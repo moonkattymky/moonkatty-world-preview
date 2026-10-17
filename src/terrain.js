@@ -13,7 +13,7 @@ export const F = { x: 0.592, z: -0.806 }, Rt = { x: 0.806, z: 0.592 };
 export function sd(s, d) { return { x: s * Rt.x + d * F.x, z: s * Rt.z + d * F.z }; }
 export const LOOKOUT = { ...sd(-2, -54), r: 19, h: 10 };
 // The concept-art camera: cat on the lip of a ridge, base below at ~60 m
-export const CONCEPT = { cat: sd(-2.53, -51.23), cam: sd(-0.8, -54.1), target: sd(-5.5, 0), eye: 1.0, drop: 3.5, fov: 47, catYaw: -0.15 };
+export const CONCEPT = { cat: sd(-2.53, -51.23), cam: sd(-0.59, -54.45), target: sd(-5.5, 0), eye: 1.0, drop: 3.5, fov: 47, catYaw: -0.15 };
 // walkable rock ledge under the concept cat (the rock mesh itself lives in props.js); raises groundAt so the cat really stands on it
 const _lc = sd(-3.0, -51.85); export const LEDGE = { x: _lc.x, z: _lc.z, h: 0.55, r0: 1.35, r1: 1.75 };
 export function ledgeAt(x, z) { const d = Math.hypot(x - LEDGE.x, z - LEDGE.z); if (d >= LEDGE.r1) return 0; const t = Math.min(1, Math.max(0, (d - LEDGE.r0) / (LEDGE.r1 - LEDGE.r0))); return LEDGE.h * (1 - t * t * (3 - 2 * t)); }
@@ -172,7 +172,7 @@ export function terrainMaterial() {
       float tDist = length(vWP - cameraPosition); float tFade = 1.0 - smoothstep(40.0, 200.0, tDist); float tNear = 1.0 - smoothstep(18.0, 85.0, tDist);
       float tN = rg(vWP.xz); vec3 cr = vec3(1.0, 0.0, 0.0); if (tNear > 0.01) cr = craters(vWP.xz, 2.6);
       { float speck = smoothstep(0.78, 0.95, vn(vWP.xz * 13.0)) - 0.6 * smoothstep(0.8, 0.95, vn(vWP.xz * 9.0 + 3.1)); float grain = vn(vWP.xz * 31.0) * 0.45 + vn(vWP.xz * 67.0) * 0.35 + hh(floor(vWP.xz * 90.0)) * 0.2;
-        diffuseColor.rgb *= mix(1.0, (0.86 + 0.26 * tN) * (1.0 + 0.22 * speck), tFade) * mix(1.0, cr.x * (0.66 + 0.68 * grain), tNear); }`)
+        diffuseColor.rgb *= mix(1.0, (0.86 + 0.26 * tN) * (1.0 + 0.22 * speck), tFade) * mix(1.0, cr.x * (0.66 + 0.68 * grain), tNear) * (1.0 + 0.45 * (1.0 - smoothstep(3.0, 24.0, tDist))); }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       if (tFade > 0.01) { float e = 0.15; float n0 = rg(vWP.xz * 1.6), nx = rg(vWP.xz * 1.6 + vec2(e, 0.)), nz = rg(vWP.xz * 1.6 + vec2(0., e));
         vec3 gW = vec3(-(nx - n0) / e, 0.0, -(nz - n0) / e) * 0.35 * tFade - vec3(cr.y, 0.0, cr.z) * 2.4 * tNear;

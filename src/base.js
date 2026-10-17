@@ -128,10 +128,15 @@ function dishModule(b, s, d) {
   for (let k = 0; k < 8; k++) { const a = k / 8 * PI * 2; const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(0.9, 0); sh.lineTo(0, 1.6); sh.lineTo(0, 0); const g = new THREE.ExtrudeGeometry(sh, { depth: 0.1, bevelEnabled: false }).translate(0, 0, -0.05); b.add('gold', g, { pos: [x + Math.sin(a) * 1.1, y + 4.9, z + Math.cos(a) * 1.1], rot: [0, a - PI / 2, 0], color: C.goldD }); }
   for (let k = 0; k < 14; k++) { const a = k / 14 * PI * 2; b.add('glow', G.box(0.18, 0.1, 0.18), { pos: [x + Math.sin(a) * 2.25, y + 4.92, z + Math.cos(a) * 2.25], color: C.win, intensity: 3.5 }); }
   for (let k = 0; k < 16; k++) { const a = k / 16 * PI * 2; b.add('glow', G.box(0.22, 0.1, 0.22), { pos: [x + Math.sin(a) * 3.65, y + 4.12, z + Math.cos(a) * 3.65], color: C.gold2, intensity: 3 }); }
-  for (const sx of [-1, 1]) b.add('gold', G.box(0.35, 1.8, 0.9), { pos: [x + Math.cos(faceCam + PI - 0.9) * sx * 1.1, y + 6.6, z - Math.sin(faceCam + PI - 0.9) * sx * 1.1], rot: [0, faceCam + PI - 0.9, 0], color: C.gold });
+  { const DY = faceCam + PI + 0.9; // yoke: two ornate gold arms + pivot hubs + elevation drum
+    for (const sx of [-1, 1]) { const ox = Math.cos(DY) * sx * 1.25, oz = -Math.sin(DY) * sx * 1.25; b.add('gold', G.box(0.32, 1.6, 0.95), { pos: [x + ox, y + 7.0, z + oz], rot: [0, DY, 0], color: C.gold }); b.add('gold', G.cyl(0.42, 0.42, 0.3, 14).rotateZ(PI / 2), { pos: [x + ox * 1.12, y + 7.55, z + oz * 1.12], rot: [0, DY, 0], color: C.gold2 }); b.add('glow', G.box(0.12, 0.7, 0.12), { pos: [x + ox * 1.15, y + 6.8, z + oz * 1.15], rot: [0, DY, 0], color: C.win, intensity: 3 }); }
+    b.add('ivory', G.cyl(0.95, 1.1, 0.7, 18), { pos: [x, y + 6.55, z], color: C.ivory }); b.add('gold', G.torus(1.0, 0.07, 3, 18), { pos: [x, y + 6.9, z], rot: [PI / 2, 0, 0], color: C.gold });
+    // balustrade on the upper deck: gold posts + rail
+    for (let k = 0; k < 18; k++) { const a = k / 18 * PI * 2; b.add('gold', G.box(0.07, 0.45, 0.07), { pos: [x + Math.sin(a) * 3.0, y + 4.32, z + Math.cos(a) * 3.0], color: C.gold }); }
+    b.add('gold', G.torus(3.0, 0.05, 3, 28), { pos: [x, y + 4.55, z], rot: [PI / 2, 0, 0], color: C.gold2 }); }
   // dish
-  const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.8, faceCam + PI - 0.9, 0, 'YXZ'));
-  const center = new THREE.Vector3(x, y + 7.6, z);
+  const DY = faceCam + PI + 0.9; const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.55, DY, 0, 'YXZ'));
+  const center = new THREE.Vector3(x, y + 9.0, z);
   const M = (g, off, col, grp = 'ivory', extra = {}) => { const m = new THREE.Matrix4().compose(center, tilt, new THREE.Vector3(1, 1, 1)); m.multiply(new THREE.Matrix4().makeTranslation(...off)); b.add(grp, g, { matrix: m, color: col, ...extra }); };
   const Rd = 4.6, th = 0.62; const sr = Rd / Math.sin(th);
   const cap = new THREE.SphereGeometry(sr, 28, 6, 0, PI * 2, PI - th, th); // bottom cap: bowl opening up
@@ -142,7 +147,7 @@ function dishModule(b, s, d) {
   for (const f of [0.45, 0.75]) { const t2 = Math.asin(f * Math.sin(th)); M(G.torus(f * Rd, 0.06, 3, 28).rotateX(PI / 2), [0, cy - sr * Math.cos(t2) + 0.1, 0], C.gold2, 'gold'); }
   for (let k = 0; k < 8; k++) { const g = G.torus(sr, 0.05, 3, 6, th).rotateZ(-PI / 2 - th).rotateY(k * PI / 4); M(g, [0, cy + 0.08, 0], C.gold2, 'gold'); }
   for (let k = 0; k < 3; k++) { const a = k / 3 * PI * 2; const p0 = new THREE.Vector3(Math.cos(a) * Rd * 0.95, 0, Math.sin(a) * Rd * 0.95), p1 = new THREE.Vector3(0, 3.2, 0); const dv = p1.clone().sub(p0); const L = dv.length(); const g = G.cyl(0.06, 0.06, L, 5).applyQuaternion(quatFromDir(dv)); M(g, p0.toArray(), C.gold, 'gold'); }
-  M(G.cone(0.35, 0.9).rotateX(PI), [0, 3.8, 0], C.gold, 'gold');
+  M(G.cone(0.35, 0.9).rotateX(PI), [0, 3.8, 0], C.gold, 'gold'); M(G.cyl(0.55, 0.55, 0.12, 14), [0, 3.25, 0], C.gold2, 'gold'); M(G.torus(Rd + 0.05, 0.2, 4, 36).rotateX(PI / 2), [0, 0.05, 0], C.gold2, 'gold'); M(G.cyl(0.6, 0.9, 0.9, 14), [0, -1.95, 0], C.gold, 'gold'); // sub-reflector, heavy gold rim, back hub
   M(G.sphere(0.2, 8, 6), [0, 2.9, 0], C.win, 'glow', { intensity: 4 });
   M(G.cyl(0.9, 0.6, 0.6, 12), [0, -0.5, 0], C.ivory2, 'ivory');
 }

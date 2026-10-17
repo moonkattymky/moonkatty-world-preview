@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { groundAt, groundMesh, LEDGE, slopeAt, LOOKOUT, REGIONS, sd, CONCEPT, CAVE, PORTAL } from './terrain.js';
+import { groundAt, groundMesh, LEDGE, slopeAt, F, Rt, LOOKOUT, REGIONS, sd, CONCEPT, CAVE, PORTAL } from './terrain.js';
 import { noise2, seeded } from './noise.js';
 import { colliders } from './base.js';
 
@@ -45,6 +45,15 @@ export function chunkGeom(detail, seed, top = 0.5) {
   }
   g.computeVertexNormals(); const N = g.attributes.normal; const col = new Float32Array(P.count * 3);
   for (let i = 0; i < P.count; i++) { const up = N.getY(i); const y = P.getY(i); const ao = THREE.MathUtils.clamp(0.7 + (y + 0.3) * 0.4, 0.65, 1.0); const c = (0.21 + Math.max(0, up) * 0.03 + nz[i] * 0.03) * ao; col[i * 3] = c * 1.04; col[i * 3 + 1] = c; col[i * 3 + 2] = c * 0.93; }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeBoundingSphere(); return g;
+}
+// chiselled boulder: icosphere cut by random planes -> flat facets with crisp edges (angular, chunky), flat-shaded, top-lit vertex colours
+export function chiselGeom(seed, cuts = 11, detail = 2) {
+  const r = seeded(seed * 13 + 1); const g = new THREE.IcosahedronGeometry(1, detail); const P = g.attributes.position; const v = new THREE.Vector3(); const n = new THREE.Vector3();
+  const planes = []; for (let i = 0; i < cuts; i++) { const th = r() * Math.PI * 2, y = i < 2 ? 0.85 + r() * 0.15 : (r() - 0.35) * 1.3; n.set(Math.cos(th) * Math.sqrt(Math.max(0, 1 - y * y)), y, Math.sin(th) * Math.sqrt(Math.max(0, 1 - y * y))).normalize(); planes.push([n.clone(), i < 2 ? 0.45 + r() * 0.15 : 0.55 + r() * 0.3]); }
+  for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); for (const [pn, d] of planes) { const k = v.dot(pn); if (k > d) v.addScaledVector(pn, d - k); } v.x *= 1.25; v.z *= 1.05; v.y *= 0.9; if (v.y < -0.3) v.y = -0.3 - (v.y + 0.3) * 0.15; P.setXYZ(i, v.x, v.y, v.z); }
+  g.deleteAttribute('uv'); g.computeVertexNormals(); const N = g.attributes.normal; const col = new Float32Array(P.count * 3);
+  for (let f = 0; f < P.count; f += 3) { const nx = (N.getX(f) + N.getX(f + 1) + N.getX(f + 2)) / 3, ny = (N.getY(f) + N.getY(f + 1) + N.getY(f + 2)) / 3; const c = 0.24 + Math.max(0, ny) * 0.06 + Math.max(0, -nx) * 0.03 + (r() - 0.5) * 0.025; for (let k = 0; k < 3; k++) { const y = P.getY(f + k); const ao = THREE.MathUtils.clamp(0.72 + (y + 0.3) * 0.35, 0.68, 1.0); const cc = c * ao; col.set([cc * 1.03, cc, cc * 0.95], (f + k) * 3); } }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeBoundingSphere(); return g;
 }
 export function protoGeom(detail, seed, stretch = [1, 1, 1], strata = 0.65, light = 1) {
@@ -93,8 +102,8 @@ export function strataGeom(seed, layers = 3, sides = 7) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals(); g.computeBoundingSphere(); return g;
 }
 
-function rockMaterial(fog = true, bump = 2.2, smooth = false) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: !smooth, roughness: 0.95, metalness: 0.0, fog }); m.color.setScalar(0.82); m.customProgramCacheKey = () => 'rock' + bump + fog + smooth;
+function rockMaterial(fog = true, bump = 2.2, smooth = false, key = 0.0, far = false) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: !smooth, roughness: 0.95, metalness: 0.0, fog }); m.color.setScalar(0.82); m.customProgramCacheKey = () => 'rock' + bump + fog + smooth + key + far;
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <project_vertex>', `#include <project_vertex>
       #ifdef USE_INSTANCING
@@ -108,20 +117,30 @@ function rockMaterial(fog = true, bump = 2.2, smooth = false) {
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(hh(i), hh(i + vec2(1, 0)), f.x), mix(hh(i + vec2(0, 1)), hh(i + vec2(1, 1)), f.x), f.y); }
       float vor(vec2 p){ vec2 i = floor(p), f = fract(p); float m1 = 8., m2 = 8.; for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 o = vec2(x, y); vec2 r = o + vec2(hh(i + o), hh(i + o + 17.3)) - f; float dd = dot(r, r); if (dd < m1) { m2 = m1; m1 = dd; } else if (dd < m2) m2 = dd; } return sqrt(m2) - sqrt(m1); }
       float crH(vec3 w){ vec2 a = w.xz * 5.0 + w.y * 3.3, c = vec2(w.x + w.y * 0.8, w.z - w.y * 0.8) * 11.0; return vn(a) * 0.45 + vn(c) * 0.3 + vn(a * 4.3) * 0.17 + vn(c * 3.1) * 0.08; }
+      float farH(vec3 w){ float sb = smoothstep(0.25, 0.75, vn(vec2(w.y * 0.55, (w.x + w.z) * 0.03))); float cn = vn(w.xz * 0.3 + w.y * 0.45) * 0.7 + vn(w.xz * 0.9 - w.y * 0.8) * 0.3; return sb * 0.5 + cn * 0.5; }
       float rkH(vec3 w){ vec2 a = w.xz * 2.3 + w.y * 1.7, b = vec2(w.x + w.y * 0.7, w.z - w.y * 0.7) * 3.1; return vor(a) * 0.55 + vor(b) * 0.3 + vn(a * 4.0) * 0.15; }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
       { float d = length(vWP - cameraPosition); float fd = 1.0 - smoothstep(30.0, 120.0, d); vec2 q = vWP.xz * 1.9 + vWP.yy * 1.3;
         float n = vn(q) * 0.5 + vn(q * 3.7) * 0.3 + vn(q * 11.0) * 0.2; diffuseColor.rgb *= mix(1.0, 0.72 + 0.56 * n, fd * ${smooth ? '0.6' : '1.0'});
-        ${smooth ? 'float ck = crH(vWP); diffuseColor.rgb *= mix(1.0, 0.9 + 0.18 * ck, fd);' : 'float ck = rkH(vWP); diffuseColor.rgb *= mix(1.0, 0.55 + 0.6 * smoothstep(0.08, 0.42, ck), fd);'} }`)
+        ${far ? 'float fdd = smoothstep(25.0, 60.0, d); float fh = farH(vWP); diffuseColor.rgb *= mix(1.0, 0.72 + 0.55 * fh, fdd);' : ''}
+        ${smooth ? 'float ck = crH(vWP); diffuseColor.rgb *= mix(1.0, 0.92 + 0.14 * ck, fd);' : 'float ck = rkH(vWP); diffuseColor.rgb *= mix(1.0, 0.55 + 0.6 * smoothstep(0.08, 0.42, ck), fd);'} }`)
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
       { // crumbly micro-relief: derivative bump from a cellular/fbm height (no extra geometry)
         float d = length(vWP - cameraPosition); float fb = 1.0 - smoothstep(10.0, 70.0, d);
         if (fb > 0.01) { vec3 sp = -vViewPosition; vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 R1 = cross(sy, normal), R2 = cross(normal, sx); float det = dot(sx, R1);
-          float H = ${smooth ? 'crH(vWP)' : 'rkH(vWP)'}; float dhx = dFdx(H), dhy = dFdy(H); vec3 grad = sign(det) * (dhx * R1 + dhy * R2); normal = normalize(mix(normal, normalize(abs(det) * normal - grad * ${bump.toFixed(2)}), fb)); } }`);
+          float H = ${smooth ? 'crH(vWP)' : 'rkH(vWP)'}; float dhx = dFdx(H), dhy = dFdy(H); vec3 grad = sign(det) * (dhx * R1 + dhy * R2); normal = normalize(mix(normal, normalize(abs(det) * normal - grad * ${bump.toFixed(2)}), fb)); }
+        ${far ? 'float ffb = smoothstep(25.0, 60.0, d); if (ffb > 0.01) { vec3 sp = -vViewPosition; vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 R1 = cross(sy, normal), R2 = cross(normal, sx); float det = dot(sx, R1); float H = farH(vWP) * 1.6; vec3 grad = sign(det) * (dFdx(H) * R1 + dFdy(H) * R2); normal = normalize(mix(normal, normalize(abs(det) * normal - grad), ffb * 0.8)); }' : ''} }`)
+      .replace('#include <opaque_fragment>', `${key > 0 ? `{ vec3 kd = normalize((viewMatrix * vec4(${KEY}, 0.0)).xyz); outgoingLight += diffuseColor.rgb * vec3(1.0, 0.96, 0.9) * ${key.toFixed(2)} * max(dot(normal, kd), 0.0); }` : ''}
+      #include <opaque_fragment>`);
   };
   return m;
 }
 
+// rock-only soft key light from the concept camera's upper-left/front (concept: foreground rocks sunlit from the left)
+const KEY = (() => { const v = new THREE.Vector3(-Rt.x * 0.65 - F.x * 0.35, 0.72, -Rt.z * 0.65 - F.z * 0.35).normalize(); return `vec3(${v.x.toFixed(3)}, ${v.y.toFixed(3)}, ${v.z.toFixed(3)})`; })();
+// main rover track: from just ahead of the concept camera, curving down the lookout to the hub (concept: track from the bottom centre)
+export const TRACK_MAIN = (t) => sd(0.3 + Math.sin(t * 2.6) * 3 - t * 3, -52.6 + t * 41.6);
+const TRACK_PTS = Array.from({ length: 47 }, (_, i) => TRACK_MAIN(i / 46)); const nearTrack = (x, z, w) => TRACK_PTS.some(p => Math.hypot(p.x - x, p.z - z) < w);
 const CLEAR = sd(-3, -21.5);
 function blocked(x, z, pad) { if (Math.hypot(x - CLEAR.x, z - CLEAR.z) < 2.5 + pad * 0.5) return true; for (const c of colliders) if (Math.hypot(x - c.x, z - c.z) < c.r + pad) return true; return false; }
 
@@ -152,13 +171,13 @@ export class InstanceCuller {
 }
 function makeKind(scene, name, lods, items, mat, castShadow) {
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
-  const single = lods.length === 1; const its = items.map(o => { q.setFromEuler(e.set(o.r[0], o.r[1], o.r[2])); m4.compose(new THREE.Vector3(o.x, o.y, o.z), q, new THREE.Vector3(...o.s)); const r = Math.max(...o.s) * 1.6; const sn = Math.min(1, Math.max(0.3, r / 2.4)); return { x: o.x, y: o.y, z: o.z, r, lodK: single ? 1 : 1 / (sn * sn), m: m4.toArray() }; });
+  const single = lods.length === 1; const its = items.map(o => { q.setFromEuler(e.set(o.r[0], o.r[1], o.r[2])); m4.compose(new THREE.Vector3(o.x, o.y, o.z), q, new THREE.Vector3(...o.s)); const r = Math.max(...o.s) * 1.6; const sn = Math.min(1, Math.max(0.3, r / 2.4)); return { x: o.x, y: o.y, z: o.z, r, lodK: o.lodK ?? (single ? 1 : 1 / (sn * sn)), m: m4.toArray() }; });
   const kind = { name, items: its, lods: lods.map(([g, dist], i) => { const im = new THREE.InstancedMesh(g, mat, Math.max(1, its.length)); im.count = 0; im.frustumCulled = false; im.castShadow = typeof castShadow === 'number' ? i < castShadow : (castShadow && i === 0 || castShadow === 'all'); im.receiveShadow = true; im.name = name + '_lod' + i; scene.add(im); return { mesh: im, d2: dist * dist }; }) };
   return kind;
 }
 
 export function buildRocks(scene, culler, quality = 1) {
-  const mat = rockMaterial(); mat.color.setScalar(1.05); const matFar = rockMaterial(true, 0.3, true); matFar.color.setScalar(1.35); const matWall = rockMaterial(true, 1.2); matWall.color.setScalar(1.2);
+  const mat = rockMaterial(true, 2.2, false, 0.9, true); mat.color.setScalar(1.15); const matFar = rockMaterial(true, 0.16, true, 1.3); matFar.flatShading = true; matFar.color.setScalar(1.5); const matWall = rockMaterial(true, 1.2, false, 0.35, true); matWall.color.setScalar(1.2);
   const L = { crumb: [], pebble: [], rubble: [], bA: [], bB: [], bC: [], cliff: [], peak: [], wall: [] };
   const K = CONCEPT; const cgy = groundAt(K.cat.x, K.cat.z); const ccam = new THREE.PerspectiveCamera(K.fov, 16 / 9, 0.2, 5000);
   ccam.position.set(K.cam.x, cgy + K.eye, K.cam.z); ccam.lookAt(K.target.x, cgy + K.eye - K.drop, K.target.z); ccam.updateMatrixWorld(); ccam.updateProjectionMatrix();
@@ -186,7 +205,7 @@ export function buildRocks(scene, culler, quality = 1) {
     for (let k = 0; k < nr; k++) { const a = rnd() * 6.283, r = 1 + rnd() * 5; const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r; const s = 0.15 + rnd() ** 2 * 0.7; if (blocked(x, z, 0.6) || !viewOK(x, z, s, 0.6)) continue; put(L.rubble, x, z, s, 0.25, 0.9); }
   }
   // scattered rubble everywhere in the hub + dense on the lookout
-  for (let i = 0, t = 0; i < 650 * quality && t < 20000; t++) {
+  for (let i = 0, t = 0; i < 420 * quality && t < 20000; t++) {
     const m = rnd(); let x, z;
     if (m < 0.22) { const a = rnd() * 6.283, r = Math.sqrt(rnd()) * 20; x = LOOKOUT.x + Math.cos(a) * r; z = LOOKOUT.z + Math.sin(a) * r; }
     else if (m < 0.5) { const p = sd((rnd() - 0.5) * 60, -58 + rnd() * 44); x = p.x; z = p.z; }
@@ -197,7 +216,7 @@ export function buildRocks(scene, culler, quality = 1) {
   // hand-composed foreground rocks for the concept framing: placed by casting rays through screen pixels of the concept camera
   const ray = new THREE.Vector3(); const screenPut = (px, py, k, list, flat = false) => { ray.set(px / 1024 * 2 - 1, 1 - py / 576 * 2, 0.5).unproject(ccam).sub(ccam.position).normalize();
     for (let t = 0.6; t < 140; t += 0.2) { const x = ccam.position.x + ray.x * t, y = ccam.position.y + ray.y * t, z = ccam.position.z + ray.z * t; if (y < groundAt(x, z)) { if (Math.hypot(x - K.cat.x, z - K.cat.z) < 1.1) return; if (t > 30 || (flat && t > 9 && rnd() < 0.55)) return; const slab0 = list === L.peak; let sz = flat ? Math.min(k * (0.16 + t * 0.02), 0.95) : Math.min(k * t * 0.045, 1.3);
-        if (flat || slab0) { const g0 = groundAt(x, z); const lim = (px > 250 && px < 880) ? 452 : 405; for (let it = 0; it < 12; it++) { _v.set(x, g0 + sz * 0.85, z).project(ccam); if ((0.5 - _v.y * 0.5) * 576 >= lim) break; sz *= 0.8; } if (sz < 0.07) return; } const slab = list === L.peak; put(list, x, z, slab ? sz * 1.15 : sz, slab ? 0.22 : flat ? 0.1 : 0.35, slab ? 0.25 : flat ? 0.22 : 0.4, slab ? 0.95 : flat ? 0.75 : 1); return; } } };
+        if (flat || slab0) { const g0 = groundAt(x, z); const lim = (px > 250 && px < 880) ? 452 : 405; for (let it = 0; it < 12; it++) { _v.set(x, g0 + sz * 0.85, z).project(ccam); if ((0.5 - _v.y * 0.5) * 576 >= lim) break; sz *= 0.8; } if (sz < 0.07) return; } const slab = list === L.peak; if (nearTrack(x, z, 0.9 + (slab ? sz : 0))) return; put(list, x, z, slab ? sz * 1.15 : sz, slab ? 0.22 : flat ? 0.1 : 0.35, slab ? 0.25 : flat ? 0.22 : 0.4, slab ? 0.95 : flat ? 0.75 : 1); return; } } };
   for (const [px, py, k] of [[30, 560, 1.3], [150, 575, 1.0], [300, 560, 1.4], [400, 545, 1.0], [490, 590, 1.4], [20, 430, 1.2], [70, 470, 0.8], [330, 455, 0.9], [270, 420, 0.7], [440, 470, 0.8],
     [600, 560, 1.3], [700, 590, 1.6], [820, 560, 1.5], [930, 540, 1.3], [1010, 470, 1.3], [880, 470, 0.9], [960, 410, 1.0], [760, 470, 0.7], [640, 470, 0.6], [560, 470, 0.5],
     [340, 405, 0.5], [600, 420, 0.45], [880, 380, 0.6], [990, 360, 0.6], [250, 380, 0.55], [460, 410, 0.45]]) screenPut(px, py, k, L.peak);
@@ -215,7 +234,7 @@ export function buildRocks(scene, culler, quality = 1) {
     for (let t = 0.6; t < 90; t += 0.3) { const x = ccam.position.x + ray.x * t, y = ccam.position.y + ray.y * t, z = ccam.position.z + ray.z * t; if (y < groundAt(x, z)) { if (Math.hypot(x - K.cat.x, z - K.cat.z) < 1.4) break; const sz = Math.min(0.5 + t * 0.06, 2.6) * (0.5 + rnd() * 0.8); put(L.peak, x, z, sz, 0.3, 0.35, 0.7 + rnd() * 0.4); break; } } }
   for (let i = 0; i < 90; i++) { const px = rnd() * 1024, py = 420 + rnd() * 160; if (px > 20 && px < 290 && py < 500) continue; screenPut(px, py, 0.3 + rnd() * 0.5, L.rubble, true); }
   // cliff slabs on steep slopes (jagged faceted rims / crater walls)
-  for (let i = 0, t = 0; i < 220 * quality && t < 60000; t++) {
+  for (let i = 0, t = 0; i < 170 * quality && t < 60000; t++) {
     const a = rnd() * 6.283, r = 50 + rnd() ** 1.3 * 650; const x = Math.cos(a) * r, z = Math.sin(a) * r;
     const sl = slopeAt(x, z); if (sl < 0.3 || blocked(x, z, 6) || Math.hypot(x - PORTAL.x, z - PORTAL.z) < 20 || Math.hypot(x - (PORTAL.x + CAVE.x) / 2, z - (PORTAL.z + CAVE.z) / 2) < 22 || Math.hypot(x - CAVE.x, z - CAVE.z) < 16 || Math.hypot(x - LOOKOUT.x, z - LOOKOUT.z) < 30) continue;
     const s = (r < 150 ? 2 : 4) + rnd() * (r < 150 ? 5 : 11); if (!viewOK(x, z, s, 1.1)) continue; put(L.cliff, x, z, s, 0.62, 0.3, 1.0); i++;
@@ -230,15 +249,15 @@ export function buildRocks(scene, culler, quality = 1) {
   { const gaps = Object.values(REGIONS).map(R => Math.atan2(R.z, R.x));
     for (let i = 0; i < 170; i++) { const a = i / 170 * Math.PI * 2 + (rnd() - 0.5) * 0.04; if (gaps.some(g => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < 0.1)) continue;
       const r0 = 105 + rnd() * 60; const s0 = 5 + rnd() * 8;
-      for (let k = 0; k < 1; k++) { const rr = r0 + k * s0 * 0.9 + rnd() * 4, aa = a + (rnd() - 0.5) * 0.02; const x = Math.cos(aa) * rr, z = Math.sin(aa) * rr; const s = s0 * (1 - k * 0.15);
+      for (let k = 0; k < 2; k++) { const rr = r0 + k * s0 * 0.9 + rnd() * 4, aa = a + (rnd() - 0.5) * 0.02; const x = Math.cos(aa) * rr, z = Math.sin(aa) * rr; const s = s0 * (1 - k * 0.15);
         const gy = Math.min(groundAt(x, z), groundAt(x + Math.sin(aa) * s, z - Math.cos(aa) * s), groundAt(x - Math.sin(aa) * s, z + Math.cos(aa) * s));
-        const hy = Math.min(s * (0.85 + rnd() * 0.9), 20); L.wall.push({ x, y: gy + k * 2.5 + hy * 0.25, z, s: [s * (2.3 + rnd() * 1.0), hy, s * (0.9 + rnd() * 0.4)], r: [(rnd() - 0.5) * 0.08, -aa + Math.PI / 2 + (rnd() - 0.5) * 0.35, (rnd() - 0.5) * 0.15] }); } } }
+        const hy = Math.min(s * (0.85 + rnd() * 0.9), 20); L.wall.push({ x, y: gy + k * 2.5 + hy * 0.25, z, s: [s * (2.3 + rnd() * 1.0), hy, s * (0.9 + rnd() * 0.4)], r: [(rnd() - 0.5) * 0.08, -aa + Math.PI / 2 + (rnd() - 0.5) * 0.35, (rnd() - 0.5) * 0.15], lodK: k ? 100 : undefined /* back layer: always the cheap 20-tri LOD */ }); } } }
   // crumbs: dense angular fragments in the concept foreground, the lookout and the gameplay start area
-  for (let i = 0, t = 0; i < 2100 * quality && t < 40000; t++) { const m = rnd(); let x, z;
+  for (let i = 0, t = 0; i < 1200 * quality && t < 40000; t++) { const m = rnd(); let x, z;
     if (m < 0.22) { const p = sd((rnd() - 0.5) * 34, -60 + rnd() * 22); x = p.x; z = p.z; } else if (m < 0.8) { const p = sd(-3 + (rnd() - 0.5) * 36, -21 + (rnd() - 0.5) * 30); x = p.x; z = p.z; } else { const a = rnd() * 6.283, r = 8 + Math.sqrt(rnd()) * 60; x = Math.cos(a) * r; z = Math.sin(a) * r; }
     if (blocked(x, z, 0.2)) continue; const s = 0.05 + rnd() ** 2.5 * 0.3; put(L.crumb, x, z, s, 0.42, 0.3); i++; }
   // pebbles: dense small stones across the hub floor (gameplay view)
-  for (let i = 0, t = 0; i < 2000 * quality && t < 30000; t++) { const a = rnd() * 6.283, r = 6 + Math.sqrt(rnd()) * 70; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (blocked(x, z, 0.3)) continue; const s = 0.1 + rnd() ** 2 * 0.4; put(L.pebble, x, z, s, 0.3, 1.2); i++; }
+  for (let i = 0, t = 0; i < 1400 * quality && t < 30000; t++) { const a = rnd() * 6.283, r = 6 + Math.sqrt(rnd()) * 70; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (blocked(x, z, 0.3)) continue; const s = 0.1 + rnd() ** 2 * 0.4; put(L.pebble, x, z, s, 0.3, 1.2); i++; }
   // gameplay area: scattered small stones + small crater rims of rocks around the hub
   for (let i = 0, t = 0; i < 420 * quality && t < 8000; t++) { const p = sd(-3 + (rnd() - 0.5) * 34, -21 + (rnd() - 0.5) * 30); if (blocked(p.x, p.z, 0.4)) continue; put(L.rubble, p.x, p.z, 0.07 + rnd() ** 2 * 0.3, 0.3, 0.8); i++; }
   for (let c = 0, t = 0; c < 16 && t < 400; t++) { const a = rnd() * 6.283, r = 12 + rnd() * 34; const cx = Math.cos(a) * r, cz = Math.sin(a) * r; const cr = 1.4 + rnd() * 2.4; if (blocked(cx, cz, cr + 1)) continue; c++;
@@ -248,9 +267,9 @@ export function buildRocks(scene, culler, quality = 1) {
   const A = [...L.bA, ...L.bC, ...L.bB, ...c0, ...c1]; // one boulder prototype (saves 3 main + 2 shadow draws)
   const debris = [...L.rubble, ...L.pebble, ...L.crumb];
   const kinds = {
-    rockA: makeKind(scene, 'rockA', [[protoGeom(2, 2, [1.25, 0.75, 1.05]), 8], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 36], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 270]], A, mat, 2),
-    debris: makeKind(scene, 'debris', [[rockGeom(-1, 14, [1.25, 0.55, 0.95], 0.5), 16]], debris, mat, 0),
-    strata: makeKind(scene, 'strata', [[chunkGeom(2, 9), 8], [chunkGeom(1, 9), 3000]], L.peak, matFar, 0),
+    rockA: makeKind(scene, 'rockA', [[protoGeom(2, 2, [1.25, 0.75, 1.05]), 8], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 30], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 200]], A, mat, 2),
+    debris: makeKind(scene, 'debris', [[chiselGeom(14, 6, 0), 10]], debris, mat, 0),
+    strata: makeKind(scene, 'strata', [[chiselGeom(9, 12, 2), 8], [chiselGeom(9, 12, 1), 3000]], L.peak, matFar, 0),
     wall: makeKind(scene, 'wall', [[protoGeom(1, 33, [1, 1, 1], 0.55), 230], [protoGeom(0, 33, [1, 1, 1], 0.45), 3000]], L.wall, matWall, 0),
   };
     for (const k of Object.values(kinds)) culler.add(k);
