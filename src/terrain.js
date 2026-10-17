@@ -101,6 +101,8 @@ export function heightAt(x, z) {
     const und = fbm(x * 0.016 + 4.2, z * 0.016 - 2.7, 3) * 3.2 + fbm(x * 0.045, z * 0.045, 2) * 0.9; let lh = 3 + small + und * (1 - pad);
     for (const [ad, rr, R] of LAUNCH_CRATERS) { const cx = L.x + Math.cos(ad * Math.PI / 180) * rr, cz = L.z + Math.sin(ad * Math.PI / 180) * rr; const dd = Math.hypot(x - cx, z - cz); if (dd < R * 2) lh += crater(dd, R, R * 0.2, R * 0.1); }
     const oc = Math.max(0, ridged(x * 0.05 + 7, z * 0.05 - 3, 2) - 0.66) * 14 * smoothstep(85, 110, d) * (1 - smoothstep(150, 175, d)) * smoothstep(0.25, 0.6, noise2(x * 0.01 + 3, z * 0.01) * 0.5 + 0.5); lh += oc;
+    { const rx = x - (L.x - 52.33), rz = z - (L.z + 52.33); const al = (rx + rz) * 0.70711, pe = (rz - rx) * 0.70711; /* pass 25: graded runway bed (flat, so the paved strip reads clean) */
+      const m = (1 - smoothstep(9, 17, Math.abs(pe))) * (1 - smoothstep(80, 94, Math.abs(al))); if (m > 0) lh = lerp(lh, 3.0, m); }
     h = lerp(h, lh, 1 - smoothstep(130, 175, d));
     h += smoothstep(190, 300, d) * (1 - smoothstep(480, 640, d)) * (6 + mass * 22 + rid * rid * 18 + jag * jag * 8) * smoothstep(380, 520, r); } }
   // echo plateau

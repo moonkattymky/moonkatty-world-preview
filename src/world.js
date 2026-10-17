@@ -32,8 +32,24 @@ function pipeRun(b, path, { r = 0.75, clear = 0.9, every = 4, endY = null, start
 }
 
 export const KEEP = []; // pass 20: footprints of region structures ({x, z, r}) — props keep rubble out of them
-function strip(b, P, off, w, lift, group, color, I) { const pos = []; for (let k = 0; k < P.length - 1; k++) { const A = P[k], B = P[k + 1]; const dx = B.x - A.x, dz = B.z - A.z, l = Math.hypot(dx, dz), nx = -dz / l, nz = dx / l; const q = (p, o) => { const px = p.x + nx * o, pz = p.z + nz * o; return [px, groundAt(px, pz) + lift, pz]; }; const a1 = q(A, off - w / 2), a2 = q(A, off + w / 2), b1 = q(B, off - w / 2), b2 = q(B, off + w / 2); pos.push(...a1, ...b1, ...a2, ...a2, ...b1, ...b2); }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); b.add(group, g, { color, intensity: I }); }
+const upN = (n) => { const a = new Float32Array(n); for (let k = 1; k < n; k += 3) a[k] = 1; return a; };
+// pass 25: continuous ground-seated wall that follows a path (base sunk 1.2 m below the terrain; outward-facing sides + flat top)
+function wallRun(b, P, off, w, h, group, color) { const pos = []; const quad = (a, bb, c, d, ex) => { const ux = bb[0] - a[0], uy = bb[1] - a[1], uz = bb[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2]; const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; if (nx * ex[0] + ny * ex[1] + nz * ex[2] >= 0) pos.push(...a, ...bb, ...c, ...a, ...c, ...d); else pos.push(...a, ...c, ...bb, ...a, ...d, ...c); };
+  for (let k = 0; k < P.length - 1; k++) { const A = P[k], B = P[k + 1]; const dx = B.x - A.x, dz = B.z - A.z, l = Math.hypot(dx, dz), nx = -dz / l, nz = dx / l; const ns = Math.max(1, Math.ceil(l / 2.5));
+    const q = (t, o, top) => { const px = A.x + dx * t + nx * o, pz = A.z + dz * t + nz * o; return [px, groundAt(px, pz) + (top ? h : -1.2), pz]; };
+    const tq = (t, o) => { const px = A.x + dx * t + nx * o, pz = A.z + dz * t + nz * o; const c0 = A.x + dx * t + nx * off, c1 = A.z + dz * t + nz * off; return [px, groundAt(c0, c1) + h, pz]; };
+    const oi = off - w / 2, oo = off + w / 2;
+    for (let i = 0; i < ns; i++) { const t0 = i / ns, t1 = (i + 1) / ns;
+      quad(q(t0, oi, 0), q(t1, oi, 0), [...tq(t1, oi)], [...tq(t0, oi)], [-nx, 0, -nz]);
+      quad(q(t0, oo, 0), q(t1, oo, 0), [...tq(t1, oo)], [...tq(t0, oo)], [nx, 0, nz]);
+      quad(tq(t0, oi), tq(t1, oi), tq(t1, oo), tq(t0, oo), [0, 1, 0]); }
+    if (k === 0 || k === P.length - 2) { const t = k === 0 ? 0 : 1; const ex = k === 0 ? [-dx / l, 0, -dz / l] : [dx / l, 0, dz / l]; quad(q(t, oi, 0), q(t, oo, 0), tq(t, oo), tq(t, oi), ex); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); b.add(group, g, { color }); }
+function strip(b, P, off, w, lift, group, color, I) { const pos = []; const nc = Math.max(1, Math.ceil(w / 3)); /* pass 24: subdivided (<=2.5 m along, <=3 m across) so it drapes the terrain; upward winding */
+  for (let k = 0; k < P.length - 1; k++) { const A = P[k], B = P[k + 1]; const dx = B.x - A.x, dz = B.z - A.z, l = Math.hypot(dx, dz), nx = -dz / l, nz = dx / l; const ns = Math.max(1, Math.ceil(l / 2.5));
+    const q = (t, o) => { const px = A.x + dx * t + nx * o, pz = A.z + dz * t + nz * o; return [px, groundAt(px, pz) + lift, pz]; };
+    for (let i = 0; i < ns; i++) for (let c = 0; c < nc; c++) { const t0 = i / ns, t1 = (i + 1) / ns, o0 = off - w / 2 + w * c / nc, o1 = off - w / 2 + w * (c + 1) / nc; const a1 = q(t0, o0), a2 = q(t0, o1), b1 = q(t1, o0), b2 = q(t1, o1); pos.push(...a1, ...a2, ...b1, ...a2, ...b2, ...b1); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(upN(pos.length), 3)); /* pass 25: up-facing normals (no terrain facet shading) */ b.add(group, g, { color, intensity: I }); }
 function launchComplex(b, beams, bn) {
   const { x, z } = REGIONS.launch; const y = groundAt(x, z);
   const at = (a, r) => ({ x: x + Math.cos(a) * r, z: z + Math.sin(a) * r }); const D = PI / 180;
@@ -49,7 +65,7 @@ function launchComplex(b, beams, bn) {
   // ---- near detail (only drawn within ~330 m) ----
   // flame trench: walled channel from the pad edge out to a scorched apron, deflector wedge under the rocket
   { const a = -135 * D; const ux = Math.cos(a), uz = Math.sin(a), vx = -uz, vz = ux; const T = []; for (let k = 0; k <= 8; k++) T.push(at(a, 14 + k * 6));
-    strip(bn, T, 0, 7, 0.06, 'dark', '#1d2128', 1); for (const sg of [-1, 1]) { for (let k = 0; k < 8; k++) { const c = at(a, 17 + k * 6); const px = c.x + vx * 4.4 * sg, pz = c.z + vz * 4.4 * sg; const gy = groundAt(px, pz); bn.add('ivory', G.box(1.6, 2.6, 6.1), { pos: [px, gy + 0.9, pz], rot: [0, -a + PI / 2, 0], color: C.ivory2 }); if (k % 2 === 0) bn.add('glow', G.box(0.3, 0.25, 0.3), { pos: [px, gy + 2.3, pz], color: C.win, intensity: 4 }); } }
+    /* pass 25: trench walls + floor removed — at the region-shot grazing angle they only read as flat pale planks; the deflector wedge stays */
     bn.add('dark', new THREE.CylinderGeometry(0.01, 4.5, 6, 3, 1).rotateX(PI / 2).rotateZ(PI / 2), { pos: [x + ux * 6, y + 2.6, z + uz * 6], rot: [0, -a, 0], scale: [1, 0.55, 1], color: '#2b2f36' });
     
     for (let k = 0; k <= 8; k++) KEEP.push({ ...at(a, 14 + k * 6), r: 7 }); }
@@ -79,7 +95,7 @@ function launchComplex(b, beams, bn) {
     bn.add('gold', G.cyl(0.3, 0.4, 8, 6), { pos: [c.x + 5, gy + 4.6, c.z], color: C.goldD }); bn.add('glow', G.octa(0.25), { pos: [c.x + 5, gy + 13.4, c.z], color: '#ff5030', intensity: 5 }); }
   // landing strip toward the hub: dark runway, gold edge lights on posts, white centre dashes, threshold bars
   { const a = 135 * D, va = 45 * D; const c = at(a, 74); const P = []; for (let k = 0; k <= 16; k++) { const t = k / 16 - 0.5; P.push({ x: c.x + Math.cos(va) * t * 150, z: c.z + Math.sin(va) * t * 150 }); }
-    strip(bn, P, 0, 14, 0.1, 'dark', '#2a2e35', 1); strip(bn, P, -6.6, 0.3, 0.16, 'glow', C.gold2, 1.8); strip(bn, P, 6.6, 0.3, 0.16, 'glow', C.gold2, 1.8);
+    strip(bn, P, 0, 14, 0.12, 'ivory', '#6f7278', 1); /* pass 25: uniform grey paving on a graded bed */ strip(bn, P, -6.6, 0.3, 0.16, 'glow', C.gold, 1.3); strip(bn, P, 6.6, 0.3, 0.16, 'glow', C.gold, 1.3);
     for (let k = 0; k <= 30; k++) { const t = k / 30 - 0.5; const px = c.x + Math.cos(va) * t * 150, pz = c.z + Math.sin(va) * t * 150; if (k % 3 === 0) for (const sg of [-1, 1]) { /* pass 21: 11 posts per edge in two neat rows (was 31) */ const qx = px + Math.cos(a) * 7.6 * sg, qz = pz + Math.sin(a) * 7.6 * sg; const gy = groundAt(qx, qz); bn.add('ivory', G.cyl(0.08, 0.1, 0.8, 5), { pos: [qx, gy, qz], color: C.ivory2 }); bn.add('glow', G.octa(0.2), { pos: [qx, gy + 0.95, qz], color: k === 0 || k === 30 ? '#ff6040' : C.win, intensity: 4 }); }
       if (k % 2 === 1 && k > 2 && k < 28) bn.add('ivory', G.box(0.7, 0.06, 6), { pos: [px, groundAt(px, pz) + 0.18, pz], rot: [0, -va + PI / 2, 0], color: '#e8e2d6' }); }
     for (const t of [-0.46, 0.46]) for (let m = -2; m <= 2; m++) { const px = c.x + Math.cos(va) * t * 150 + Math.cos(a) * m * 2.4, pz = c.z + Math.sin(va) * t * 150 + Math.sin(a) * m * 2.4; bn.add('ivory', G.box(1.4, 0.06, 5), { pos: [px, groundAt(px, pz) + 0.18, pz], rot: [0, -va, 0], color: '#e8e2d6' }); }
@@ -125,9 +141,7 @@ function reactorCrater(b, beams, bn, bf) { // pass 19: a real reactor complex on
     bn.add('dark', G.box(1.4, 2.2, 0.2), { pos: [px + Math.cos(a + PI) * 4.05, yy + 1.1, pz + Math.sin(a + PI) * 4.05], rot: [0, -a + PI / 2, 0], color: '#2a3442' }); }
   // service road down the crater wall toward the hub (dark strip with gold edge lights) — leading line for the region shot
   { const ah = Math.atan2(-z, -x); const P = []; for (let k = 0; k <= 30; k++) { const t = k / 30; const rr = 120 - t * 96; const a = ah + Math.sin(t * PI * 1.5) * 0.28; P.push({ x: x + Math.cos(a) * rr, z: z + Math.sin(a) * rr }); }
-    const strip = (off, w, lift, group, color, I) => { const pos = []; for (let k = 0; k < P.length - 1; k++) { const A = P[k], B = P[k + 1]; const dx = B.x - A.x, dz = B.z - A.z, l = Math.hypot(dx, dz), nx = -dz / l, nz = dx / l; const q = (p, o) => { const px = p.x + nx * o, pz = p.z + nz * o; return [px, groundAt(px, pz) + lift, pz]; }; const a1 = q(A, off - w / 2), a2 = q(A, off + w / 2), b1 = q(B, off - w / 2), b2 = q(B, off + w / 2); pos.push(...a1, ...b1, ...a2, ...a2, ...b1, ...b2); }
-      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); bn.add(group, g, { color, intensity: I }); };
-    strip(0, 6, 0.12, 'dark', '#4a4d55', 1); strip(-2.9, 0.22, 0.2, 'glow', C.gold2, 2.2); strip(2.9, 0.22, 0.2, 'glow', C.gold2, 2.2);
+    /* pass 25: the paved strip stays hidden here (the steep, rough crater wall pokes through any draped ribbon); the lamp-post rows remain the leading line, as in passes 20-23 */
     for (let k = 2; k < P.length; k += 3) for (const sgn of [-1, 1]) { const A = P[k], B = P[k - 1]; const dx = A.x - B.x, dz = A.z - B.z, l = Math.hypot(dx, dz); const px = A.x - dz / l * 3.6 * sgn, pz = A.z + dx / l * 3.6 * sgn; const yy = groundAt(px, pz); bn.add('ivory', G.cyl(0.12, 0.16, 2.2, 6), { pos: [px, yy, pz], color: C.ivory2 }); bn.add('glow', G.octa(0.22), { pos: [px, yy + 2.35, pz], color: C.win, intensity: 4 }); } }
   // rim stations + pipes that follow the crater wall down to the core (on short supports, not floating)
   for (let i = 0; i < 14; i++) {
@@ -190,6 +204,15 @@ function echo(b, beams, bn) {
   // relay hut + small dish array beside the field
   { const hx = x + 46, hz = z + 10, hy = groundAt(hx, hz); KEEP.push({ x: hx, z: hz, r: 12 }); bn.add('tex', G.box(12, 4.5, 8), { region: 'panel', pos: [hx, hy + 2.0, hz], color: '#ffffff' }); bn.add('glow', G.box(10, 0.9, 8.1), { pos: [hx, hy + 3.0, hz], color: C.cyan, intensity: 2.2 }); bn.add('gold', G.box(12.4, 0.4, 8.4), { pos: [hx, hy + 4.45, hz], color: C.gold });
     for (let k = 0; k < 3; k++) { const dx = hx - 10 + k * 7, dz = hz + 12, dy = groundAt(dx, dz); KEEP.push({ x: dx, z: dz, r: 4 }); bn.add('ivory', G.cyl(0.25, 0.35, 3.5, 8), { pos: [dx, dy, dz], color: C.ivory2 }); bn.add('ivory', G.cap(2.2, 14, 4, 0.9).rotateX(-0.8), { pos: [dx, dy + 3.8, dz], rot: [0, 0.6, 0], color: C.ivory }); bn.add('gold', G.cyl(0.05, 0.05, 1.6, 4).rotateX(-0.8), { pos: [dx, dy + 3.9, dz], rot: [0, 0.6, 0], color: C.gold }); } }
+  // pass 24: cable trenches radiating to small antenna arrays, a parked rover by the relay hut
+  for (const ad of [100, 200, 262, 325]) { const a = ad * PI / 180; const P = []; for (let k = 0; k <= 8; k++) { const rr = 38 + k * 8.5; P.push({ x: x + Math.cos(a) * rr, z: z + Math.sin(a) * rr }); } /* pass 25: dead-straight runs */
+    strip(bn, P, 0, 1.3, 0.06, 'dark', '#3a3e46', 1); strip(bn, P, 0, 0.18, 0.11, 'glow', C.cyan, 1.4); /* pass 25: up normals, narrower, softer grey, continuous glow line */ for (const p of P) KEEP.push({ x: p.x, z: p.z, r: 2 });
+    for (let k = 1; k < 8; k += 3) { const p = P[k]; const gy = groundAt(p.x, p.z); bn.add('ivory', G.box(0.9, 0.5, 0.9), { pos: [p.x, gy + 0.2, p.z], rot: [0, -a, 0], color: C.ivory2 }); bn.add('glow', G.box(0.3, 0.12, 0.3), { pos: [p.x, gy + 0.5, p.z], color: C.cyan, intensity: 4 }); }
+    const c = { x: x + Math.cos(a) * 112, z: z + Math.sin(a) * 112 }; const gy = groundAt(c.x, c.z); KEEP.push({ x: c.x, z: c.z, r: 7 });
+    bn.add('dark', G.box(5.6, 0.4, 5.6), { pos: [c.x, gy + 0.1, c.z], rot: [0, -a, 0], color: '#2e3540' }); bn.add('tex', G.box(1.6, 1.2, 1.1), { region: 'panel', pos: [c.x, gy + 0.85, c.z], rot: [0, -a, 0], color: '#ffffff' });
+    for (const [u, v, h] of [[-1.8, -1.8, 7], [1.8, -1.8, 9], [-1.8, 1.8, 8.5], [1.8, 1.8, 6]]) { const px = c.x + Math.cos(a) * u - Math.sin(a) * v, pz = c.z + Math.sin(a) * u + Math.cos(a) * v;
+      bn.add('ivory', G.cyl(0.08, 0.13, h, 5), { pos: [px, gy, pz], color: C.ivory }); for (const yy of [0.55, 0.8]) bn.add('gold', G.box(1.4, 0.07, 0.07), { pos: [px, gy + h * yy, pz], rot: [0, -a + PI / 4, 0], color: C.goldD }); bn.add('glow', G.octa(0.16), { pos: [px, gy + h + 0.2, pz], color: h > 8 ? '#ff5030' : C.cyan, intensity: 5 }); } }
+  { const rx = x + 22, rz = z - 47; KEEP.push({ x: rx, z: rz, r: 6 }); rover(bn, rx, rz, 2.4); }
 }
 
 function rover(b, x, z, yaw) { // 6-wheel retro rover: rounded ivory cab with glowing windscreen, gold trim, rear cargo deck, antenna dish
@@ -210,7 +233,7 @@ function rover(b, x, z, yaw) { // 6-wheel retro rover: rounded ivory cab with gl
 }
 
 // Glowing gold-lit roads from the hub toward each chapter region (as on the world map)
-function roads(b) {
+function roads(b) { return; /* pass 25: hub->region roads stay hidden (never visible before pass 24; draped versions cost ~12k hub tris) */
   const targets = [REGIONS.canyon, REGIONS.reactor, REGIONS.launch, REGIONS.echo].map(r => ({ x: r.x * 0.86, z: r.z * 0.86 }));
   for (const [ti, T] of targets.entries()) {
     const a0 = Math.atan2(T.z, T.x); const start = { x: Math.cos(a0) * 46, z: Math.sin(a0) * 46 };
@@ -223,7 +246,7 @@ function roads(b) {
         const A = P[i], B = P[i + 1]; const dx = B.x - A.x, dz = B.z - A.z, l = Math.hypot(dx, dz); const nx = -dz / l, nz = dx / l;
         const q = (p, o) => { const px = p.x + nx * o, pz = p.z + nz * o; return [px, groundAt(px, pz) + lift + Math.min(0.6, Math.hypot(px, pz) / 1500), pz]; };
         const a1 = q(A, offset - width / 2), a2 = q(A, offset + width / 2), b1 = q(B, offset - width / 2), b2 = q(B, offset + width / 2);
-        pos.push(...a1, ...b1, ...a2, ...a2, ...b1, ...b2);
+        pos.push(...a1, ...a2, ...b1, ...a2, ...b2, ...b1) /* pass 24: upward winding (strips were back-face culled) */;
       }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
       b.add(group, g, { color, intensity: I });
