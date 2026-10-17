@@ -87,13 +87,13 @@ function reactor(b, s, d) {
   b.add('gold', G.torus(Ri + 1.25, 0.035, 3, 36), { pos: [x, yt + 0.57, z], rot: [PI / 2, 0, 0], color: C.gold2 });
   // deep glowing pit: walls glow hotter toward the molten floor, with dark vertical ribs
   const pitD = 0.85;
-  b.add('glow', G.cyl(Ri, Ri * 0.92, pitD + 0.55, 36, true), { pos: [x, yt - pitD, z], flip: true, color: (px, py, pz) => { const hh = pitD + 0.55; const ly = py > yt - pitD - 1 ? py - (yt - pitD) : py; const t = THREE.MathUtils.clamp(ly / hh, 0, 1); const k = 1.1 - 0.5 * t; return [k, k * 0.17, k * 0.012]; } });
+  b.add('glow', G.cyl(Ri, Ri * 0.92, pitD + 0.55, 36, true), { pos: [x, yt - pitD, z], flip: true, color: (px, py, pz) => { const hh = pitD + 0.55; const ly = py > yt - pitD - 1 ? py - (yt - pitD) : py; const t = THREE.MathUtils.clamp(ly / hh, 0, 1); const k = 1.55 - 0.6 * t; return [k, k * 0.17, k * 0.012]; } });
   for (let i = 0; i < 20; i++) { const a = i / 20 * PI * 2; b.add('dark', G.box(0.16, pitD + 0.8, 0.1), { pos: [x + Math.sin(a) * (Ri * 0.96 - 0.06), yt - pitD / 2 + 0.4, z + Math.cos(a) * (Ri * 0.96 - 0.06)], rot: [0, a, 0], color: '#5a3a20' }); }
-  b.add('glow', G.disc(Ri * 0.97, 32), { pos: [x, yt + 0.2, z], color: (px, py, pz) => { const t = Math.hypot(px - x, pz - z) / Ri; const k = 0.45 - 0.2 * t; return [k, k * 0.16, k * 0.01]; } });
-  b.add('glow', G.disc(Ri * 0.42, 24), { pos: [x, yt + 0.215, z], color: '#ffb347', intensity: 1.25 }); for (const f of [0.55, 0.78]) b.add('dark', G.ring(Ri * f, Ri * f + 0.34, 48), { pos: [x, yt + 0.218, z], color: '#1c0d06' }); // molten core: hot centre + crust rings
+  b.add('glow', G.disc(Ri * 0.97, 32), { pos: [x, yt + 0.2, z], color: (px, py, pz) => { const t = Math.hypot(px - x, pz - z) / Ri; const k = 0.95 - 0.4 * t; return [k, k * 0.2, k * 0.012]; } });
+  b.add('glow', G.disc(Ri * 0.42, 24), { pos: [x, yt + 0.215, z], color: '#ffb347', intensity: 2.4 }); for (const f of [0.55, 0.78]) b.add('dark', G.ring(Ri * f, Ri * f + 0.34, 48), { pos: [x, yt + 0.218, z], color: '#1c0d06' }); // molten core: hot centre + crust rings
   // small rooftop units
   for (let i = 0; i < 6; i++) { const a = i / 6 * PI * 2 + 0.5; const rr = (R + Ri + 0.75) / 2; b.add('ivory', G.cyl(0.35, 0.45, 0.6, 10), { pos: [x + Math.sin(a) * rr, yt, z + Math.cos(a) * rr], color: C.ivory }); b.add('glow', G.octa(0.14), { pos: [x + Math.sin(a) * rr, yt + 0.7, z + Math.cos(a) * rr], color: C.win, intensity: 4 }); }
-  return { x, y: yt, z };
+  return { x, y: yt, z, Ri };
 }
 
 function corridor(b, A, B, r = 1.05, h = 1.25) {
@@ -271,13 +271,13 @@ function portalCave(b, beams) {
   b.add('glow', G.ring(4.6, 5.0, 36), { pos: [P0.x, y0 + 0.52, P0.z], color: C.mint, intensity: 2.4 });
   // three beam pylons (concept: central larger ringed pad flanked by two smaller ones)
   for (let k = 0; k < 3; k++) {
-    const lat = (k - 1) * 4.3, fwd = k === 1 ? 2.2 : 3.4; const [px, , pz] = at(lat, fwd); const py = groundAt(px, pz); const big = k === 1 ? 1.5 : 1;
+    const lat = (k - 1) * 4.3 + 1.8, fwd = k === 1 ? 2.2 : 3.4; const [px, , pz] = at(lat, fwd); const py = groundAt(px, pz); const big = k === 1 ? 1.5 : 1;
     b.add('dark', G.cyl(1.25 * big, 1.45 * big, 0.5, 20), { pos: [px, py, pz], color: '#3a4250' });
     b.add('ivory', G.cyl(0.9 * big, 1.1 * big, 0.6, 20), { pos: [px, py + 0.4, pz], color: C.ivory });
     b.add('gold', G.torus(0.95 * big, 0.08, 3, 20), { pos: [px, py + 1.0, pz], rot: [PI / 2, 0, 0], color: C.gold });
     if (big > 1) { b.add('ivory', G.torus(1.6, 0.18, 4, 24), { pos: [px, py + 1.5, pz], rot: [PI / 2, 0, 0], color: C.ivory2 }); for (let q = 0; q < 4; q++) { const aa = q * PI / 2; b.add('ivory', G.box(0.2, 1.2, 0.2), { pos: [px + Math.sin(aa) * 1.6, py + 0.9, pz + Math.cos(aa) * 1.6], color: C.ivory2 }); } }
     b.add('glow', G.disc(0.7 * big, 16), { pos: [px, py + 1.02, pz], color: C.cyan, intensity: 4 });
-    beams.push({ x: px, y: py + 1.0, z: pz, r: 0.45 * big, h: 15 + (k === 1 ? 4 : 0), color: '#53e0d0', I: 1.3 });
+    beams.push({ x: px, y: py + 1.0, z: pz, r: 0.36 * big, h: 15 + (k === 1 ? 4 : 0), color: '#53e0d0', I: 1.9 });
   }
   return { x: mx, y, z: mz, yaw };
 }
@@ -300,6 +300,8 @@ function tracks(b) {
 }
 export function buildHub(b, beams) {
   const R = reactor(b, 0, 0);
+  beams.push({ x: R.x, y: R.y + 0.2, z: R.z, r: R.Ri * 0.92, h: 6.5, color: "#ff7a1e", I: 1.1, taper: 1.2 }); // warm glow halo rising out of the molten pit (additive, merged into the beam draw)
+  beams.push({ x: R.x, y: R.y + 0.2, z: R.z, r: R.Ri * 0.5, h: 3.6, color: "#ffa04a", I: 0.9, taper: 1.3 });
   const L = dome(b, -22, 3, 5.0);
   const Bk = dome(b, -3.5, 25, 5.6, { spireH: 4.5 });
   const sm = dome(b, -9, 16.5, 2.8, { spire: false });

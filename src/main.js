@@ -80,6 +80,9 @@ const mats = {
 };
 mats.ivory = mats.hull; // placeholder fallback
 const built = b.build(mats, scene); for (const [n, B] of [...Object.entries(WB), ['beams', wb]]) { const bw = B.build(mats, scene, '_' + n); for (const k in bw) bw[k].castShadow = false; }
+// far chapter-region hulls sit behind the crater rim: skip them while the camera is low inside the hub basin (cheap occlusion cull)
+const farRegion = []; scene.traverse(o => { if (o.isMesh && /_(launch|echo|canyon|reactor)$/.test(o.name)) { o.geometry.computeBoundingSphere(); farRegion.push([o, o.geometry.boundingSphere.center.clone()]); } });
+const cullFarRegions = () => { const c = camera.position; const inHub = Math.hypot(c.x, c.z) < 125 && c.y < 45; for (const [o, ctr] of farRegion) o.visible = !inHub || ctr.distanceTo(c) < 380; };
 const culler = new InstanceCuller();
 const rocks = buildRocks(scene, culler, LOW ? 0.6 : MOBILE ? 0.8 : 1);
 const crystals = buildCrystals(scene, env);
@@ -110,10 +113,22 @@ const flame = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 10, 1, true).rota
 flame.position.set(0, 0.85, -0.45); flame.visible = false; catRoot.add(flame);
 function play(name, fade = 0.25) { const a = actions[name]; if (!a || current === a) return; a.reset().fadeIn(fade).play(); if (current) current.fadeOut(fade); current = a; }
 const catURL = Q.get('cat') || 'assets/moonkatty.glb';
+// walk-cycle stride speed: how fast a planted foot travels backwards (m/s at timeScale 1), measured from the clip itself so
+// walk playback = actualSpeed / STRIDE keeps feet planted (re-measured automatically whenever the cat glb changes)
+let STRIDE = 0.8; const STRIDE_MAX_TS = 3.5;
+function measureStride(model, clip) {
+  if (!clip) return STRIDE; const feet = ['foot_L', 'foot_R'].map(n => model.getObjectByName(n)).filter(Boolean); if (!feet.length) return STRIDE;
+  const mx = new THREE.AnimationMixer(model), act = mx.clipAction(clip).play(); const N = 96, D = clip.duration, inv = new THREE.Matrix4(), v = new THREE.Vector3();
+  const S = feet.map(() => []); for (let i = 0; i <= N; i++) { mx.setTime(i / N * D); model.updateMatrixWorld(true); inv.copy(model.matrixWorld).invert(); feet.forEach((f, k) => S[k].push(f.getWorldPosition(v).applyMatrix4(inv).clone().applyMatrix4(model.matrix))); }
+  act.stop(); mx.uncacheRoot(model);
+  const vs = []; for (const P of S) { const mn = Math.min(...P.map(p => p.y)); const tol = Math.max(0.012, (Math.max(...P.map(p => p.y)) - mn) * 0.12); for (let i = 0; i < N; i++) if (P[i].y < mn + tol && P[i + 1].y < mn + tol) vs.push(-(P[i + 1].z - P[i].z) / (D / N)); }
+  const st = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : 0; window.__stride = { stride: +st.toFixed(3), dur: +D.toFixed(3), samples: vs.length };
+  return st > 0.2 && st < 4 ? st : STRIDE;
+}
 const catPromise = new GLTFLoader().loadAsync(catURL + '?v=' + Date.now()).then(gltf => {
   const m = gltf.scene; m.traverse(o => { if (o.isMesh) { o.castShadow = !/Eye|Glow|Dome|Glint|Outline/i.test(Array.isArray(o.material) ? '' : o.material.name); o.receiveShadow = true; o.frustumCulled = false; const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const mt of ms) { if (mt.transmission > 0) { mt.transmission = 0; mt.transparent = true; mt.opacity = Math.min(mt.opacity, 0.35); mt.depthWrite = false; } /* transmission would re-render the whole opaque scene every frame */ if (mt.isMeshStandardMaterial) { mt.envMap = env; mt.envMapIntensity = /gold/i.test(mt.name) ? 1.6 : 0.6; } if (/Face|Fur|Eye/i.test(mt.name) && mt.isMeshStandardMaterial) { /* cat-only warm fill: face reads bright orange inside the dome even with the sun behind (no scene light added) */ if (mt.map) mt.emissiveMap = mt.map; mt.emissive = new THREE.Color(/Eye/i.test(mt.name) ? '#8a8a8a' : '#ffc89a'); mt.emissiveIntensity = /Eye/i.test(mt.name) ? 0.3 : 0.42; mt.needsUpdate = true; } if (/^MK_Dome$/i.test(mt.name)) { /* clear glass: weaker env/spec glare so the face reads through the helmet */ mt.opacity = 0.16; mt.envMapIntensity = 0.3; if ('specularIntensity' in mt) mt.specularIntensity = 0.5; if ('clearcoat' in mt) mt.clearcoat = 0; mt.needsUpdate = true; } if (/DomeGlint/i.test(mt.name)) mt.opacity = 0.22; if (/Fur/i.test(mt.name)) mt.emissiveIntensity = 0.3; } } });
   catRoot.add(m); m.traverse(o => { if (!headBone && /^head$/i.test(o.name)) headBone = o; }); if (!headBone) m.traverse(o => { if (!headBone && /head/i.test(o.name) && !o.isMesh) headBone = o; });
-  if (gltf.animations.length) { mixer = new THREE.AnimationMixer(m); for (const c of gltf.animations) actions[c.name] = mixer.clipAction(c); play('idle', 0); }
+  if (gltf.animations.length) { mixer = new THREE.AnimationMixer(m); for (const c of gltf.animations) actions[c.name] = mixer.clipAction(c); STRIDE = measureStride(m, gltf.animations.find(c => c.name === 'walk')); play('idle', 0); }
   return gltf;
 }).catch(err => { console.warn('cat glb missing, using placeholder', err); const ph = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.9, 4, 12), mats.ivory); ph.position.y = 0.85; ph.castShadow = true; catRoot.add(ph); });
 
@@ -163,11 +178,12 @@ function frame(dt) {
   catRoot.position.copy(ctrl.pos); catRoot.rotation.y = ctrl.yaw;
   prints.update(ctrl.pos, ctrl.yaw, ctrl.onGround, ctrl.speed);
   if (headBone && headBone.userData.pre) headBone.quaternion.copy(headBone.userData.pre);
-  if (mixer) { if (!ctrl.onGround) play(actions.jump ? 'jump' : 'idle', 0.15); else if (ctrl.speed > 0.6) { play('walk'); actions.walk && (actions.walk.timeScale = THREE.MathUtils.clamp(ctrl.speed / 3.8, 0.7, 2.2)); } else play('idle'); mixer.update(dt); }
+  if (mixer) { if (!ctrl.onGround) play(actions.jump ? 'jump' : 'idle', 0.15); else if (ctrl.speed > 0.6) { play('walk'); actions.walk && (actions.walk.timeScale = THREE.MathUtils.clamp(ctrl.speed / STRIDE, 0.6, STRIDE_MAX_TS)); /* feet planted up to the cap; beyond it (run) accept some slide rather than absurd cadence */ } else play('idle'); mixer.update(dt); }
   headLook(SHOT ? 1 : dt);
   flame.visible = ctrl.thrusting; if (flame.visible) flame.scale.y = 0.8 + Math.random() * 0.5;
   crystals.update(t); mats.beam.uniforms.uTime.value = t; sky.starMat.uniforms.uTime.value = t; sky.earthMat.uniforms.uTime.value = t;
   sky.group.position.copy(camera.position);
+  cullFarRegions();
   space.group.rotation.y = t * 0.002;
   // shadow frustum follows the focus point
   const focus = ctrl.camFree ? ctrl.pos : (VIEW === 'aerial' || VIEW === 'world' ? new THREE.Vector3(sd(0, 5).x, 0, sd(0, 5).z) : new THREE.Vector3(sd(0, -20).x, 0, sd(0, -20).z));
@@ -194,7 +210,7 @@ window.MK = { THREE, camera, scene, sky, renderer, head: () => headBone && [head
     per.sort((x, y) => y[1] - x[1]);
     return { culler: culler.stats(), rocks: rocks.counts, mainPass: main, mainPlusShadowPass: withShadow, wholeFrameInclPost: frameAll, top: per.slice(0, +(window.TOPN || 14)) };
   },
-  ctrlState() { return { pos: ctrl.pos.toArray().map(v => +v.toFixed(2)), onGround: ctrl.onGround, fuel: +ctrl.fuel.toFixed(2), anim: current ? current.getClip().name : null, thrust: ctrl.thrusting }; },
+  ctrlState() { return { pos: ctrl.pos.toArray().map(v => +v.toFixed(2)), onGround: ctrl.onGround, fuel: +ctrl.fuel.toFixed(2), anim: current ? current.getClip().name : null, thrust: ctrl.thrusting, walkTS: actions.walk ? +actions.walk.timeScale.toFixed(2) : null }; },
   frameTimes() { const a = [...ftimes].sort((x, y) => x - y); return { n: a.length, avg: a.reduce((s, x) => s + x, 0) / a.length, p50: a[Math.floor(a.length / 2)], p95: a[Math.floor(a.length * 0.95)] }; },
   async measure(n = 30) { const out = []; for (let i = 0; i < n; i++) { const t0 = performance.now(); frame(1 / 60); { const gl = renderer.getContext(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4)); } out.push(performance.now() - t0); await new Promise(r => setTimeout(r, 0)); } out.sort((a, b) => a - b); return { n, p50: out[n >> 1], avg: out.reduce((s, x) => s + x, 0) / n, min: out[0], max: out[n - 1] }; },
 };
