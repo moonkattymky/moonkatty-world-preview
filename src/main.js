@@ -66,7 +66,7 @@ const WB = { launch: new Builder(), reactor: new Builder(), canyon: new Builder(
 const hub = buildHub(b, beams); buildWorld(WB, beams); addBeams(wb, beams);
 coreLight.position.set(hub.reactor.x, hub.reactor.y + 2.5, hub.reactor.z);
 const atlas = makeAtlas();
-const hullOpts = { map: atlas.map, emissiveMap: atlas.emissiveMap, emissive: '#ffffff', emissiveIntensity: EMISSIVE_INTENSITY, roughnessMap: atlas.ormMap, metalnessMap: atlas.ormMap, roughness: 1, metalness: 1, vertexColors: true, envMap: env, envMapIntensity: 1.0 };
+const hullOpts = { map: atlas.map, emissiveMap: atlas.emissiveMap, emissive: '#ffffff', emissiveIntensity: EMISSIVE_INTENSITY, roughnessMap: atlas.ormMap, metalnessMap: atlas.ormMap, roughness: 1, metalness: 1, vertexColors: true, envMap: env, envMapIntensity: 0.75 };
 const mats = {
   hull: new THREE.MeshStandardMaterial(hullOpts),
   lattice: new THREE.MeshStandardMaterial({ ...hullOpts, alphaTest: 0.5, side: THREE.DoubleSide }),
@@ -127,6 +127,15 @@ const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, 
 composer.addPass(new RenderPass(scene, camera));
 let bloom = null; if (BLOOM) { bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.22, 1.3); composer.addPass(bloom); }
 composer.addPass(new OutputPass());
+const grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uVig: { value: 0.3 } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uVig; varying vec2 vUv;
+    void main(){ vec4 t = texture2D(tDiffuse, vUv); vec3 c = t.rgb; float l = dot(c, vec3(0.299, 0.587, 0.114));
+      c = mix(c, c * vec3(0.9, 0.97, 1.1), (1.0 - smoothstep(0.0, 0.45, l)) * 0.55); // cool shadows
+      c += vec3(0.045, 0.02, -0.025) * smoothstep(0.45, 1.0, l); // warm highlights
+      c = mix(c, c * c * (3.0 - 2.0 * c), 0.18); // gentle S-curve
+      vec2 d = vUv - 0.5; d.x *= 1.15; c *= 1.0 - uVig * smoothstep(0.3, 0.85, length(d) * 1.25);
+      gl_FragColor = vec4(c, t.a); }` });
+composer.addPass(grade);
 const fxaa = new ShaderPass(FXAAShader); composer.addPass(fxaa);
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h); composer.setPixelRatio(PR); composer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); fxaa.material.uniforms.resolution.value.set(1 / (w * PR), 1 / (h * PR)); }
 addEventListener('resize', resize); resize();

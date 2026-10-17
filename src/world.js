@@ -85,7 +85,7 @@ function roads(b) {
   const targets = [REGIONS.canyon, REGIONS.reactor, REGIONS.launch, REGIONS.echo].map(r => ({ x: r.x * 0.86, z: r.z * 0.86 }));
   for (const [ti, T] of targets.entries()) {
     const a0 = Math.atan2(T.z, T.x); const start = { x: Math.cos(a0) * 46, z: Math.sin(a0) * 46 };
-    const len = Math.hypot(T.x - start.x, T.z - start.z); const n = Math.ceil(len / 5);
+    const len = Math.hypot(T.x - start.x, T.z - start.z); const n = Math.ceil(len / 8);
     const P = [];
     for (let i = 0; i <= n; i++) { const t = i / n; const nx = -(T.z - start.z) / len, nz = (T.x - start.x) / len; const w = fbm(t * 3 + ti * 7, ti * 3.3, 2) * 40 * Math.sin(PI * t); P.push({ x: start.x + (T.x - start.x) * t + nx * w, z: start.z + (T.z - start.z) * t + nz * w }); }
     const strip = (offset, width, lift, group, color, I) => {

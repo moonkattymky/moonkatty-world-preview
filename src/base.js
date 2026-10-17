@@ -5,7 +5,7 @@ import { noise2 } from './noise.js';
 
 const PI = Math.PI;
 export const C = {
-  ivory: '#e2dacb', ivory2: '#d2c9b8', gold: '#e9bd58', gold2: '#efd295', goldD: '#aa7835', navy: '#102e40', night: '#05070d',
+  ivory: '#dccaa8', ivory2: '#ccb995', gold: '#e9bd58', gold2: '#efd295', goldD: '#aa7835', navy: '#102e40', night: '#05070d',
   dark: '#2a3442', win: '#ffb347', winHot: '#ff9a30', cyan: '#67d7f0', mint: '#a8dbc9',
 };
 export const colliders = [];
@@ -27,22 +27,22 @@ function door(b, x, y, z, a, R, w = 1.4, h = 1.9, color = C.winHot) {
 }
 function antenna(b, x, y, z, h, light = C.win) {
   b.add('gold', G.cyl(0.08, 0.14, h, 6), { pos: [x, y, z], color: C.gold });
-  b.add('gold', G.sphere(0.18, 8, 6), { pos: [x, y + h * 0.6, z], color: C.gold });
+  b.add('gold', G.sphere(0.18, 6, 4), { pos: [x, y + h * 0.6, z], color: C.gold });
   b.add('glow', G.octa(0.16), { pos: [x, y + h + 0.1, z], color: light, intensity: 4 });
 }
 
 export function dome(b, s, d, r, o = {}) {
   const { x, z } = sd(s, d); const y = groundAt(x, z) - 0.15;
-  colliders.push({ x, z, r: r * 1.15 });
-  b.add('dark', G.cyl(r * 1.13, r * 1.2, 0.55, 32), { pos: [x, y - 0.25, z], color: '#3a4250' });
-  b.add('gold', G.torus(r * 1.12, 0.12, 3, 28), { pos: [x, y + 0.3, z], rot: [PI / 2, 0, 0], color: C.gold });
-  const wallH = r * 0.45, yw = y + 0.3; const seg = r > 4 ? 32 : 24;
+  colliders.push({ x, z, r: r * 1.15 }); const seg = r > 4 ? 24 : 18;
+  b.add('dark', G.cyl(r * 1.13, r * 1.2, 0.55, seg), { pos: [x, y - 0.25, z], color: '#3a4250' });
+  b.add('gold', G.torus(r * 1.12, 0.12, 3, seg), { pos: [x, y + 0.3, z], rot: [PI / 2, 0, 0], color: C.gold });
+  const wallH = r * 0.45, yw = y + 0.3;
   b.add('tex', G.cyl(r, r * 1.05, wallH, seg, true), { region: 'domeWall', pos: [x, yw, z], rot: [0, o.rotA || 0.2, 0], color: '#ffffff', ao: [yw - 0.4, yw + wallH * 1.4] });
   const dA = o.doorA ?? faceCam;
   door(b, x, yw, z, dA, r * 0.97, 1.3, Math.min(1.9, wallH * 0.8));
   b.add('gold', G.torus(r * 1.01, 0.12, 3, seg), { pos: [x, yw + wallH, z], rot: [PI / 2, 0, 0], color: C.gold });
   const sy = 0.8, yd = yw + wallH;
-  b.add('tex', G.cap(r, seg, 7), { region: 'domeCap', pos: [x, yd, z], rot: [0, (o.rotA || 0.2) + 0.1, 0], scale: [1, sy, 1], color: '#ffffff' });
+  b.add('tex', G.cap(r, seg, 5), { region: 'domeCap', pos: [x, yd, z], rot: [0, (o.rotA || 0.2) + 0.1, 0], scale: [1, sy, 1], color: '#ffffff' });
   const top = yd + r * sy;
   b.add('ivory', G.cyl(r * 0.18, r * 0.24, 0.5, 16), { pos: [x, top - 0.15, z], color: C.ivory2 });
   b.add('gold', G.torus(r * 0.2, 0.06, 3, 16), { pos: [x, top + 0.33, z], rot: [PI / 2, 0, 0], color: C.gold });
@@ -53,19 +53,19 @@ export function dome(b, s, d, r, o = {}) {
 function reactor(b, s, d) {
   const { x, z } = sd(s, d); const y = groundAt(x, z) - 0.1; const R = 8.5, H = 2.6, Ri = R - 2.4;
   colliders.push({ x, z, r: R * 1.1 });
-  b.add('dark', G.cyl(R * 1.1, R * 1.16, 0.5, 48), { pos: [x, y - 0.2, z], color: '#3a4250' });
-  b.add('gold', G.torus(R * 1.09, 0.14, 3, 40), { pos: [x, y + 0.3, z], rot: [PI / 2, 0, 0], color: C.gold });
-  b.add('tex', G.cyl(R, R * 1.04, H, 48, true), { region: 'reactorWall', pos: [x, y + 0.3, z], color: '#ffffff', ao: [y - 0.5, y + H * 1.3] });
+  b.add('dark', G.cyl(R * 1.1, R * 1.16, 0.5, 36), { pos: [x, y - 0.2, z], color: '#3a4250' });
+  b.add('gold', G.torus(R * 1.09, 0.14, 3, 32), { pos: [x, y + 0.3, z], rot: [PI / 2, 0, 0], color: C.gold });
+  b.add('tex', G.cyl(R, R * 1.04, H, 36, true), { region: 'reactorWall', pos: [x, y + 0.3, z], color: '#ffffff', ao: [y - 0.5, y + H * 1.3] });
   const doors = [faceCam, faceCam + 1.9, faceCam - 1.6, faceCam + PI];
   for (const a of doors) door(b, x, y + 0.3, z, a, R * 1.0, 1.6, 2.0);
   const yt = y + 0.3 + H;
-  b.add('ivory', G.ring(Ri, R, 48), { pos: [x, yt, z], color: C.ivory2 });
-  b.add('gold', G.torus(R, 0.3, 4, 40), { pos: [x, yt, z], rot: [PI / 2, 0, 0], color: C.gold });
+  b.add('ivory', G.ring(Ri, R, 36), { pos: [x, yt, z], color: C.ivory2 });
+  b.add('gold', G.torus(R, 0.3, 4, 32), { pos: [x, yt, z], rot: [PI / 2, 0, 0], color: C.gold });
   b.add('gold', G.torus(Ri, 0.32, 4, 36), { pos: [x, yt + 0.05, z], rot: [PI / 2, 0, 0], color: C.gold });
-  b.add('gold', G.torus((R + Ri) / 2, 0.1, 4, 48), { pos: [x, yt + 0.02, z], rot: [PI / 2, 0, 0], color: C.gold2 });
-  b.add('ivory', G.cyl(Ri, Ri, 1.4, 40, true), { pos: [x, yt - 1.4, z], color: C.ivory2, flip: true });
+  b.add('gold', G.torus((R + Ri) / 2, 0.1, 4, 36), { pos: [x, yt + 0.02, z], rot: [PI / 2, 0, 0], color: C.gold2 });
+  b.add('ivory', G.cyl(Ri, Ri, 1.4, 32, true), { pos: [x, yt - 1.4, z], color: C.ivory2, flip: true });
   // molten core
-  b.add('glow', G.disc(Ri, 40), { pos: [x, yt - 0.25, z], color: (px, py, pz) => { const t = Math.hypot(px - x, pz - z) / Ri; return [5.5 - 2.2 * t, 2.6 - 1.4 * t, 0.6 - 0.4 * t]; } });
+  b.add('glow', G.disc(Ri, 32), { pos: [x, yt - 0.25, z], color: (px, py, pz) => { const t = Math.hypot(px - x, pz - z) / Ri; return [5.5 - 2.2 * t, 2.6 - 1.4 * t, 0.6 - 0.4 * t]; } });
   for (const rr of [Ri * 0.35, Ri * 0.62, Ri * 0.85]) b.add('gold', G.torus(rr, 0.08, 3, 32), { pos: [x, yt - 0.2, z], rot: [PI / 2, 0, 0], color: C.goldD });
   b.add('beam', G.cyl(Ri * 0.98, Ri * 0.7, 3.2, 32, true), { pos: [x, yt - 0.25, z], color: '#ffae50', intensity: 0.5 }); // heat shimmer above the core
   // small rooftop units
@@ -110,7 +110,7 @@ function dishModule(b, s, d) {
   M(cap, [0, cy + 0.06, 0], C.ivory2, 'ivory', { flip: true });
   M(G.torus(Rd, 0.16, 3, 32).rotateX(PI / 2), [0, 0.03, 0], C.gold, 'gold');
   for (const f of [0.45, 0.75]) { const t2 = Math.asin(f * Math.sin(th)); M(G.torus(f * Rd, 0.06, 3, 28).rotateX(PI / 2), [0, cy - sr * Math.cos(t2) + 0.1, 0], C.gold2, 'gold'); }
-  for (let k = 0; k < 12; k++) { const g = G.torus(sr, 0.05, 3, 10, th).rotateZ(-PI / 2 - th).rotateY(k * PI / 6); M(g, [0, cy + 0.08, 0], C.gold2, 'gold'); }
+  for (let k = 0; k < 8; k++) { const g = G.torus(sr, 0.05, 3, 6, th).rotateZ(-PI / 2 - th).rotateY(k * PI / 4); M(g, [0, cy + 0.08, 0], C.gold2, 'gold'); }
   for (let k = 0; k < 3; k++) { const a = k / 3 * PI * 2; const p0 = new THREE.Vector3(Math.cos(a) * Rd * 0.95, 0, Math.sin(a) * Rd * 0.95), p1 = new THREE.Vector3(0, 3.2, 0); const dv = p1.clone().sub(p0); const L = dv.length(); const g = G.cyl(0.06, 0.06, L, 5).applyQuaternion(quatFromDir(dv)); M(g, p0.toArray(), C.gold, 'gold'); }
   M(G.cone(0.35, 0.9).rotateX(PI), [0, 3.8, 0], C.gold, 'gold');
   M(G.sphere(0.2, 8, 6), [0, 2.9, 0], C.win, 'glow', { intensity: 4 });
@@ -128,7 +128,6 @@ function tower(b, x, z, h, w = 1.5) {
     for (let k = 0; k < 4; k++) { const a = k * PI / 2 + PI / 8; b.add('glow', new THREE.PlaneGeometry(0.28, sh * 0.4), { pos: [x + Math.sin(a) * ww * 0.56, yy + sh * 0.5, z + Math.cos(a) * ww * 0.56], rot: [0, a, 0], color: C.win, intensity: 2.5 }); }
     if (i === 2 || i === 4) { b.add('ivory', G.cyl(ww * 1.05, ww * 0.8, 0.35, 12), { pos: [x, yy + sh * 0.95, z], color: C.ivory2 }); b.add('glow', G.torus(ww * 1.05, 0.05, 3, 16), { pos: [x, yy + sh * 0.95 + 0.36, z], rot: [PI / 2, 0, 0], color: C.win, intensity: 2.5 }); }
     const lw = ww * 0.95; for (let k = 0; k < 4; k++) { const a = k * PI / 2 + PI / 4; b.add('lattice', new THREE.PlaneGeometry(lw * 1.414, sh * 0.9), { pos: [x + Math.sin(a) * lw * 0.707, yy + sh * 0.45, z + Math.cos(a) * lw * 0.707], rot: [0, a, 0], color: '#ffffff' }); }
-    for (let k = 0; k < 4; k++) { const a = k * PI / 2; b.add('gold', G.box(0.12, sh, 0.12), { pos: [x + Math.sin(a) * lw, yy + sh / 2, z + Math.cos(a) * lw], color: C.goldD }); }
   }
   const top = y + 0.4 + h;
   b.add('gold', G.cone(w * 0.35, h * 0.22, 8), { pos: [x, top, z], color: C.gold });
@@ -211,7 +210,7 @@ function portalCave(b, beams) {
   b.add('dark', rockyArch(R + 3.6, 2.4, 7), { pos: at(0, -1.8), rot: [0, yaw, 0], color: '#6a6762' });
   // tunnel (inside visible) + glowing back
   b.add('dark', new THREE.CylinderGeometry(R, R, 9, 16, 1, true, -PI / 2, PI).rotateX(PI / 2).rotateZ(0).translate(0, 0, -4.5), { pos: at(0, 0.4), rot: [0, yaw, 0], color: '#1a2230', flip: true });
-  b.add('glow', new THREE.CircleGeometry(R - 0.6, 20, 0, PI), { pos: at(0, -0.9), rot: [0, yaw, 0], color: (px, py, pz) => { const t = Math.min(1, (py - y) / R); return [0.3 + 0.9 * (1 - t) * (1 - t), 3.6 - 2.2 * t, 4.2 - 2.4 * t]; } });
+  b.add('glow', new THREE.CircleGeometry(R - 0.6, 20, 0, PI), { pos: at(0, -0.9), rot: [0, yaw, 0], color: (px, py, pz) => { const h = Math.min(1, (py - y) / R); const t = Math.min(1, Math.hypot(px - mx, pz - mz, py - y) / (R - 0.6)); const k = 0.08 + 1.5 * Math.pow(t, 4) + 1.2 * Math.pow(1 - h, 6); return [0.15 * k, 1.9 * k, 2.3 * k]; } });
   b.add('dark', new THREE.PlaneGeometry(2 * R + 0.2, 0.4).rotateX(-PI / 2), { pos: at(0, -4, 0.05), rot: [0, yaw, 0], color: '#2a3442' });
   // gold gate ring with cyan inner glow
   b.add('gold', G.torus(R - 0.5, 0.42, 6, 32, PI), { pos: at(0, -0.6, 0.0), rot: [0, yaw, 0], color: C.gold });
@@ -277,5 +276,9 @@ export function buildHub(b, beams) {
   for (const [s, d] of [[-1, -14], [3, -10.5], [-6.5, -11], [7, -13.5], [-4, -27], [2.5, -26], [-8, -33], [6, -36]]) { const p = P(s, d); lamp(b, p.x, p.z, C.gold2); }
   { const p = P(1.5, -23); const y = groundAt(p.x, p.z); b.add('dark', G.cyl(0.07, 0.09, 2.2, 6), { pos: [p.x, y, p.z], color: '#59616d' });
     b.add('tex', new THREE.BoxGeometry(1.4, 0.7, 0.06), { region: 'panel', pos: [p.x, y + 2.0, p.z], rot: [0, faceCam, 0], color: '#ffffff' }); b.add('gold', G.box(1.5, 0.08, 0.08), { pos: [p.x, y + 2.38, p.z], rot: [0, faceCam, 0], color: C.gold }); }
+  // extra small props: solar arrays, mast antennas, path lamps
+  for (const [s0, d0, n, yw] of [[30, -6, 4, 0.4], [-28, -8, 3, -0.3], [8, 44, 4, 0.1]]) for (let i = 0; i < n; i++) { const p = P(s0 + i * 3.6 * Math.cos(yw), d0 + i * 3.6 * Math.sin(yw)); solar(b, p.x, p.z, faceCam + PI + yw); }
+  for (const [s0, d0, h] of [[-17, -2, 4.5], [27, 14, 3.5], [3, 12, 5], [-12, 26, 4], [17, 30, 4.5], [33, 22, 3]]) { const p = P(s0, d0); const y = groundAt(p.x, p.z); b.add('dark', G.cyl(0.35, 0.45, 0.3, 8), { pos: [p.x, y, p.z], color: '#4a5260' }); antenna(b, p.x, y + 0.3, p.z, h); }
+  for (const [s0, d0] of [[-18, -18], [14, -24], [26, -16], [-24, 22], [30, 30], [-6, 38], [20, 40], [-30, -2]]) { const p = P(s0, d0); lamp(b, p.x, p.z, C.gold2); }
   return { reactor: R, cave };
 }
