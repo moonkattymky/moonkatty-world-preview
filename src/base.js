@@ -271,7 +271,7 @@ function portalCave(b, beams) {
   b.add('glow', G.ring(4.6, 5.0, 36), { pos: [P0.x, y0 + 0.52, P0.z], color: C.mint, intensity: 2.4 });
   // three beam pylons (concept: central larger ringed pad flanked by two smaller ones)
   for (let k = 0; k < 3; k++) {
-    const lat = (k - 1) * 4.3 + 1.8, fwd = k === 1 ? 2.2 : 3.4; const [px, , pz] = at(lat, fwd); const py = groundAt(px, pz); const big = k === 1 ? 1.5 : 1;
+    const lat = (k - 1) * 3.0 + 2.4, fwd = k === 1 ? 1.6 : 3.8; const [px, , pz] = at(lat, fwd); const py = groundAt(px, pz); const big = k === 1 ? 1.5 : 1;
     b.add('dark', G.cyl(1.25 * big, 1.45 * big, 0.5, 20), { pos: [px, py, pz], color: '#3a4250' });
     b.add('ivory', G.cyl(0.9 * big, 1.1 * big, 0.6, 20), { pos: [px, py + 0.4, pz], color: C.ivory });
     b.add('gold', G.torus(0.95 * big, 0.08, 3, 20), { pos: [px, py + 1.0, pz], rot: [PI / 2, 0, 0], color: C.gold });
@@ -300,8 +300,8 @@ function tracks(b) {
 }
 export function buildHub(b, beams) {
   const R = reactor(b, 0, 0);
-  beams.push({ x: R.x, y: R.y + 0.2, z: R.z, r: R.Ri * 0.92, h: 6.5, color: "#ff7a1e", I: 1.1, taper: 1.2 }); // warm glow halo rising out of the molten pit (additive, merged into the beam draw)
-  beams.push({ x: R.x, y: R.y + 0.2, z: R.z, r: R.Ri * 0.5, h: 3.6, color: "#ffa04a", I: 0.9, taper: 1.3 });
+  beams.push({ x: R.x, y: R.y + 0.2, z: R.z, r: R.Ri * 0.92, h: 5.0, color: "#ff7a1e", I: 0.55, taper: 1.2 }); // warm glow halo rising out of the molten pit (additive, merged into the beam draw)
+  beams.push({ x: R.x, y: R.y + 0.2, z: R.z, r: R.Ri * 0.5, h: 3.0, color: "#ffa04a", I: 0.5, taper: 1.3 });
   const L = dome(b, -22, 3, 5.0);
   const Bk = dome(b, -3.5, 25, 5.6, { spireH: 4.5 });
   const sm = dome(b, -9, 16.5, 2.8, { spire: false });

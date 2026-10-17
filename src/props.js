@@ -53,7 +53,7 @@ export function chiselGeom(seed, cuts = 11, detail = 2) {
   const planes = []; for (let i = 0; i < cuts; i++) { const th = r() * Math.PI * 2, y = i < 2 ? 0.85 + r() * 0.15 : (r() - 0.35) * 1.3; n.set(Math.cos(th) * Math.sqrt(Math.max(0, 1 - y * y)), y, Math.sin(th) * Math.sqrt(Math.max(0, 1 - y * y))).normalize(); planes.push([n.clone(), i < 2 ? 0.45 + r() * 0.15 : 0.55 + r() * 0.3]); }
   for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); for (const [pn, d] of planes) { const k = v.dot(pn); if (k > d) v.addScaledVector(pn, d - k); } v.x *= 1.25; v.z *= 1.05; v.y *= 0.9; if (v.y < -0.3) v.y = -0.3 - (v.y + 0.3) * 0.15; P.setXYZ(i, v.x, v.y, v.z); }
   g.deleteAttribute('uv'); g.computeVertexNormals(); const N = g.attributes.normal; const col = new Float32Array(P.count * 3);
-  for (let f = 0; f < P.count; f += 3) { const nx = (N.getX(f) + N.getX(f + 1) + N.getX(f + 2)) / 3, ny = (N.getY(f) + N.getY(f + 1) + N.getY(f + 2)) / 3; const c = 0.24 + Math.max(0, ny) * 0.06 + Math.max(0, -nx) * 0.03 + (r() - 0.5) * 0.025; for (let k = 0; k < 3; k++) { const y = P.getY(f + k); const ao = THREE.MathUtils.clamp(0.72 + (y + 0.3) * 0.35, 0.68, 1.0); const cc = c * ao; col.set([cc * 1.03, cc, cc * 0.95], (f + k) * 3); } }
+  for (let f = 0; f < P.count; f += 3) { const nx = (N.getX(f) + N.getX(f + 1) + N.getX(f + 2)) / 3, ny = (N.getY(f) + N.getY(f + 1) + N.getY(f + 2)) / 3; const c = 0.24 + Math.max(0, ny) * 0.06 + Math.max(0, -nx) * 0.03 + (r() - 0.5) * 0.025; for (let k = 0; k < 3; k++) { const y = P.getY(f + k); const ao = THREE.MathUtils.clamp(0.52 + (y + 0.3) * 0.55, 0.5, 1.0); const cc = c * ao; col.set([cc * 1.03, cc, cc * 0.95], (f + k) * 3); } }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeBoundingSphere(); return g;
 }
 // jagged crest for crater-wall pieces: lift upper vertices by position-hashed noise into sharp spires (no new triangles, crack-free)
@@ -134,6 +134,7 @@ function rockMaterial(fog = true, bump = 2.2, smooth = false, key = 0.0, far = f
       float farH(vec3 w){ float sb = smoothstep(0.25, 0.75, vn(vec2(w.y * 0.55, (w.x + w.z) * 0.03))); float cn = vn(w.xz * 0.3 + w.y * 0.45) * 0.7 + vn(w.xz * 0.9 - w.y * 0.8) * 0.3; return sb * 0.5 + cn * 0.5; }
       float rkH(vec3 w){ vec2 a = w.xz * 2.3 + w.y * 1.7, b = vec2(w.x + w.y * 0.7, w.z - w.y * 0.7) * 3.1; return vor(a) * 0.55 + vor(b) * 0.3 + vn(a * 4.0) * 0.15; }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
+      diffuseColor.rgb *= mix(vec3(1.01, 1.0, 0.96), vec3(1.06, 1.0, 0.9), smoothstep(0.25, 0.8, vn(vWP.xz * 0.06 + 4.0))); // warm regolith tones, varying by area
       { float d = length(vWP - cameraPosition); float fd = 1.0 - smoothstep(30.0, 120.0, d); vec2 q = vWP.xz * 1.9 + vWP.yy * 1.3;
         float n = vn(q) * 0.6 + vn(q * 3.7) * 0.4; diffuseColor.rgb *= mix(1.0, 0.93 + 0.14 * n, fd);
         ${rug > 0 ? 'vec2 rq = vec2(vWP.x * 0.7 + vWP.z * 0.7, vWP.y * 1.8) * 0.16; float rv = vor(rq) + 0.5 * vor(rq * 2.7 + 3.0); diffuseColor.rgb *= mix(1.0, 0.62 + 0.5 * smoothstep(0.02, 0.35, rv), smoothstep(40.0, 90.0, d) * ' + rug.toFixed(2) + ');' : ''}
@@ -193,7 +194,7 @@ function makeKind(scene, name, lods, items, mat, castShadow) {
 }
 
 export function buildRocks(scene, culler, quality = 1) {
-  const mat = rockMaterial(true, 0.2, false, 1.0, true, false, 0.24); mat.color.setScalar(0.85); const matFar = rockMaterial(true, 0.0, true, 2.9, false, true, 0.0); matFar.flatShading = true; matFar.color.setScalar(0.78); const matDebris = rockMaterial(true, 0.0, true, 0.7, false, false, 0.3); matDebris.color.setScalar(1.05); /* debris: smooth normals -> no sub-pixel black/white facet speckle */ const matWall = rockMaterial(true, 1.2, false, 0.35, true, false, 0.32, 1.0); matWall.color.setScalar(1.05);
+  const mat = rockMaterial(true, 0.2, false, 1.0, true, false, 0.24); mat.color.setScalar(0.85); const matFar = rockMaterial(true, 0.0, true, 1.95, false, true, 0.0); matFar.flatShading = true; matFar.color.setScalar(0.64); const matDebris = rockMaterial(true, 0.0, true, 0.7, false, false, 0.3); matDebris.color.setScalar(1.05); /* debris: smooth normals -> no sub-pixel black/white facet speckle */ const matWall = rockMaterial(true, 1.2, false, 0.35, true, false, 0.32, 1.0); matWall.color.setScalar(1.05);
   const L = { crumb: [], pebble: [], rubble: [], bA: [], bB: [], bC: [], cliff: [], peak: [], wall: [] };
   const K = CONCEPT; const cgy = groundAt(K.cat.x, K.cat.z); const ccam = new THREE.PerspectiveCamera(K.fov, 16 / 9, 0.2, 5000);
   ccam.position.set(K.cam.x, cgy + K.eye, K.cam.z); ccam.lookAt(K.target.x, cgy + K.eye - K.drop, K.target.z); ccam.updateMatrixWorld(); ccam.updateProjectionMatrix();
@@ -278,24 +279,22 @@ export function buildRocks(scene, culler, quality = 1) {
   // crater walls: connected massifs ringing the hub (r 105-175). Crest heights follow ONE continuous rugged profile instead of per-piece random peaks,
   // so overlapping pieces fuse into big cliff masses. In the concept frame the profile is authored in screen space: a big continuous massif rising
   // behind the base on the left-middle and a lower broken ridge on the right.
-  {
+  { const wr = seeded(7331); // own RNG: the skyline never shifts with quality level or edits elsewhere
     const n1 = (u, sd0) => noise2(u, sd0) * 0.5 + 0.5;
-    const skyY = (px) => { // target crest (px, 576-high concept frame)
-      const mass = 1 - THREE.MathUtils.smoothstep(px, 560, 660); // 1 = left/middle massif, 0 = right ridge
-      const left = 158 - 22 * Math.exp(-(((px - 360) / 110) ** 2)) - 10 * Math.exp(-(((px - 200) / 60) ** 2)) + 14 * (n1(px / 70, 3.3) - 0.5) + 7 * (n1(px / 22, 7.1) - 0.5);
-      const right = 204 + 14 * (n1(px / 60, 1.7) - 0.5) + 6 * (n1(px / 17, 5.2) - 0.5) + (n1(px / 45, 9.4) > 0.72 ? 12 : 0); // broken: occasional notches
-      return left * mass + right * (1 - mass); };
+    const SKY = [[0, 100], [100, 108], [170, 124], [230, 117], [290, 122], [330, 156], [420, 166], [470, 177], [560, 187], [640, 175], [700, 192], [820, 196], [930, 154], [1024, 150]]; // measured from the concept art's skyline
+    const skyY = (px) => { let k = 1; while (k < SKY.length - 1 && SKY[k][0] < px) k++; const [x0, y0] = SKY[k - 1], [x1, y1] = SKY[k]; const t = THREE.MathUtils.clamp((px - x0) / (x1 - x0), 0, 1); const b = y0 + (y1 - y0) * t * t * (3 - 2 * t);
+      return b + 9 * (n1(px / 38, 3.3) - 0.5) + 4 * (n1(px / 13, 7.1) - 0.5); };
     const prof = (a) => 0.7 + 0.45 * n1(Math.cos(a) * 1.6, Math.sin(a) * 1.6) + 0.15 * n1(Math.cos(a) * 6, Math.sin(a) * 6); // off-frame: continuous profile
-    for (let i = 0; i < 190; i++) { const a = i / 190 * Math.PI * 2 + (rnd() - 0.5) * 0.02;
-      const r0 = 108 + 40 * n1(Math.cos(a) * 2.1 + 5, Math.sin(a) * 2.1) + rnd() * 10; const s0 = 7 + rnd() * 5;
-      for (let k = 0; k < 2; k++) { const rr = r0 + k * s0 * 1.1 + rnd() * 3, aa = a + (rnd() - 0.5) * 0.015; const x = Math.cos(aa) * rr, z = Math.sin(aa) * rr; const s = s0 * (1 - k * 0.1);
+    for (let i = 0; i < 190; i++) { const a = i / 190 * Math.PI * 2 + (wr() - 0.5) * 0.02;
+      const r0 = 108 + 40 * n1(Math.cos(a) * 2.1 + 5, Math.sin(a) * 2.1) + wr() * 10; const s0 = 7 + wr() * 5;
+      for (let k = 0; k < 2; k++) { const rr = r0 + k * s0 * 1.1 + wr() * 3, aa = a + (wr() - 0.5) * 0.015; const x = Math.cos(aa) * rr, z = Math.sin(aa) * rr; const s = s0 * (1 - k * 0.1);
         const gy = Math.min(groundAt(x, z), groundAt(x + Math.sin(aa) * s, z - Math.cos(aa) * s), groundAt(x - Math.sin(aa) * s, z + Math.cos(aa) * s)); const base = gy + k * 2.5;
-        let hy = Math.min(s * 1.6 * prof(aa) * (0.9 + rnd() * 0.2), 30);
+        let hy = Math.min(s * 1.6 * prof(aa) * (0.9 + wr() * 0.2), 30);
         _v.set(x, base, z).project(ccam); const px = (_v.x * 0.5 + 0.5) * 1024;
-        if (_v.z < 1 && px > -80 && px < 1100) { const ty = skyY(THREE.MathUtils.clamp(px, 0, 1024)) - k * 7 + (rnd() - 0.5) * 6; let lo = base, hi = base + 90; // binary-search the crest height that lands on the screen-space skyline
+        if (_v.z < 1 && px > -80 && px < 1100) { const ty = skyY(THREE.MathUtils.clamp(px, 0, 1024)) - k * 7 + (wr() - 0.5) * 6; let lo = base, hi = base + 90; // binary-search the crest height that lands on the screen-space skyline
           for (let it = 0; it < 22; it++) { const mid = (lo + hi) / 2; _v.set(x, mid, z).project(ccam); if ((0.5 - _v.y * 0.5) * 576 > ty) lo = mid; else hi = mid; }
           hy = THREE.MathUtils.clamp((lo - base) / 0.78, 2.5, 60); }
-        L.wall.push({ x, y: base + hy * 0.25, z, s: [s * (2.2 + rnd() * 1.6), hy, s * (1.0 + rnd() * 0.6)], r: [(rnd() - 0.5) * 0.08, -aa + Math.PI / 2 + (rnd() - 0.5) * 0.7, (rnd() - 0.5) * 0.12], lodK: k ? 100 : undefined /* back layer: always the cheap 20-tri LOD */ }); } } }
+        L.wall.push({ x, y: base + hy * 0.25, z, s: [s * (2.2 + wr() * 1.6), hy, s * (1.0 + wr() * 0.6)], r: [(wr() - 0.5) * 0.08, -aa + Math.PI / 2 + (wr() - 0.5) * 0.7, (wr() - 0.5) * 0.12], lodK: k ? 100 : undefined /* back layer: always the cheap 20-tri LOD */ }); } } }
   // crumbs: dense angular fragments in the concept foreground, the lookout and the gameplay start area
   for (let i = 0, t = 0; i < 1200 * quality && t < 40000; t++) { const m = rnd(); let x, z;
     if (m < 0.22) { const p = sd((rnd() - 0.5) * 34, -60 + rnd() * 22); x = p.x; z = p.z; } else if (m < 0.8) { const p = sd(-3 + (rnd() - 0.5) * 36, -21 + (rnd() - 0.5) * 30); x = p.x; z = p.z; } else { const a = rnd() * 6.283, r = 8 + Math.sqrt(rnd()) * 60; x = Math.cos(a) * r; z = Math.sin(a) * r; }
@@ -314,7 +313,7 @@ export function buildRocks(scene, culler, quality = 1) {
     rockA: makeKind(scene, 'rockA', [[protoGeom(1, 2, [1.25, 0.75, 1.05]), 8], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 24], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 200]], A, mat, 2),
     debris: makeKind(scene, 'debris', [[chiselGeom(14, 6, 0), 10]], debris, matDebris, 0),
     strata: makeKind(scene, 'strata', [[chiselGeom(9, 12, 2), 8], [chiselGeom(9, 12, 1), 3000]], L.peak, matFar, 0),
-    wall: makeKind(scene, 'wall', [[mesaGeom(protoGeom(1, 33, [1, 1, 1], 0.55), 33), 170], [mesaGeom(protoGeom(0, 33, [1, 1, 1], 0.45), 33), 3000]], L.wall, matWall, 0),
+    wall: makeKind(scene, 'wall', [[mesaGeom(protoGeom(1, 33, [1, 1, 1], 0.55), 33), 150], [mesaGeom(protoGeom(0, 33, [1, 1, 1], 0.45), 33), 3000]], L.wall, matWall, 0),
   };
     for (const k of Object.values(kinds)) culler.add(k);
   return { kinds, counts: Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.length])) };
