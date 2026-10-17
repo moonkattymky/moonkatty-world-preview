@@ -13,7 +13,7 @@ export const F = { x: 0.592, z: -0.806 }, Rt = { x: 0.806, z: 0.592 };
 export function sd(s, d) { return { x: s * Rt.x + d * F.x, z: s * Rt.z + d * F.z }; }
 export const LOOKOUT = { ...sd(-2, -54), r: 19, h: 10 };
 // The concept-art camera: cat on the lip of a ridge, base below at ~60 m
-export const CONCEPT = { cat: sd(-2.53, -51.23), cam: sd(-0.59, -54.45), target: sd(-5.5, 0), eye: 1.0, drop: 3.5, fov: 47, catYaw: -0.15 };
+export const CONCEPT = { cat: sd(-2.53, -51.23), cam: sd(-0.59, -54.45), target: sd(-5.5, 0), eye: 1.1, drop: 3.5, fov: 47, catYaw: -0.15 };
 // walkable rock ledge under the concept cat (the rock mesh itself lives in props.js); raises groundAt so the cat really stands on it
 const _lc = sd(-3.0, -51.85); export const LEDGE = { x: _lc.x, z: _lc.z, h: 0.55, r0: 1.35, r1: 1.75 };
 export function ledgeAt(x, z) { const d = Math.hypot(x - LEDGE.x, z - LEDGE.z); if (d >= LEDGE.r1) return 0; const t = Math.min(1, Math.max(0, (d - LEDGE.r0) / (LEDGE.r1 - LEDGE.r0))); return LEDGE.h * (1 - t * t * (3 - 2 * t)); }
@@ -147,15 +147,19 @@ export function groundMesh(x, z) { // exact height of the rendered terrain mesh
   return best ?? heightAt(x, z);
 }
 
+// warm light pools under the path lamps: a small world-space light map painted in main.js (one texture fetch, no extra lights)
+const TFILL = (() => { const x = Rt.x * 0.6 - F.x * 0.3, z = Rt.z * 0.6 - F.z * 0.3, y = 0.6, l = Math.hypot(x, y, z); return `vec3(${(x / l).toFixed(3)}, ${(y / l).toFixed(3)}, ${(z / l).toFixed(3)})`; })();
+export const LAMPMAP = { value: null }; export const LAMPMAP_R = 75;
 export function terrainMaterial() {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.color.setScalar(0.7);
   // procedural regolith: mottled albedo, dark pits, pebble speckle and a bump-mapped normal (fades with distance)
-  m.onBeforeCompile = (sh) => {
+  m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
       varying vec3 vWP;
       float hh(vec2 p){ p = fract(p * vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(hh(i), hh(i + vec2(1, 0)), f.x), mix(hh(i + vec2(0, 1)), hh(i + vec2(1, 1)), f.x), f.y); }
+      uniform sampler2D uLampMap;
       float rg(vec2 p){ return vn(p * 0.55) * 0.45 + vn(p * 1.7) * 0.33 + vn(p * 5.3) * 0.22; }
       // small impact craters: returns (albedo factor, dh/dx, dh/dz)
       vec3 craters(vec2 p, float cs){
@@ -165,13 +169,16 @@ export function terrainMaterial() {
           vec2 ctr = (c + 0.2 + 0.6 * vec2(hh(c), hh(c + 17.3))) * cs; float rad = cs * (0.12 + 0.3 * hh(c + 5.1) * hh(c + 5.1));
           vec2 dv = p - ctr; float dl = length(dv); float d = dl / rad; if (d > 1.7) continue;
           float e1 = exp(-2.5 * d * d), q = (d - 1.0) / 0.28, e2 = exp(-q * q); float dh = 3.0 * d * e1 - 0.25 * 2.0 * q / 0.28 * e2; vec2 g = dh * 0.32 * dv / max(dl, 1e-3);
-          acc.yz += g; acc.x *= (1.0 - 0.1 * e1) * (1.0 + 0.06 * e2);
+          acc.yz += g; acc.x *= (1.0 - 0.12 * e1) * (1.0 + 0.16 * e2);
         }
         return acc; }`)
+      .replace('#include <opaque_fragment>', `{ vec3 kd = normalize((viewMatrix * vec4(${TFILL}, 0.0)).xyz); outgoingLight += diffuseColor.rgb * vec3(0.98, 0.96, 0.92) * 0.55 * max(dot(normal, kd), 0.0);
+        vec2 lu = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (lu.x > 0.0 && lu.x < 1.0 && lu.y > 0.0 && lu.y < 1.0) outgoingLight += diffuseColor.rgb * texture2D(uLampMap, lu).rgb * 9.0; }
+      #include <opaque_fragment>`)
       .replace('#include <color_fragment>', `#include <color_fragment>
       float tDist = length(vWP - cameraPosition); float tFade = 1.0 - smoothstep(40.0, 200.0, tDist); float tNear = 1.0 - smoothstep(18.0, 85.0, tDist);
-      float tN = rg(vWP.xz); vec3 cr = vec3(1.0, 0.0, 0.0); if (tNear > 0.01) cr = craters(vWP.xz, 2.6);
-      { float speck = smoothstep(0.78, 0.95, vn(vWP.xz * 13.0)) - 0.6 * smoothstep(0.8, 0.95, vn(vWP.xz * 9.0 + 3.1)); float grain = vn(vWP.xz * 31.0) * 0.45 + vn(vWP.xz * 67.0) * 0.35 + hh(floor(vWP.xz * 90.0)) * 0.2;
+      float tN = rg(vWP.xz); vec3 cr = vec3(1.0, 0.0, 0.0); if (tNear > 0.01) cr = craters(vWP.xz, 2.6); if (tDist < 28.0) { vec3 c2 = craters(vWP.xz + 31.7, 0.85); float w2 = 1.0 - smoothstep(14.0, 28.0, tDist); cr.x *= mix(1.0, c2.x, w2); cr.yz += c2.yz * 0.7 * w2; }
+      { float speck = smoothstep(0.78, 0.95, vn(vWP.xz * 13.0)) - 0.6 * smoothstep(0.8, 0.95, vn(vWP.xz * 9.0 + 3.1)); float grain = vn(vWP.xz * 31.0) * 0.4 + vn(vWP.xz * 67.0) * 0.3 + vn(vWP.xz * 140.0) * 0.15 + hh(floor(vWP.xz * 90.0)) * 0.15;
         diffuseColor.rgb *= mix(1.0, (0.86 + 0.26 * tN) * (1.0 + 0.22 * speck), tFade) * mix(1.0, cr.x * (0.66 + 0.68 * grain), tNear) * (1.0 + 0.45 * (1.0 - smoothstep(3.0, 24.0, tDist))); }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       if (tFade > 0.01) { float e = 0.15; float n0 = rg(vWP.xz * 1.6), nx = rg(vWP.xz * 1.6 + vec2(e, 0.)), nz = rg(vWP.xz * 1.6 + vec2(0., e));

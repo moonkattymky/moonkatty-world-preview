@@ -6,9 +6,9 @@ import { UnrealBloomPass } from '../vendor/three/jsm/postprocessing/UnrealBloomP
 import { OutputPass } from '../vendor/three/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from '../vendor/three/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from '../vendor/three/jsm/shaders/FXAAShader.js';
-import { buildTerrain, groundAt, sd, F, Rt, LOOKOUT, CONCEPT, PLAY_START } from './terrain.js';
+import { buildTerrain, groundAt, sd, F, Rt, LOOKOUT, CONCEPT, PLAY_START, LAMPMAP, LAMPMAP_R } from './terrain.js';
 import { Builder } from './builder.js';
-import { buildHub, colliders, C } from './base.js';
+import { buildHub, colliders, C, LAMPS } from './base.js';
 import { buildWorld } from './world.js';
 import { buildRocks, buildCrystals, beamMaterial, addBeams, InstanceCuller, buildTracks, TRACK_MAIN } from './props.js';
 import { makeAtlas, EMISSIVE_INTENSITY } from './atlas.js';
@@ -64,6 +64,10 @@ const terrain = buildTerrain(); scene.add(terrain);
 const b = new Builder(), wb = new Builder(); const beams = [];
 const WB = { launch: new Builder(), reactor: new Builder(), canyon: new Builder(), echo: new Builder(), roads: new Builder(), misc: new Builder() };
 const hub = buildHub(b, beams); buildWorld(WB, beams); addBeams(wb, beams);
+{ // warm light pools under the path lamps (terrain samples this map; no runtime lights)
+  const N = 512, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, N, N); g.globalCompositeOperation = 'lighter';
+  for (const L of LAMPS) { const u = (L.x / (2 * LAMPMAP_R) + 0.5) * N, v = (L.z / (2 * LAMPMAP_R) + 0.5) * N; const r = 3.2 / (2 * LAMPMAP_R) * N; const gr = g.createRadialGradient(u, v, 0, u, v, r); gr.addColorStop(0, 'rgba(255,170,90,0.55)'); gr.addColorStop(0.45, 'rgba(255,150,70,0.2)'); gr.addColorStop(1, 'rgba(255,140,60,0)'); g.fillStyle = gr; g.fillRect(u - r, v - r, 2 * r, 2 * r); }
+  const t = new THREE.CanvasTexture(c); t.flipY = true; t.colorSpace = THREE.SRGBColorSpace; LAMPMAP.value = t; }
 coreLight.position.set(hub.reactor.x, hub.reactor.y + 2.5, hub.reactor.z);
 const atlas = makeAtlas();
 const hullOpts = { map: atlas.map, emissiveMap: atlas.emissiveMap, emissive: '#ffffff', emissiveIntensity: EMISSIVE_INTENSITY, roughnessMap: atlas.ormMap, metalnessMap: atlas.ormMap, roughness: 1, metalness: 1, vertexColors: true, envMap: env, envMapIntensity: 0.75 };

@@ -56,6 +56,8 @@ export function chiselGeom(seed, cuts = 11, detail = 2) {
   for (let f = 0; f < P.count; f += 3) { const nx = (N.getX(f) + N.getX(f + 1) + N.getX(f + 2)) / 3, ny = (N.getY(f) + N.getY(f + 1) + N.getY(f + 2)) / 3; const c = 0.24 + Math.max(0, ny) * 0.06 + Math.max(0, -nx) * 0.03 + (r() - 0.5) * 0.025; for (let k = 0; k < 3; k++) { const y = P.getY(f + k); const ao = THREE.MathUtils.clamp(0.72 + (y + 0.3) * 0.35, 0.68, 1.0); const cc = c * ao; col.set([cc * 1.03, cc, cc * 0.95], (f + k) * 3); } }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeBoundingSphere(); return g;
 }
+// jagged crest for crater-wall pieces: lift upper vertices by position-hashed noise into sharp spires (no new triangles, crack-free)
+export function jagGeom(g, seed, amp = 0.9) { const P = g.attributes.position; for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (y <= 0.1) continue; const n = noise2(x * 2.3 + seed, z * 2.3 - seed * 0.7) * 0.5 + 0.5; const sp = Math.pow(n, 2.2) * amp * (y - 0.1) * 2.0; P.setY(i, y + sp); P.setX(i, x * (1 - 0.25 * Math.min(1, sp))); P.setZ(i, z * (1 - 0.25 * Math.min(1, sp))); } g.computeVertexNormals(); g.computeBoundingSphere(); return g; }
 export function protoGeom(detail, seed, stretch = [1, 1, 1], strata = 0.65, light = 1) {
   const g = new THREE.IcosahedronGeometry(1, detail); const P = g.attributes.position; const v = new THREE.Vector3(); const rr = new Float32Array(P.count);
   for (let i = 0; i < P.count; i++) {
@@ -220,10 +222,15 @@ export function buildRocks(scene, culler, quality = 1) {
   for (const [px, py, k] of [[30, 560, 1.3], [150, 575, 1.0], [300, 560, 1.4], [400, 545, 1.0], [490, 590, 1.4], [20, 430, 1.2], [70, 470, 0.8], [330, 455, 0.9], [270, 420, 0.7], [440, 470, 0.8],
     [600, 560, 1.3], [700, 590, 1.6], [820, 560, 1.5], [930, 540, 1.3], [1010, 470, 1.3], [880, 470, 0.9], [960, 410, 1.0], [760, 470, 0.7], [640, 470, 0.6], [560, 470, 0.5],
     [340, 405, 0.5], [600, 420, 0.45], [880, 380, 0.6], [990, 360, 0.6], [250, 380, 0.55], [460, 410, 0.45]]) screenPut(px, py, k, L.peak);
-  // hero chunks at the concept's foreground rock spots (centre-bottom, bottom-right, right edge)
-  for (const [px, py, k] of [[380, 540, 2.4], [450, 572, 2.6], [690, 545, 2.2], [745, 574, 2.4], [935, 505, 2.6], [1005, 560, 2.8], [965, 445, 1.8], [560, 562, 1.5], [240, 566, 1.7], [850, 560, 1.6]]) screenPut(px, py, k, L.peak);
+  // HERO slabs: a few big sunlit chiselled rocks in the concept's bottom band; each is sized so its top projects to the art's rock top
+  const heroPut = (px, py, topY, sx = 1.25) => { ray.set(px / 1024 * 2 - 1, 1 - py / 576 * 2, 0.5).unproject(ccam).sub(ccam.position).normalize();
+    for (let t = 0.6; t < 60; t += 0.1) { const x = ccam.position.x + ray.x * t, y = ccam.position.y + ray.y * t, z = ccam.position.z + ray.z * t; if (y < groundAt(x, z)) {
+      if (Math.hypot(x - K.cat.x, z - K.cat.z) < 1.3 || nearTrack(x, z, 1.0)) return; const g0 = groundMesh(x, z); let lo = 0.2, hi = 4;
+      for (let it = 0; it < 18; it++) { const m = (lo + hi) / 2; _v.set(x, g0 + m * 0.62, z).project(ccam); if ((0.5 - _v.y * 0.5) * 576 > topY) lo = m; else hi = m; }
+      const sz = lo; L.peak.push({ x, y: g0 - sz * 0.18, z, s: [sz * sx, sz * 0.8, sz * (0.9 + rnd() * 0.3)], r: [(rnd() - 0.5) * 0.12, rnd() * 6.28, (rnd() - 0.5) * 0.12] }); return; } } };
+  for (const [px, py, top, sx] of [[385, 568, 412, 1.3], [480, 574, 452, 1.1], [60, 566, 468, 1.3], [215, 572, 486, 1.2], [690, 566, 482, 1.3], [770, 575, 505, 1.1], [955, 528, 412, 1.3], [1012, 478, 382, 1.1], [870, 572, 470, 1.2]]) heroPut(px, py, top, sx);
   // dense chunky foreground (concept: jagged slabs + rubble filling the bottom of the frame around the cat's ledge)
-  for (let gy = 455; gy < 595; gy += 26) for (let gx = -10; gx < 1050; gx += 56) { const px = gx + (rnd() - 0.5) * 30, py = gy + (rnd() - 0.5) * 14; if (px > 20 && px < 290 && py < 500) continue; if (rnd() < 0.8) continue; screenPut(px, py, 0.8 + rnd() * 2.6, L.peak, true); }
+  for (let gy = 455; gy < 595; gy += 26) for (let gx = -10; gx < 1050; gx += 56) { const px = gx + (rnd() - 0.5) * 30, py = gy + (rnd() - 0.5) * 14; if (px > 20 && px < 290 && py < 500) continue; if (rnd() < 0.88) continue; screenPut(px, py, 0.8 + rnd() * 2.0, L.peak, true); }
   // rocky ledge under the cat: one big flat-topped boulder matching LEDGE (groundAt is raised there, so feet are grounded) + lower stepped rocks at its front/right edge
   { const gb = Math.min(groundMesh(LEDGE.x, LEDGE.z), groundMesh(LEDGE.x + 1.4, LEDGE.z), groundMesh(LEDGE.x - 1.4, LEDGE.z), groundMesh(LEDGE.x, LEDGE.z + 1.4), groundMesh(LEDGE.x, LEDGE.z - 1.4)); const top = gb + LEDGE.h;
     L.peak.push({ x: LEDGE.x, y: top - 0.53 * 1.1, z: LEDGE.z, s: [1.5, 1.1, 1.6], r: [0, 0.4, 0] });
@@ -234,7 +241,7 @@ export function buildRocks(scene, culler, quality = 1) {
     for (let t = 0.6; t < 90; t += 0.3) { const x = ccam.position.x + ray.x * t, y = ccam.position.y + ray.y * t, z = ccam.position.z + ray.z * t; if (y < groundAt(x, z)) { if (Math.hypot(x - K.cat.x, z - K.cat.z) < 1.4) break; const sz = Math.min(0.5 + t * 0.06, 2.6) * (0.5 + rnd() * 0.8); put(L.peak, x, z, sz, 0.3, 0.35, 0.7 + rnd() * 0.4); break; } } }
   for (let i = 0; i < 90; i++) { const px = rnd() * 1024, py = 420 + rnd() * 160; if (px > 20 && px < 290 && py < 500) continue; screenPut(px, py, 0.3 + rnd() * 0.5, L.rubble, true); }
   // cliff slabs on steep slopes (jagged faceted rims / crater walls)
-  for (let i = 0, t = 0; i < 170 * quality && t < 60000; t++) {
+  for (let i = 0, t = 0; i < 140 * quality && t < 60000; t++) {
     const a = rnd() * 6.283, r = 50 + rnd() ** 1.3 * 650; const x = Math.cos(a) * r, z = Math.sin(a) * r;
     const sl = slopeAt(x, z); if (sl < 0.3 || blocked(x, z, 6) || Math.hypot(x - PORTAL.x, z - PORTAL.z) < 20 || Math.hypot(x - (PORTAL.x + CAVE.x) / 2, z - (PORTAL.z + CAVE.z) / 2) < 22 || Math.hypot(x - CAVE.x, z - CAVE.z) < 16 || Math.hypot(x - LOOKOUT.x, z - LOOKOUT.z) < 30) continue;
     const s = (r < 150 ? 2 : 4) + rnd() * (r < 150 ? 5 : 11); if (!viewOK(x, z, s, 1.1)) continue; put(L.cliff, x, z, s, 0.62, 0.3, 1.0); i++;
@@ -270,7 +277,7 @@ export function buildRocks(scene, culler, quality = 1) {
     rockA: makeKind(scene, 'rockA', [[protoGeom(2, 2, [1.25, 0.75, 1.05]), 8], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 30], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 200]], A, mat, 2),
     debris: makeKind(scene, 'debris', [[chiselGeom(14, 6, 0), 10]], debris, mat, 0),
     strata: makeKind(scene, 'strata', [[chiselGeom(9, 12, 2), 8], [chiselGeom(9, 12, 1), 3000]], L.peak, matFar, 0),
-    wall: makeKind(scene, 'wall', [[protoGeom(1, 33, [1, 1, 1], 0.55), 230], [protoGeom(0, 33, [1, 1, 1], 0.45), 3000]], L.wall, matWall, 0),
+    wall: makeKind(scene, 'wall', [[jagGeom(protoGeom(1, 33, [1, 1, 1], 0.55), 33, 0.22), 230], [jagGeom(protoGeom(0, 33, [1, 1, 1], 0.45), 33, 0.28), 3000]], L.wall, matWall, 0),
   };
     for (const k of Object.values(kinds)) culler.add(k);
   return { kinds, counts: Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.length])) };

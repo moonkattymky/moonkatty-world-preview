@@ -69,15 +69,21 @@ function echo(b, beams) {
   }
 }
 
-function rover(b, x, z, yaw) {
-  const y = groundAt(x, z) + 0.6;
+function rover(b, x, z, yaw) { // 6-wheel retro rover: rounded ivory cab with glowing windscreen, gold trim, rear cargo deck, antenna dish
+  const y = groundAt(x, z) + 0.55;
   const off = (dx, dy, dz) => [x + Math.cos(yaw) * dx + Math.sin(yaw) * dz, y + dy, z - Math.sin(yaw) * dx + Math.cos(yaw) * dz];
-  b.add('ivory', G.box(2.4, 1.1, 4.2), { pos: off(0, 0.9, 0), rot: [0, yaw, 0], color: C.ivory });
-  b.add('gold', G.box(2.5, 0.25, 4.3), { pos: off(0, 0.45, 0), rot: [0, yaw, 0], color: C.gold });
-  b.add('glow', G.box(2.0, 0.45, 0.1), { pos: off(0, 1.1, 2.12), rot: [0, yaw, 0], color: C.win, intensity: 2.5 });
-  b.add('ivory', G.box(1.8, 0.7, 1.6), { pos: off(0, 1.8, -0.8), rot: [0, yaw, 0], color: C.ivory2 });
-  for (const dz of [-1.4, 0, 1.4]) for (const dx of [-1.35, 1.35]) b.add('dark', G.cyl(0.5, 0.5, 0.45, 10).rotateZ(PI / 2).translate(0, 0, 0), { pos: off(dx, 0.0, dz), rot: [0, yaw, 0], color: '#3a3f48' });
-  b.add('gold', G.cyl(0.04, 0.04, 1.6, 4), { pos: off(0.6, 2.1, -1.2), color: C.gold });
+  const R = [0, yaw, 0];
+  b.add('dark', G.box(2.3, 0.35, 4.4), { pos: off(0, 0.35, 0), rot: R, color: '#4a505a' }); // chassis
+  b.add('gold', G.box(2.42, 0.12, 4.5), { pos: off(0, 0.55, 0), rot: R, color: C.gold }); // trim line
+  b.add('ivory', G.box(2.2, 0.55, 2.0), { pos: off(0, 0.85, -1.15), rot: R, color: C.ivory2 }); // cargo deck
+  b.add('gold', G.box(2.24, 0.06, 2.04), { pos: off(0, 1.14, -1.15), rot: R, color: C.goldD });
+  b.add('dark', G.box(1.7, 0.06, 1.5), { pos: off(0, 1.2, -1.2), rot: [-0.08, yaw, 0], color: '#1b3c5a' }); // solar deck
+  b.add('ivory', new THREE.CylinderGeometry(1, 1, 2.3, 12, 1, false, -PI / 2, PI).rotateX(-PI / 2), { pos: off(0, 0.6, 1.05), rot: R, scale: [1.1, 0.85, 1], color: C.ivory }); // rounded cab (half cylinder, closed by end plates)
+  b.add('ivory', new THREE.CircleGeometry(1, 12, 0, PI), { pos: off(0, 0.6, -0.1), rot: [0, yaw + PI, 0], scale: [1.1, 0.85, 1], color: C.ivory2 });
+  b.add('dark', new THREE.CircleGeometry(1, 12, 0, PI), { pos: off(0, 0.6, 2.2), rot: R, scale: [1.1, 0.85, 1], color: '#2a3442' }); b.add('glow', new THREE.CircleGeometry(0.85, 12, 0.25, PI - 0.5), { pos: off(0, 0.62, 2.21), rot: R, scale: [1.1, 0.8, 1], color: C.win, intensity: 2.2 }); b.add('gold', G.torus(1.0, 0.06, 3, 12, PI), { pos: off(0, 0.6, 2.22), rot: R, scale: [1.1, 0.85, 1], color: C.gold }); // front: dark bezel, glowing windscreen, gold arch
+  for (const sx of [-1, 1]) { b.add('gold', G.box(0.08, 0.1, 2.3), { pos: off(sx * 1.12, 0.7, 1.05), rot: R, color: C.gold }); b.add('glow', G.box(0.22, 0.14, 0.06), { pos: off(sx * 0.75, 0.62, 2.58), rot: R, color: C.gold2, intensity: 4 }); }
+  for (const dz of [-1.5, 0, 1.5]) for (const dx of [-1.32, 1.32]) { b.add('dark', G.cyl(0.52, 0.52, 0.42, 12).rotateZ(PI / 2), { pos: off(dx, 0.0, dz), rot: R, color: '#3a3f48' }); b.add('gold', G.cyl(0.24, 0.24, 0.46, 8).rotateZ(PI / 2), { pos: off(dx, 0.0, dz), rot: R, color: C.gold }); }
+  b.add('gold', G.cyl(0.04, 0.04, 1.4, 4), { pos: off(0.75, 1.9, -1.9), color: C.gold }); b.add('ivory', G.cap(0.4, 8, 2).rotateX(-0.9), { pos: off(0.75, 2.6, -1.9), rot: R, color: C.ivory }); b.add('glow', G.octa(0.07), { pos: off(0.75, 2.65, -1.75), color: C.gold2, intensity: 4 });
 }
 
 // Glowing gold-lit roads from the hub toward each chapter region (as on the world map)
@@ -108,6 +114,5 @@ function roads(b) {
 export function buildWorld(B, beams) {
   const b = B.misc; launchComplex(B.launch, beams); reactorCrater(B.reactor, beams); canyon(B.canyon, beams); echo(B.echo, beams); roads(B.roads);
   const r1 = sd(-30, 2); rover(b, r1.x, r1.z, 1.2);
-  rover(b, -300, 60, 0.4);
   const r3 = sd(28, -2); rover(b, r3.x, r3.z, -0.6);
 }
