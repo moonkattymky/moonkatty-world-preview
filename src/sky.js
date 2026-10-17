@@ -11,7 +11,7 @@ float n3(vec3 x){ vec3 i=floor(x); vec3 f=fract(x); f=f*f*(3.0-2.0*f);
             mix(mix(h3(i+vec3(0,0,1)),h3(i+vec3(1,0,1)),f.x),mix(h3(i+vec3(0,1,1)),h3(i+vec3(1,1,1)),f.x),f.y),f.z); }
 float fbm3(vec3 p){ float a=0.5,s=0.; for(int i=0;i<5;i++){ s+=a*n3(p); p=p*2.03+vec3(1.7,9.2,3.1); a*=0.5;} return s; }`;
 
-export function buildSky(sunDir, earthDir) {
+export function buildSky(sunDir, earthDir, lite = false) {
   const group = new THREE.Group(); group.name = 'sky';
   // gradient dome + faint milky way
   const skyMat = new THREE.ShaderMaterial({
@@ -68,7 +68,7 @@ export function buildSky(sunDir, earthDir) {
         float fr=pow(1.-max(dot(normalize(vN),vV),0.),4.); col+=vec3(0.2,0.45,1.0)*fr*(0.08+0.55*lit); float rim=pow(1.-max(dot(normalize(vN),vV),0.),2.2); col+=vec3(0.3,0.6,1.0)*smoothstep(0.55,1.0,rim)*(0.12+0.5*lit);
         float lum=dot(col,vec3(0.3,0.59,0.11)); col=mix(vec3(lum),col,0.9)*0.5; gl_FragColor=vec4(col,1.); }`,
   });
-  const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), earthMat); earth.renderOrder = -8;
+  const earth = new THREE.Mesh(new THREE.SphereGeometry(1, lite ? 28 : 40, lite ? 14 : 20), earthMat); earth.renderOrder = -8;
   const ED = 4200, ER = 690; earth.position.copy(earthDir).multiplyScalar(ED); earth.scale.setScalar(ER); earth.rotation.set(0.4, 2.2, 0.2);
   group.add(earth);
   const haloMat = new THREE.ShaderMaterial({

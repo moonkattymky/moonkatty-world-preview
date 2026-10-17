@@ -186,14 +186,15 @@ export class InstanceCuller {
   }
   stats() { const o = {}; for (const k of this.kinds) o[k.name] = k.lods.map(l => l.mesh.count + '×' + (l.mesh.geometry.attributes.position.count / 3)); return o; }
 }
+let LOD_SCALE = 1; // low preset shortens all rock LOD distances
 function makeKind(scene, name, lods, items, mat, castShadow) {
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
   const single = lods.length === 1; const its = items.map(o => { q.setFromEuler(e.set(o.r[0], o.r[1], o.r[2])); m4.compose(new THREE.Vector3(o.x, o.y, o.z), q, new THREE.Vector3(...o.s)); const r = Math.max(...o.s) * 1.6; const sn = Math.min(1, Math.max(0.3, r / 2.4)); return { x: o.x, y: o.y, z: o.z, r, lodK: o.lodK ?? (single ? 1 : 1 / (sn * sn)), m: m4.toArray() }; });
-  const kind = { name, items: its, lods: lods.map(([g, dist], i) => { const im = new THREE.InstancedMesh(g, mat, Math.max(1, its.length)); im.count = 0; im.frustumCulled = false; im.castShadow = typeof castShadow === 'number' ? i < castShadow : (castShadow && i === 0 || castShadow === 'all'); im.receiveShadow = true; im.name = name + '_lod' + i; scene.add(im); return { mesh: im, d2: dist * dist }; }) };
+  const kind = { name, items: its, lods: lods.map(([g, dist], i) => { const im = new THREE.InstancedMesh(g, mat, Math.max(1, its.length)); im.count = 0; im.frustumCulled = false; im.castShadow = typeof castShadow === 'number' ? i < castShadow : (castShadow && i === 0 || castShadow === 'all'); im.receiveShadow = true; im.name = name + '_lod' + i; scene.add(im); return { mesh: im, d2: (dist * LOD_SCALE) ** 2 }; }) };
   return kind;
 }
 
-export function buildRocks(scene, culler, quality = 1) {
+export function buildRocks(scene, culler, quality = 1) { LOD_SCALE = quality < 0.7 ? 0.6 : 1;
   const mat = rockMaterial(true, 0.2, false, 1.0, true, false, 0.24); mat.color.setScalar(0.85); const matFar = rockMaterial(true, 0.0, true, 2.0, false, true, 0.0); matFar.flatShading = true; matFar.color.setScalar(0.3); const matDebris = rockMaterial(true, 0.0, true, 2.0, false, false, 0.04); matDebris.color.setScalar(0.32); /* pass 17: debris uses the dark rock tone (no pale chips near camera spots) */ /* debris: smooth normals -> no sub-pixel black/white facet speckle */ const matWall = rockMaterial(true, 1.2, false, 0.35, true, false, 0.32, 1.0); matWall.color.setScalar(1.05);
   const L = { crumb: [], pebble: [], rubble: [], bA: [], bB: [], bC: [], cliff: [], peak: [], wall: [] };
   const K = CONCEPT; const cgy = groundAt(K.cat.x, K.cat.z); const ccam = new THREE.PerspectiveCamera(K.fov, 16 / 9, 0.2, 5000);
@@ -259,7 +260,7 @@ export function buildRocks(scene, culler, quality = 1) {
   // rocky ledge under the cat: one big flat-topped boulder matching LEDGE (groundAt is raised there, so feet are grounded) + lower stepped rocks at its front/right edge
   { const gb = Math.min(groundMesh(LEDGE.x, LEDGE.z), groundMesh(LEDGE.x + 1.4, LEDGE.z), groundMesh(LEDGE.x - 1.4, LEDGE.z), groundMesh(LEDGE.x, LEDGE.z + 1.4), groundMesh(LEDGE.x, LEDGE.z - 1.4)); const top = gb + LEDGE.h;
     L.peak.push({ x: LEDGE.x, y: top - 0.53 * 1.7, z: LEDGE.z, s: [1.6, 1.7, 1.75], r: [0, 0.4, 0] });
-    for (const [ds, dd, s0, hh] of [[1.4, 0.9, 0.9, 0.62], [0.2, 1.6, 0.8, 0.48], [1.7, -0.5, 0.85, 0.66], [-1.5, 1.2, 0.85, 0.55], [0.9, 2.2, 0.6, 0.28], [-1.7, -0.6, 0.9, 0.7]]) {
+    for (const [ds, dd, s0, hh] of (() => { const o = [[1.5, -0.4, 0.75, 0.66], [-1.6, -0.5, 0.75, 0.7]]; for (let k = 0; k < 13; k++) { const a = -0.3 + k / 12 * 3.6, rr = 1.45 + rnd() * 1.3; o.push([Math.cos(a) * rr, Math.sin(a) * rr, 0.3 + rnd() * 0.3, Math.max(0.12, 0.62 - (rr - 1.45) * 0.38) + rnd() * 0.1]); } return o; })()) { /* many medium jagged rocks stepping down from the ledge instead of a few big smooth slabs */
       const p = sd(ds, dd), o = sd(0, 0); const x = LEDGE.x + p.x - o.x, z = LEDGE.z + p.z - o.z; const g0 = groundMesh(x, z); L.peak.push({ x, y: g0 + hh - 0.53 * s0, z, s: [s0 * 1.1, s0, s0], r: [0, rnd() * 6.28, 0] }); } }
   // rocky texture left of the cat: layered slabs on the hill side seen at the left edge of the concept frame
   for (let i = 0; i < 24; i++) { const px = rnd() * 120, py = 250 + rnd() * 300; ray.set(px / 1024 * 2 - 1, 1 - py / 576 * 2, 0.5).unproject(ccam).sub(ccam.position).normalize();
@@ -338,14 +339,23 @@ export function buildRocks(scene, culler, quality = 1) {
   for (let i = 0, t = 0; i < 200 * quality && t < 8000; t++) { const p = sd(-3 + (rnd() - 0.5) * 34, -21 + (rnd() - 0.5) * 30); if (blocked(p.x, p.z, 0.4)) continue; put(L.rubble, p.x, p.z, 0.07 + rnd() ** 2 * 0.3, 0.3, 0.8); i++; }
   for (let c = 0, t = 0; c < 16 && t < 400; t++) { const a = rnd() * 6.283, r = 12 + rnd() * 34; const cx = Math.cos(a) * r, cz = Math.sin(a) * r; const cr = 1.4 + rnd() * 2.4; if (blocked(cx, cz, cr + 1)) continue; c++;
     const n = Math.round(cr * 7); for (let k = 0; k < n; k++) { const b = k / n * 6.283 + rnd() * 0.3; const rr = cr * (0.92 + rnd() * 0.2); const x = cx + Math.cos(b) * rr, z = cz + Math.sin(b) * rr; put(L.bB, x, z, 0.16 + rnd() * 0.22, 0.35, 0.6, 0.7); } }
+  // pass 17: the biggest smooth slabs along the concept frame's bottom edge -> clusters of medium jagged rocks (same footprint/height, more facets)
+  { const out = []; let nSplit = 0; const big = L.peak.map((it, i) => { _v.set(it.x, it.y + it.s[1] * 0.5, it.z).project(ccam); return { it, i, px: (_v.x * 0.5 + 0.5) * 1024, py: (0.5 - _v.y * 0.5) * 576, d: Math.hypot(it.x - K.cam.x, it.z - K.cam.z), sm: Math.max(...it.s) }; })
+      .filter(o => o.py > 470 && o.px > -80 && o.px < 1100 && o.d < 14 && o.sm > 1.0 && Math.hypot(o.it.x - LEDGE.x, o.it.z - LEDGE.z) > 2.6).sort((a, b) => b.sm - a.sm).slice(0, 9);
+    const drop = new Set(big.map(o => o.i));
+    for (const { it } of big) { const n = 5 + Math.floor(rnd() * 3); const R0 = Math.max(it.s[0], it.s[2]) * 0.75; nSplit++;
+      for (let k = 0; k < n; k++) { const a = k / n * 6.283 + rnd() * 0.8, rr = k === 0 ? 0 : R0 * (0.45 + rnd() * 0.55); const x = it.x + Math.cos(a) * rr, z = it.z + Math.sin(a) * rr; if (nearTrack(x, z, 0.8) || Math.hypot(x - K.cat.x, z - K.cat.z) < 1.2) continue;
+        const sc = (k === 0 ? 0.62 : 0.32 + rnd() * 0.26); const sx = it.s[0] * sc, sy = it.s[1] * sc * (1.15 + rnd() * 0.5), sz = it.s[2] * sc; const g0 = groundAt(x, z);
+        out.push({ x, y: g0 + sy * (0.18 + rnd() * 0.12), z, s: [sx, sy, sz], r: [(rnd() - 0.5) * 0.5, rnd() * 6.28, (rnd() - 0.5) * 0.5] }); } }
+    const kept = L.peak.filter((_, i) => !drop.has(i)); L.peak.length = 0; L.peak.push(...kept, ...out); window.__split = nSplit; }
   // merge lists: two prototypes (3 LODs each), one debris layer, one strata layer -> 8 instanced draws total
   const half = (l) => [l.filter((_, i) => i % 2 === 0), l.filter((_, i) => i % 2 === 1)]; const [c0, c1] = half(L.cliff);
   const A = [...L.bA, ...L.bC, ...L.bB, ...c0, ...c1]; // one boulder prototype (saves 3 main + 2 shadow draws)
   const debris = [...L.rubble, ...L.pebble, ...L.crumb];
   const kinds = {
-    rockA: makeKind(scene, 'rockA', [[protoGeom(1, 2, [1.25, 0.75, 1.05]), 8], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 24], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 122]], A, mat, 2),
+    rockA: makeKind(scene, 'rockA', [[protoGeom(1, 2, [1.25, 0.75, 1.05]), 8], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 24], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 116]], A, mat, 2),
     debris: makeKind(scene, 'debris', [[chiselGeom(14, 6, 0), 7.5]], debris, matDebris, 0),
-    strata: makeKind(scene, 'strata', [[chiselGeom(9, 16, 2), 6.5], [chiselGeom(9, 12, 1), 15], [chiselGeom(9, 12, 0), 95]], L.peak, matFar, 0),
+    strata: makeKind(scene, 'strata', [[chiselGeom(9, 16, 2), 6.5], [chiselGeom(9, 12, 1), 14], [chiselGeom(9, 12, 0), 95]], L.peak, matFar, 0),
     wall: makeKind(scene, 'wall', [[mesaGeom(protoGeom(1, 33, [1, 1, 1], 0.55), 33), 118], [mesaGeom(protoGeom(0, 33, [1, 1, 1], 0.45), 33), 3000]], L.wall, matWall, 0),
   };
     for (const k of Object.values(kinds)) culler.add(k);
@@ -364,7 +374,7 @@ function diamondGeom() {
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   return g;
 }
-export function buildCrystals(scene, envMap) {
+export function buildCrystals(scene, envMap, lite = false) {
   const g = diamondGeom();
   const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, metalness: 0.55, roughness: 0.18, flatShading: true, emissive: '#ffffff', emissiveIntensity: 1, envMap, envMapIntensity: 1.6 });
   mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance *= vColor.rgb * vColor.rgb * 1.7;'); };
@@ -391,6 +401,7 @@ export function buildCrystals(scene, envMap) {
     for (const [px, py, hp, t] of [[62, 268, 62, 7], [330, 262, 30, 24], [348, 214, 15, 58], [410, 372, 30, 28], [618, 254, 15, 70], [805, 248, 20, 72], [875, 336, 28, 42], [952, 338, 46, 20], [918, 394, 30, 30], [470, 300, 14, 50], [700, 300, 16, 55], [232, 182, 24, 34], [565, 178, 16, 62], [668, 238, 32, 30], [650, 284, 19, 26], [288, 262, 19, 24], [440, 178, 14, 58], [150, 330, 20, 18], [995, 250, 26, 30]]) {
       v.set(px / 512 - 1, 1 - py / 288, 0.5).unproject(cc).sub(cc.position).normalize(); const x = cc.position.x + v.x * t, y = cc.position.y + v.y * t, z = cc.position.z + v.z * t;
       items.push({ x, y: Math.max(y, groundAt(x, z) + 0.6), z, s: hp * t * k / 1.9, c: (rnd() < 0.85 || hp >= 24) ? gold : amber, bob: true, ph: (rnd(), (px * 0.37 + py * 0.11) % 6.28) }); } } // deterministic phase per screen spot (no random mirror flash)
+  if (lite) { let n = 0; for (let i = items.length - 1; i >= 0; i--) if (!items[i].bob && (n++ % 3 !== 0)) items.splice(i, 1); } // low preset: a third of the ground clusters
   const im = new THREE.InstancedMesh(g, mat, items.length);
   items.forEach((it, i) => im.setColorAt(i, it.c));
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();

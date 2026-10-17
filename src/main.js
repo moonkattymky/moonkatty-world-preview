@@ -7,8 +7,8 @@ import { OutputPass } from '../vendor/three/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from '../vendor/three/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from '../vendor/three/jsm/shaders/FXAAShader.js';
 import { makeFootprints } from './footprints.js';
-import { buildTerrain, groundAt, sd, F, Rt, LOOKOUT, CONCEPT, PLAY_START, LAMPMAP, LAMPMAP_R, AOMAP } from './terrain.js';
-import { Builder } from './builder.js';
+import { buildTerrain, GRID, groundAt, sd, F, Rt, LOOKOUT, CONCEPT, PLAY_START, LAMPMAP, LAMPMAP_R, AOMAP } from './terrain.js';
+import { Builder, GQ } from './builder.js';
 import { buildHub, colliders, C, LAMPS } from './base.js';
 import { buildWorld } from './world.js';
 import { buildRocks, buildCrystals, beamMaterial, addBeams, InstanceCuller, buildTracks, TRACK_MAIN } from './props.js';
@@ -18,7 +18,7 @@ import { Controller } from './controller.js';
 
 const Q = new URLSearchParams(location.search);
 const SHOT = Q.has('shot'); const VIEW = Q.get('view') || 'play';
-const LOW = Q.get('q') === 'low';
+const LOW = Q.get('q') === 'low'; if (LOW) { GQ.s = 0.4; GRID.Mn = 72; GRID.Mf = 48; } // phones: fewer segments on all architecture + coarser near terrain rings
 const MOBILE = Q.get('q') === 'mobile' || (!Q.get('q') && (matchMedia('(pointer:coarse)').matches || Math.min(innerWidth, innerHeight) < 480));
 const BLOOM = Q.get('bloom') !== '0' && !LOW;
 document.body.classList.toggle('shot', SHOT);
@@ -82,10 +82,10 @@ mats.ivory = mats.hull; // placeholder fallback
 const built = b.build(mats, scene); for (const [n, B] of [...Object.entries(WB), ['beams', wb]]) { const bw = B.build(mats, scene, '_' + n); for (const k in bw) bw[k].castShadow = false; }
 // far chapter-region hulls sit behind the crater rim: skip them while the camera is low inside the hub basin (cheap occlusion cull)
 const farRegion = []; scene.traverse(o => { if (o.isMesh && /_(launch|echo|canyon|reactor)$/.test(o.name)) { o.geometry.computeBoundingSphere(); farRegion.push([o, o.geometry.boundingSphere.center.clone()]); } });
-const cullFarRegions = () => { const c = camera.position; const inHub = Math.hypot(c.x, c.z) < 125 && c.y < 45; for (const [o, ctr] of farRegion) o.visible = !inHub || ctr.distanceTo(c) < 380; { const farRidgeMesh = (cullFarRegions.fr ??= scene.getObjectByName('farRidge')); if (farRidgeMesh) farRidgeMesh.visible = Math.hypot(c.x, c.z) < 140 && c.y < 60; } }; // far ridge is a backdrop layer for in-hub views only (no ring band from world/aerial)
+const cullFarRegions = () => { const c = camera.position; const inHub = Math.hypot(c.x, c.z) < 125 && c.y < 45; for (const [o, ctr] of farRegion) o.visible = !inHub || ctr.distanceTo(c) < 380; { const farRidgeMesh = (cullFarRegions.fr ??= scene.getObjectByName('farRidge')); if (farRidgeMesh) farRidgeMesh.visible = !LOW && Math.hypot(c.x, c.z) < 140 && c.y < 60; } }; // far ridge is a backdrop layer for in-hub views only (no ring band from world/aerial)
 const culler = new InstanceCuller();
 const rocks = buildRocks(scene, culler, LOW ? 0.6 : MOBILE ? 0.8 : 1);
-const crystals = buildCrystals(scene, env);
+const crystals = buildCrystals(scene, env, LOW);
 { // terrain contact-shadow / crevice map (1024², +-75 m): dark soft pools under every rock -> rugged lit-top / dark-crevice contrast
   const N = 1024, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, N, N);
   for (const [x, z, s, w] of rocks.contacts) { const u = (x / (2 * LAMPMAP_R) + 0.5) * N, v = (z / (2 * LAMPMAP_R) + 0.5) * N; const r = Math.max(1.5, s * 1.35 / (2 * LAMPMAP_R) * N); const a = 0.5 * w;
@@ -96,7 +96,7 @@ const crystals = buildCrystals(scene, env);
   const spur = []; for (let i = 0; i <= 20; i++) { const t = i / 20; spur.push(sd(-1.5 - t * 3 + Math.sin(t * 3) * 1.5, -11 - t * 20)); }
   const toPortal = []; for (let i = 0; i <= 20; i++) { const t = i / 20; toPortal.push(sd(22 + t * 9, 18 + t * 13 + Math.sin(t * 3) * 2)); }
   buildTracks(scene, [pts, loop, spur, toPortal]); }
-const sky = buildSky(sunDir, earthDir); scene.add(sky.group); sky.starMat.uniforms.uPR.value = PR;
+const sky = buildSky(sunDir, earthDir, LOW); scene.add(sky.group); sky.starMat.uniforms.uPR.value = PR;
 const space = buildSpace(scene, mats.hull);
 
 // ---------- cat ----------

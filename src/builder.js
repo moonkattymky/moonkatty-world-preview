@@ -61,15 +61,18 @@ export function flipGeom(g) {
   for (let i = 0; i < g.attributes.position.count; i += 3) for (const A of A2) for (let c = 0; c < A.itemSize; c++) { const t = A.array[i * A.itemSize + c]; A.array[i * A.itemSize + c] = A.array[(i + 2) * A.itemSize + c]; A.array[(i + 2) * A.itemSize + c] = t; }
   const N = g.attributes.normal; if (N) for (let i = 0; i < N.array.length; i++) N.array[i] *= -1;
 }
+// geometry quality scale (low preset for phones sets GQ.s < 1 before the hub is built): fewer segments, same shapes/UV layout
+export const GQ = { s: 1 };
+const q = (n, min) => GQ.s === 1 ? n : Math.max(min, Math.round(n * GQ.s));
 export const G = {
-  cyl: (rt, rb, h, seg = 24, open = false) => new THREE.CylinderGeometry(rt, rb, h, seg, 1, open).translate(0, h / 2, 0),
+  cyl: (rt, rb, h, seg = 24, open = false) => new THREE.CylinderGeometry(rt, rb, h, q(seg, 6), 1, open).translate(0, h / 2, 0),
   box: (w, h, d) => new THREE.BoxGeometry(w, h, d),
-  torus: (R, t, rs = 5, ts = 28, arc = Math.PI * 2) => new THREE.TorusGeometry(R, t, rs, ts, arc),
-  cap: (r, ws = 28, hs = 10, theta = Math.PI / 2) => new THREE.SphereGeometry(r, ws, hs, 0, Math.PI * 2, 0, theta),
-  sphere: (r, ws = 12, hs = 8) => new THREE.SphereGeometry(r, ws, hs),
-  cone: (r, h, seg = 12) => new THREE.ConeGeometry(r, h, seg).translate(0, h / 2, 0),
-  ring: (ri, ro, seg = 40) => new THREE.RingGeometry(ri, ro, seg).rotateX(-Math.PI / 2),
-  disc: (r, seg = 40) => new THREE.CircleGeometry(r, seg).rotateX(-Math.PI / 2),
+  torus: (R, t, rs = 5, ts = 28, arc = Math.PI * 2) => new THREE.TorusGeometry(R, t, q(rs, 3), q(ts, 6), arc),
+  cap: (r, ws = 28, hs = 10, theta = Math.PI / 2) => new THREE.SphereGeometry(r, q(ws, 8), q(hs, 3), 0, Math.PI * 2, 0, theta),
+  sphere: (r, ws = 12, hs = 8) => new THREE.SphereGeometry(r, q(ws, 6), q(hs, 4)),
+  cone: (r, h, seg = 12) => new THREE.ConeGeometry(r, h, q(seg, 5)).translate(0, h / 2, 0),
+  ring: (ri, ro, seg = 40) => new THREE.RingGeometry(ri, ro, q(seg, 12)).rotateX(-Math.PI / 2),
+  disc: (r, seg = 40) => new THREE.CircleGeometry(r, q(seg, 12)).rotateX(-Math.PI / 2),
   octa: (r) => new THREE.OctahedronGeometry(r, 0),
   plane: (w, h) => new THREE.PlaneGeometry(w, h),
 };

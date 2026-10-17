@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { G, quatFromDir } from './builder.js';
+import { G, quatFromDir, GQ } from './builder.js';
 import { groundAt, sd, PORTAL, F, CAVE, PLAY_START, CONCEPT } from './terrain.js';
 import { noise2 } from './noise.js';
 
@@ -154,6 +154,9 @@ function dishModule(b, s, d) {
   M(G.cone(0.35, 0.9).rotateX(PI), [0, 3.8, 0], C.gold, 'gold'); M(G.cyl(0.55, 0.55, 0.12, 14), [0, 3.25, 0], C.gold2, 'gold'); M(G.torus(Rd + 0.05, 0.2, 4, 36).rotateX(PI / 2), [0, 0.05, 0], C.gold2, 'gold'); M(G.cyl(0.6, 0.9, 0.9, 14), [0, -1.95, 0], C.gold, 'gold'); // sub-reflector, heavy gold rim, back hub
   M(G.sphere(0.2, 8, 6), [0, 2.9, 0], C.win, 'glow', { intensity: 4 });
   M(G.cyl(0.9, 0.6, 0.6, 12), [0, -0.5, 0], C.ivory2, 'ivory');
+  // pass 17: lattice truss on the dish back (alpha lattice group -> no extra draw call) + gold feed horn with glowing tip
+  M(G.cyl(Rd * 0.78, 0.75, 1.5, 12, true), [0, -1.35, 0], '#ffffff', 'lattice');
+  M(G.cyl(0.07, 0.18, 0.9, 8), [0, 3.95, 0], C.gold2, 'gold'); M(G.torus(0.2, 0.04, 3, 10).rotateX(PI / 2), [0, 3.3, 0], C.gold2, 'gold');
 }
 
 function tower(b, x, z, h, w = 1.5) {
@@ -180,7 +183,7 @@ export function rocketGeom(scale = 1, seg = 20) {
   const cum = [0]; for (let i = 1; i < prof.length; i++) cum.push(cum[i - 1] + Math.hypot(prof[i][0] - prof[i - 1][0], prof[i][1] - prof[i - 1][1]));
   const N = 26, pts = []; for (let k = 0; k <= N; k++) { const t = k / N * cum[cum.length - 1]; let i = 1; while (i < cum.length - 1 && cum[i] < t) i++; const f = (t - cum[i - 1]) / (cum[i] - cum[i - 1]); pts.push(new THREE.Vector2((prof[i - 1][0] + (prof[i][0] - prof[i - 1][0]) * f) * scale, (prof[i - 1][1] + (prof[i][1] - prof[i - 1][1]) * f) * scale)); }
   pts[0].x = 0.001 * scale; // avoid degenerate bottom
-  return new THREE.LatheGeometry(pts.slice(1), seg);
+  return new THREE.LatheGeometry(pts.slice(1), GQ.s === 1 ? seg : Math.max(8, Math.round(seg * GQ.s)));
 }
 export function rocket(b, x, y, z, S = 1, yaw = 0, seg = 20) {
   const by = y + 1.4 * S;
@@ -286,8 +289,8 @@ function portalCave(b, beams) {
 export const LAMPS = [];
 function lamp(b, x, z, color = C.win) { const y = groundAt(x, z); LAMPS.push({ x, z });
   b.add('gold', G.cyl(0.16, 0.2, 0.18, 6), { pos: [x, y - 0.02, z], color: C.goldD }); b.add('ivory', G.cyl(0.06, 0.085, 1.15, 6), { pos: [x, y + 0.14, z], color: C.ivory });
-  b.add('gold', G.torus(0.08, 0.025, 3, 6), { pos: [x, y + 0.75, z], rot: [PI / 2, 0, 0], color: C.gold }); b.add('gold', G.cyl(0.13, 0.07, 0.12, 6), { pos: [x, y + 1.27, z], color: C.gold });
-  b.add('glow', G.octa(0.13), { pos: [x, y + 1.5, z], color, intensity: 4 }); b.add('gold', G.cone(0.1, 0.16, 6), { pos: [x, y + 1.62, z], color: C.gold2 }); }
+  if (GQ.s === 1) b.add('gold', G.torus(0.08, 0.025, 3, 6), { pos: [x, y + 0.75, z], rot: [PI / 2, 0, 0], color: C.gold }); b.add('gold', G.cyl(0.13, 0.07, 0.12, 6), { pos: [x, y + 1.27, z], color: C.gold });
+  b.add('glow', G.octa(0.13), { pos: [x, y + 1.5, z], color, intensity: 4 }); if (GQ.s === 1) b.add('gold', G.cone(0.1, 0.16, 6), { pos: [x, y + 1.62, z], color: C.gold2 }); }
 function crate(b, x, z, s = 1, yaw = 0) { const y = groundAt(x, z); b.add('ivory', G.box(1.2 * s, 0.9 * s, 0.9 * s), { pos: [x, y + 0.45 * s, z], rot: [0, yaw, 0], color: C.ivory2 }); b.add('gold', G.box(1.25 * s, 0.12 * s, 0.95 * s), { pos: [x, y + 0.65 * s, z], rot: [0, yaw, 0], color: C.gold }); colliders.push({ x, z, r: 0.8 * s }); }
 // small auxiliary pod (storage / airlock hut): squat ivory drum + low cap, gold band, one lit hatch (concept: little modules scattered around the base)
 function pod(b, x, z, r = 1.6, yaw = 0) { const y = groundAt(x, z) - 0.1; colliders.push({ x, z, r: r + 0.4 });

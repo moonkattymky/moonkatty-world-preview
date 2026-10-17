@@ -157,7 +157,7 @@ export function groundMesh(x, z) { // exact height of the rendered terrain mesh
 const TFILL = (() => { const x = Rt.x * 0.6 - F.x * 0.3, z = Rt.z * 0.6 - F.z * 0.3, y = 0.6, l = Math.hypot(x, y, z); return `vec3(${(x / l).toFixed(3)}, ${(y / l).toFixed(3)}, ${(z / l).toFixed(3)})`; })();
 export const LAMPMAP = { value: null }; export const LAMPMAP_R = 75; export const AOMAP = { value: new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1) }; AOMAP.value.needsUpdate = true;
 export function terrainMaterial() {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.color.setRGB(0.715, 0.69, 0.655); // faintly warm regolith
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.color.setRGB(0.74, 0.72, 0.69); // regolith: slightly brighter, less warm (pass 17)
   // procedural regolith: mottled albedo, dark pits, pebble speckle and a bump-mapped normal (fades with distance)
   m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP; sh.uniforms.uAOMap = AOMAP;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
@@ -180,6 +180,8 @@ export function terrainMaterial() {
           acc.yz += g; acc.x *= (1.0 - 0.12 * e1) * (1.0 + 0.16 * e2);
         }
         return acc; }`)
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+      reflectedLight.directDiffuse *= 1.28; reflectedLight.indirectDiffuse *= 0.92;`)
       .replace('#include <opaque_fragment>', `{ vec3 kd = normalize((viewMatrix * vec4(${TFILL}, 0.0)).xyz); outgoingLight += diffuseColor.rgb * vec3(0.98, 0.96, 0.92) * 0.55 * max(dot(normal, kd), 0.0);
         vec2 lu = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (lu.x > 0.0 && lu.x < 1.0 && lu.y > 0.0 && lu.y < 1.0) outgoingLight += diffuseColor.rgb * texture2D(uLampMap, lu).rgb * 9.0; }
       #include <opaque_fragment>`)

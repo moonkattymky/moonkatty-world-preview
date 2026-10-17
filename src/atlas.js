@@ -45,14 +45,16 @@ export function makeAtlas() {
   // dome cap (concept: soft grey-beige shell, subtle segmented panels, thin gold band near the base, no vertical gold ribs)
   { const [x, y, w, h] = R.domeCap; P(x, y, w, h, IV, null, 0.5, 0.02);
     const g = a.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(255,250,240,0.18)'); g.addColorStop(1, 'rgba(90,82,70,0.12)'); a.fillStyle = g; a.fillRect(x, y, w, h);
-    for (let b = 0; b < 7; b++) { const y0 = y + 26 + b * 30; a.fillStyle = IVL; a.fillRect(x, y0, w, 2); for (let xx = (b % 2) * 42; xx < w; xx += 85) a.fillRect(x + xx, y0, 2, 30); }
-    for (let k = 0; k < 12; k++) { a.fillStyle = IVD; a.fillRect(x + k * 85 + 20, y + 16, 3, h - 16); } // main segment seams
+    const seam = (sx, sy, sw, sh) => { a.fillStyle = '#857a66'; a.fillRect(sx, sy, sw, sh); a.fillStyle = 'rgba(255,250,238,0.55)'; if (sw > sh) a.fillRect(sx, sy + sh, sw, 1); else a.fillRect(sx + sw, sy, 1, sh); }; // dark groove + lit bevel edge (reads at distance after mipmapping)
+    for (let b = 0; b < 7; b++) { const y0 = y + 26 + b * 30; seam(x, y0, w, 3); for (let xx = (b % 2) * 42; xx < w; xx += 85) seam(x + xx, y0, 3, 30); }
+    for (let k = 0; k < 12; k++) seam(x + k * 85 + 20, y + 16, 4, h - 16); // main segment seams
     gold(x, y, w, 12, GOLDD); gold(x, y + h - 30, w, 8, GOLD); gold(x, y + h - 10, w, 10, GOLDD);
-    for (let k = 0; k < 24; k++) { a.fillStyle = '#8f8676'; a.fillRect(x + k * 42.6 + 14, y + h - 46, 10, 6); } }
+    for (let k = 0; k < 24; k++) win(x + k * 42.6 + 14, y + h - 50, 12, 9, 2); /* lit porthole ring low on the cap */
+    gold(x, y + h - 58, w, 3, GOLD2); }
   // dome wall (short base ring with small warm windows + darker plinth)
   { const [x, y, w, h] = R.domeWall; P(x, y, w, h, IV, null, 0.5, 0.02); lines(x, y, w, h, 85, 0, IVL, 2);
     gold(x, y, w, 8, GOLD); a.fillStyle = '#6b6658'; a.fillRect(x, y + h - 26, w, 26); gold(x, y + h - 30, w, 5, GOLDD);
-    for (let k = 0; k < 24; k++) win(x + k * 42.6 + 14, y + 40, 15, 22, 2); }
+    for (let k = 0; k < 32; k++) win(x + k * 32 + 9, y + 34, 13, 20, 2); for (let k = 0; k < 32; k++) win(x + k * 32 + 13, y + 70, 6, 8, 1); }
   // reactor wall
   { const [x, y, w, h] = R.reactorWall; P(x, y, w, h, IV, null, 0.45, 0.02); a.fillStyle = IVL; a.fillRect(x, y + 24, w, 2); a.fillRect(x, y + 98, w, 2);
     gold(x, y, w, 8); gold(x, y + h - 10, w, 10, GOLDD);
@@ -72,9 +74,12 @@ export function makeAtlas() {
       el(GOLD, 84, 12, a); el(orm(0.28, 0.95), 84, 12, m); el('#ffcf7a', 62, 8.5, a); el('#c08848', 62, 8.5, e); el('#fff0c8', 22, 3, a); }
     a.save(); a.fillStyle = GOLDD; a.font = 'bold 20px sans-serif'; a.translate(x + w * 0.25, Y(0.5)); a.rotate(-Math.PI / 2); a.fillText('MK-01 ALPHA', -60, 7); a.restore(); }
   // tower segment (8 sides around)
-  { const [x, y, w, h] = R.tower; P(x, y, w, h, IV, null, 0.45, 0.02); for (let k = 0; k < 8; k++) { a.fillStyle = IVL; a.fillRect(x + k * w / 8, y, 2, h); win(x + k * w / 8 + 22, y + 36, 20, 50, 2); } gold(x, y, w, 10); gold(x, y + h - 8, w, 8, GOLDD); }
+  { const [x, y, w, h] = R.tower; P(x, y, w, h, IV, null, 0.45, 0.02); for (let k = 0; k < 8; k++) { a.fillStyle = IVL; a.fillRect(x + k * w / 8, y, 2, h); win(x + k * w / 8 + 22, y + 36, 20, 50, 2); }
+    a.strokeStyle = GOLDD; a.lineWidth = 2; for (let k = 0; k < 8; k++) { const x0 = x + k * w / 8 + 3; a.beginPath(); a.moveTo(x0, y + 12); a.lineTo(x0 + 16, y + 34); a.moveTo(x0 + 16, y + 12); a.lineTo(x0, y + 34); a.moveTo(x0 + 46, y + 90); a.lineTo(x0 + 60, y + 116); a.moveTo(x0 + 60, y + 90); a.lineTo(x0 + 46, y + 116); a.stroke(); } /* filigree bracing */
+    gold(x, y, w, 10); gold(x, y + h - 8, w, 8, GOLDD); }
   // lattice (alpha)
-  { const [x, y, w, h] = R.lattice; a.clearRect(x, y, w, h); a.strokeStyle = '#efe7d6'; a.lineWidth = 9; a.strokeRect(x + 5, y + 5, w - 10, h - 10); a.lineWidth = 7; a.beginPath(); a.moveTo(x + 6, y + 6); a.lineTo(x + w - 6, y + h - 6); a.moveTo(x + w - 6, y + 6); a.lineTo(x + 6, y + h - 6); a.stroke(); a.fillStyle = GOLD; for (const [px, py] of [[8, 8], [w - 8, 8], [8, h - 8], [w - 8, h - 8], [w / 2, h / 2]]) { a.beginPath(); a.arc(x + px, y + py, 7, 0, 7); a.fill(); }
+  { const [x, y, w, h] = R.lattice; a.clearRect(x, y, w, h); a.strokeStyle = '#efe7d6'; a.lineWidth = 9; a.strokeRect(x + 5, y + 5, w - 10, h - 10); a.lineWidth = 7; a.beginPath(); a.moveTo(x + 6, y + 6); a.lineTo(x + w - 6, y + h - 6); a.moveTo(x + w - 6, y + 6); a.lineTo(x + 6, y + h - 6); a.stroke(); a.lineWidth = 3; a.strokeStyle = '#e9bd58'; a.beginPath(); a.moveTo(x + w / 2, y + 8); a.lineTo(x + w - 8, y + h / 2); a.lineTo(x + w / 2, y + h - 8); a.lineTo(x + 8, y + h / 2); a.closePath(); a.moveTo(x + 8, y + h / 2); a.lineTo(x + w - 8, y + h / 2); a.stroke(); /* inner diamond + mid rail: filigree gantries */
+    a.fillStyle = GOLD; for (const [px, py] of [[8, 8], [w - 8, 8], [8, h - 8], [w - 8, h - 8], [w / 2, h / 2]]) { a.beginPath(); a.arc(x + px, y + py, 7, 0, 7); a.fill(); }
     m.fillStyle = orm(0.4, 0.4); m.fillRect(x, y, w, h); }
   // generic panel facade + solar cells
   { const [x, y, w, h] = R.panel; P(x, y, w, h, IV, null, 0.5, 0.02); lines(x, y, w, h, 48, 32, IVL, 2, true); gold(x, y, w, 6); for (let k = 0; k < 4; k++) win(x + 10 + k * 46, y + 50, 28, 26, 2); }
