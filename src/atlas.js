@@ -56,7 +56,7 @@ export function makeAtlas() {
   // reactor wall
   { const [x, y, w, h] = R.reactorWall; P(x, y, w, h, IV, null, 0.45, 0.02); a.fillStyle = IVL; a.fillRect(x, y + 24, w, 2); a.fillRect(x, y + 98, w, 2);
     gold(x, y, w, 8); gold(x, y + h - 10, w, 10, GOLDD);
-    for (let k = 0; k < 24; k++) { const xx = x + k * (w / 24); gold(xx, y, 6, h, GOLDD); if (k % 2 === 0) win(xx + 12, y + 38, 26, 44, 2); else { a.fillStyle = IVL; a.fillRect(xx + 14, y + 40, 22, 2); a.fillRect(xx + 14, y + 80, 22, 2); } } }
+    for (let k = 0; k < 24; k++) { const xx = x + k * (w / 24); gold(xx, y, 6, h, GOLDD); for (const cx of [xx + 14, xx + 34]) { const cy = y + 62; const el = (ctx, c, rx, ry) => { ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 7); ctx.fill(); }; el(a, GOLD, 7, 17); el(a, '#e8b468', 4.8, 11.5); el(e, '#7a4f24', 4.8, 11.5); m.fillStyle = orm(0.2, 0); m.beginPath(); m.ellipse(cx, cy, 4.8, 11.5, 0, 0, 7); m.fill(); } } }
   // corridor segment (u around, v along)
   { const [x, y, w, h] = R.corridor; P(x, y, w, h, IV, null, 0.45, 0.02);
     for (let k = 0; k < 6; k++) { const yy = y + 8 + k * 13.3; const g = a.createLinearGradient(0, yy, 0, yy + 13); g.addColorStop(0, '#f1e6cf'); g.addColorStop(0.45, IV); g.addColorStop(1, '#a8977a'); a.fillStyle = g; a.fillRect(x, yy, w, 13); }

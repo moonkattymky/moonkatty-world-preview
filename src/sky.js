@@ -25,7 +25,7 @@ export function buildSky(sunDir, earthDir) {
   });
   const dome = new THREE.Mesh(new THREE.SphereGeometry(6000, 24, 12), skyMat); dome.renderOrder = -10; dome.frustumCulled = false; group.add(dome);
   // stars
-  const r = seeded(99); const N = 13000; const pos = new Float32Array(N * 3), size = new Float32Array(N), col = new Float32Array(N * 3);
+  const r = seeded(99); const N = 9500; const pos = new Float32Array(N * 3), size = new Float32Array(N), col = new Float32Array(N * 3);
   const band = skyMat.uniforms.band.value;
   for (let i = 0; i < N; i++) {
     let v; do { v = new THREE.Vector3(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1); } while (v.lengthSq() > 1 || v.lengthSq() < 0.01);
@@ -50,18 +50,18 @@ export function buildSky(sunDir, earthDir) {
     fragmentShader: `uniform vec3 sun; uniform float uTime; varying vec3 vN; varying vec3 vP; varying vec3 vV; ${NOISE_GLSL}
       void main(){ vec3 p=normalize(vP); float land=fbm3(p*2.2+vec3(3.,1.,7.)); float l=smoothstep(0.6,0.64,land);
         vec3 ocean=mix(vec3(0.01,0.06,0.22),vec3(0.03,0.16,0.42),fbm3(p*6.)); vec3 ground=mix(vec3(0.16,0.24,0.16),vec3(0.42,0.38,0.30),fbm3(p*7.));
-        vec3 c=mix(ocean,ground,l); vec3 q=p*3.0+vec3(fbm3(p*4.+uTime*0.01),fbm3(p*4.+5.),0.)*1.4; float cl=smoothstep(0.44,0.68,fbm3(q*1.8)); c=mix(c,vec3(0.92,0.95,1.0),cl*0.85);
+        vec3 c=mix(ocean,ground,l); vec3 q=p*3.0+vec3(fbm3(p*4.+uTime*0.01),fbm3(p*4.+5.),0.)*1.4; float cl=smoothstep(0.44,0.68,fbm3(q*1.8)); c=mix(c,vec3(0.85,0.88,0.93),cl*0.6);
         float ndl=dot(normalize(vN),sun); float lit=smoothstep(-0.15,0.35,ndl); vec3 col=c*(0.04+1.25*lit);
         float fr=pow(1.-max(dot(normalize(vN),vV),0.),3.); col+=vec3(0.25,0.55,1.0)*fr*(0.25+1.4*lit);
-        gl_FragColor=vec4(col,1.); }`,
+        float lum=dot(col,vec3(0.3,0.59,0.11)); col=mix(vec3(lum),col,0.62)*0.6; gl_FragColor=vec4(col,1.); }`,
   });
   const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14), earthMat); earth.renderOrder = -8;
-  const ED = 4200, ER = 830; earth.position.copy(earthDir).multiplyScalar(ED); earth.scale.setScalar(ER); earth.rotation.set(0.4, 2.2, 0.2);
+  const ED = 4200, ER = 840; earth.position.copy(earthDir).multiplyScalar(ED); earth.scale.setScalar(ER); earth.rotation.set(0.4, 2.2, 0.2);
   group.add(earth);
   const haloMat = new THREE.ShaderMaterial({
     fog: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.BackSide, uniforms: { sun: { value: sunDir.clone() } },
     vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vN=normalize(mat3(modelMatrix)*normal); vec4 w=modelMatrix*vec4(position,1.); vV=normalize(cameraPosition-w.xyz); gl_Position=projectionMatrix*viewMatrix*w; }`,
-    fragmentShader: `uniform vec3 sun; varying vec3 vN; varying vec3 vV; void main(){ float d=dot(normalize(vN),vV); float a=pow(smoothstep(0.0,0.42,-d),2.0); float lit=0.3+0.7*smoothstep(-0.5,0.4,dot(normalize(vN),sun)); gl_FragColor=vec4(vec3(0.3,0.62,1.0)*a*lit*1.7,1.); }`,
+    fragmentShader: `uniform vec3 sun; varying vec3 vN; varying vec3 vV; void main(){ float d=dot(normalize(vN),vV); float a=pow(smoothstep(0.0,0.42,-d),2.0); float lit=0.3+0.7*smoothstep(-0.5,0.4,dot(normalize(vN),sun)); gl_FragColor=vec4(vec3(0.3,0.58,0.95)*a*lit*1.2,1.); }`,
   });
   const halo = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 10), haloMat); halo.position.copy(earth.position); halo.scale.setScalar(ER * 1.09); halo.renderOrder = -7; group.add(halo);
   return { group, earth, starMat, earthMat };

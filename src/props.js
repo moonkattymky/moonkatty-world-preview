@@ -59,7 +59,7 @@ export function strataGeom(seed, layers = 3, sides = 7) {
 }
 
 function rockMaterial(fog = true) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9, metalness: 0.0, fog });
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9, metalness: 0.0, fog }); m.color.setScalar(0.68);
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <project_vertex>', `#include <project_vertex>
       #ifdef USE_INSTANCING
@@ -179,9 +179,9 @@ export function buildRocks(scene, culler, quality = 1) {
   const A = [...L.bA, ...L.bC, ...c0], B = [...L.bB, ...c1];
   const debris = [...L.rubble, ...L.pebble, ...L.crumb];
   const kinds = {
-    rockA: makeKind(scene, 'rockA', [[protoGeom(2, 2, [1.25, 0.75, 1.05]), 19], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 90], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 1000]], A, mat, 2),
-    rockB: makeKind(scene, 'rockB', [[protoGeom(2, 5, [1.05, 0.9, 1.2]), 19], [protoGeom(1, 5, [1.05, 0.9, 1.2]), 90], [protoGeom(0, 5, [1.05, 0.9, 1.2], 0.3), 1000]], B, mat, 2),
-    debris: makeKind(scene, 'debris', [[rockGeom(-1, 14, [1.25, 0.55, 0.95], 0.5), 22]], debris, mat, 0),
+    rockA: makeKind(scene, 'rockA', [[protoGeom(2, 2, [1.25, 0.75, 1.05]), 15], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 75], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 1000]], A, mat, 2),
+    rockB: makeKind(scene, 'rockB', [[protoGeom(2, 5, [1.05, 0.9, 1.2]), 15], [protoGeom(1, 5, [1.05, 0.9, 1.2]), 75], [protoGeom(0, 5, [1.05, 0.9, 1.2], 0.3), 1000]], B, mat, 2),
+    debris: makeKind(scene, 'debris', [[rockGeom(-1, 14, [1.25, 0.55, 0.95], 0.5), 19]], debris, mat, 0),
     strata: makeKind(scene, 'strata', [[strataGeom(9, 3, 7), 3000]], L.peak, matFar, 0),
   };
   for (const k of Object.values(kinds)) culler.add(k);
@@ -243,9 +243,9 @@ export function addBeams(b, beams) {
 // ---------- rover tire tracks: textured ribbons hugging the terrain ----------
 export function buildTracks(scene, paths) {
   const c = document.createElement('canvas'); c.width = 64; c.height = 64; const x = c.getContext('2d');
-  x.clearRect(0, 0, 64, 64); x.filter = 'blur(1.5px)'; x.fillStyle = 'rgba(55,52,50,0.26)'; x.fillRect(8, 0, 14, 64); x.fillRect(42, 0, 14, 64);
-  x.fillStyle = 'rgba(40,38,36,0.32)'; for (let y = 0; y < 64; y += 8) { x.beginPath(); x.moveTo(9, y); x.lineTo(15, y + 3); x.lineTo(21, y); x.lineTo(21, y + 3); x.lineTo(15, y + 6); x.lineTo(9, y + 3); x.fill(); x.beginPath(); x.moveTo(43, y + 4); x.lineTo(49, y + 7); x.lineTo(55, y + 4); x.lineTo(55, y + 7); x.lineTo(49, y + 10); x.lineTo(43, y + 7); x.fill(); }
-  x.fillStyle = 'rgba(225,220,210,0.08)'; x.fillRect(6, 0, 2, 64); x.fillRect(22, 0, 2, 64); x.fillRect(40, 0, 2, 64); x.fillRect(56, 0, 2, 64); x.filter = 'none';
+  x.clearRect(0, 0, 64, 64); x.filter = "blur(1px)"; x.fillStyle = 'rgba(30,29,28,0.36)'; x.fillRect(8, 0, 14, 64); x.fillRect(42, 0, 14, 64);
+  x.fillStyle = 'rgba(18,17,16,0.62)'; for (let y = 0; y < 64; y += 8) { x.beginPath(); x.moveTo(9, y); x.lineTo(15, y + 3); x.lineTo(21, y); x.lineTo(21, y + 3); x.lineTo(15, y + 6); x.lineTo(9, y + 3); x.fill(); x.beginPath(); x.moveTo(43, y + 4); x.lineTo(49, y + 7); x.lineTo(55, y + 4); x.lineTo(55, y + 7); x.lineTo(49, y + 10); x.lineTo(43, y + 7); x.fill(); }
+  x.fillStyle = 'rgba(230,225,215,0.28)'; x.fillRect(6, 0, 2, 64); x.fillRect(22, 0, 2, 64); x.fillRect(40, 0, 2, 64); x.fillRect(56, 0, 2, 64); x.filter = 'none';
   const tex = new THREE.CanvasTexture(c); tex.wrapS = THREE.ClampToEdgeWrapping; tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const pos = [], uv = [];
   for (const pts of paths) {
