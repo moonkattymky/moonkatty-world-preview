@@ -98,7 +98,7 @@ const crystals = buildCrystals(scene, env, LOW);
   const toPortal = []; for (let i = 0; i <= 20; i++) { const t = i / 20; toPortal.push(sd(22 + t * 9, 18 + t * 13 + Math.sin(t * 3) * 2)); }
   buildTracks(scene, [pts, loop, spur, toPortal]); }
 const sky = buildSky(sunDir, earthDir, LOW); scene.add(sky.group); sky.starMat.uniforms.uPR.value = PR;
-const space = buildSpace(scene, mats.hull);
+const space = buildSpace(scene, mats.hull, MOBILE || LOW);
 
 // ---------- cat ----------
 const ctrl = new Controller(camera, renderer.domElement, colliders);
@@ -151,7 +151,7 @@ const VIEWS = {
   concept: () => { lookTarget = new THREE.Vector3(...(() => { const p = sd(45, -48); return [p.x, 2, p.z]; })()); const K = CONCEPT; ctrl.place(K.cat.x, K.cat.z, Math.atan2(F.x, F.z) + K.catYaw); const gy = groundAt(K.cat.x, K.cat.z); camera.position.set(K.cam.x, gy + K.eye, K.cam.z); camera.lookAt(K.target.x, gy + K.eye - K.drop, K.target.z); camera.fov = K.fov; ctrl.camFree = false; },
   ...Object.fromEntries([['reactor', 70, 80, 13], ['reactor2', 44, 53, 3.2]].map(([k, dc, dcam, up]) => [k, () => { lookTarget = null; const R = REGIONS.reactor; const ah = Math.atan2(-R.z, -R.x) + 0.35; const cx = R.x + Math.cos(ah) * dc, cz = R.z + Math.sin(ah) * dc; ctrl.place(cx, cz, Math.atan2(-Math.cos(ah), -Math.sin(ah))); const px = R.x + Math.cos(ah + 0.06) * dcam, pz = R.z + Math.sin(ah + 0.06) * dcam; camera.position.set(px, groundAt(px, pz) + up, pz); camera.lookAt(R.x, groundAt(R.x, R.z) + (k === 'reactor' ? 4 : 8), R.z); camera.fov = 55; ctrl.camFree = false; }])), // reactor crater QA shots: rim overlook + floor level
   ark: () => { lookTarget = null; const L = REGIONS.launch; const px = L.x + 60, pz = L.z + 95; ctrl.place(px + 4, pz - 6, 0); camera.position.set(px, groundAt(px, pz) + 4, pz); camera.lookAt(2300, 2050, -2500); camera.fov = 34; ctrl.camFree = false; },
-  belt: () => { lookTarget = null; const px = -230, pz = 170; ctrl.place(px + 3, pz + 4, 0); camera.position.set(px, groundAt(px, pz) + 6, pz); camera.lookAt(-1540, 1350, 2096); camera.fov = 70; ctrl.camFree = false; },
+  belt: () => { lookTarget = null; const px = -230, pz = 170; ctrl.place(px + 3, pz + 4, 0); camera.position.set(px, groundAt(px, pz) + 6, pz); camera.lookAt(-2400, 2400, 3300); camera.fov = 70; ctrl.camFree = false; },
   canyon: () => { lookTarget = null; const s0 = canyonS(REGIONS.canyon.x, REGIONS.canyon.z); const c = canyonPoint(s0 - 62, 0), t = canyonPoint(s0 - 40, 0); ctrl.place(c.x, c.z, Math.atan2(t.x - c.x, t.z - c.z)); const e = canyonPoint(s0 - 92, -3), l = canyonPoint(s0 + 25, 0); camera.position.set(e.x, groundAt(e.x, e.z) + 14, e.z); camera.lookAt(l.x, groundAt(l.x, l.z) + 3, l.z); camera.fov = 58; ctrl.camFree = false; },
   launch: () => { lookTarget = null; const L = REGIONS.launch; const c = { x: L.x - 52, z: L.z + 38 }; ctrl.place(c.x, c.z, Math.atan2(L.x - c.x, L.z - c.z)); camera.position.set(L.x - 92, groundAt(L.x - 92, L.z + 66) + 16, L.z + 66); camera.lookAt(L.x + 4, groundAt(L.x, L.z) + 22, L.z - 4); camera.fov = 55; ctrl.camFree = false; },
   launch2: () => { lookTarget = null; const L = REGIONS.launch; const c = { x: L.x + Math.cos(4.2) * 84, z: L.z + Math.sin(4.2) * 84 }; ctrl.place(c.x, c.z, Math.atan2(L.x - c.x, L.z - c.z)); const ca = 275 * Math.PI / 180; const px = L.x + Math.cos(ca) * 98, pz = L.z + Math.sin(ca) * 98; camera.position.set(px, groundAt(px, pz) + 12, pz); camera.lookAt(L.x, groundAt(L.x, L.z) + 15, L.z); camera.fov = 55; ctrl.camFree = false; },

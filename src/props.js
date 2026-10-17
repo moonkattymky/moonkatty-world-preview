@@ -410,11 +410,19 @@ function diamondGeom() {
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   return g;
 }
+// pass 23: cluster of 5 faceted hexagonal shards (prism + pointed tip), brightness ramp base->tip baked in vertex colour
+function shardClusterGeom() { const pos = [], col = []; const S = [[0, 0, 0, 1.0, 0.26], [0.32, 0.5, 0.15, 0.62, 0.2], [-0.3, -0.45, 0.25, 0.7, 0.19], [0.1, 2.3, -0.35, 0.5, 0.16], [-0.2, 3.6, 0.42, 0.45, 0.15]];
+  const v = new THREE.Vector3(), q = new THREE.Quaternion(), e = new THREE.Euler();
+  for (const [ox, ang, tl, h, w] of S) { const H = h * 2.2, Hb = H * 0.68; q.setFromEuler(e.set(tl, ang, tl * 0.6)); const off = new THREE.Vector3(ox * Math.cos(ang), 0, ox * Math.sin(ang));
+    const P = (a, y, rr) => v.set(Math.cos(a) * rr, y, Math.sin(a) * rr).applyQuaternion(q).add(off).toArray(); const n = 6;
+    for (let i = 0; i < n; i++) { const a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2; const b0 = P(a0, -0.3, w), b1 = P(a1, -0.3, w), t0 = P(a0, Hb, w * 0.92), t1 = P(a1, Hb, w * 0.92), tip = P(0, H, 0);
+      pos.push(...b0, ...t0, ...b1, ...b1, ...t0, ...t1, ...t0, ...tip, ...t1); col.push(0.45, 0.45, 0.45, 0.8, 0.8, 0.8, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1, 1, 1, 0.8, 0.8, 0.8); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals(); return g; }
 export function buildCrystals(scene, envMap, lite = false) {
   const g = diamondGeom();
   const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, metalness: 0.55, roughness: 0.18, flatShading: true, emissive: '#ffffff', emissiveIntensity: 1, envMap, envMapIntensity: 1.6 });
   mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance *= vColor.rgb * vColor.rgb * 1.7;'); };
-  const items = [];
+  const items = [], regC = [], regE = []; // pass 23: canyon/echo cyan crystals -> separate shard-cluster meshes (frustum-culled, region only)
   const gold = new THREE.Color('#f5b83a'), amber = new THREE.Color('#ff9a2e'), cyan = new THREE.Color('#5ee6ec');
   // floating gold diamonds (hub), several placed to match the concept composition
   const hubSpots = [[-27, -44, 2.6], [-17, -26, 2.2], [-9, 16, 3.5], [-3, -30, 2.4], [5.5, 27, 2.8], [16, 18, 2.6], [29, -2, 2.3], [31, 12, 2.6], [21, -24, 2.2], [-31, -12, 2.6], [-40, 18, 3.0], [40, 30, 2.6], [12, -36, 2.3], [-14, 40, 3.2], [36, -30, 2.6], [-48, -30, 2.8], [46, -8, 2.4], [-2, 48, 3],
@@ -427,8 +435,8 @@ export function buildCrystals(scene, envMap, lite = false) {
   // cyan clusters at the portal cave mouth
   for (let i = 0; i < 9; i++) { const a = (i / 9 - 0.5) * 2.2 + Math.atan2(PORTAL.z - CAVE.z, PORTAL.x - CAVE.x); const cx = CAVE.x + Math.cos(a) * 8.5, cz = CAVE.z + Math.sin(a) * 8.5;
     for (let k = 0; k < 3; k++) { const x = cx + (rnd() - 0.5) * 1.6, z = cz + (rnd() - 0.5) * 1.6; items.push({ x, y: groundAt(x, z) + 0.3, z, s: 0.6 + rnd() * 1.0, c: cyan, tilt: (rnd() - 0.5) * 0.9, ph: rnd() * 6 }); } }
-  for (let i = 0; i < 40; i++) { const t = rnd(); const j1 = rnd(), j2 = rnd(); const cp = canyonPoint(110 + t * 540, (j1 < 0.5 ? -1 : 1) * (20 + j2 * 6)); const x = cp.x, z = cp.z; /* pass 21: clusters at the foot of the winding walls */ items.push({ x, y: groundAt(x, z) + 0.6, z, s: 1.2 + rnd() * 3, c: cyan, tilt: (rnd() - 0.5) * 0.8, ph: rnd() * 6 }); }
-  for (let i = 0; i < 12; i++) { const a = rnd() * 6.28; const R = REGIONS.echo; const x = R.x + Math.cos(a) * (45 + rnd() * 20), z = R.z + Math.sin(a) * (45 + rnd() * 20); items.push({ x, y: groundAt(x, z) + 1, z, s: 1.5 + rnd() * 3, c: cyan, tilt: (rnd() - 0.5) * 0.6, ph: 0 }); }
+  for (let i = 0; i < 40; i++) { const t = rnd(); const j1 = rnd(), j2 = rnd(); const cp = canyonPoint(110 + t * 540, (j1 < 0.5 ? -1 : 1) * (20 + j2 * 6)); const x = cp.x, z = cp.z; /* pass 21: clusters at the foot of the winding walls */ regC.push({ x, y: groundAt(x, z) - 0.3, z, s: 1.0 + rnd() * 1.6, tilt: (rnd() - 0.5) * 0.4, ph: rnd() * 6 }); }
+  for (let i = 0; i < 12; i++) { const a = rnd() * 6.28; const R = REGIONS.echo; const x = R.x + Math.cos(a) * (45 + rnd() * 20), z = R.z + Math.sin(a) * (45 + rnd() * 20); regE.push({ x, y: groundAt(x, z) - 0.3, z, s: 1.1 + rnd() * 1.4, tilt: (rnd() - 0.5) * 0.3, ph: a * 3.1 }); }
   for (let i = items.length - 1; i >= 0; i--) { const it = items[i]; if (!it.bob && Math.hypot(it.x - CONCEPT.cam.x, it.z - CONCEPT.cam.z) < 12) items.splice(i, 1); }
   // concept composition: floating diamonds at the concept's screen spots/sizes; drop procedural ones that would read big in that shot
   { const K = CONCEPT; const cgy = groundAt(K.cat.x, K.cat.z); const cc = new THREE.PerspectiveCamera(K.fov, 16 / 9, 0.2, 5000); cc.position.set(K.cam.x, cgy + K.eye, K.cam.z); cc.lookAt(K.target.x, cgy + K.eye - K.drop, K.target.z); cc.updateMatrixWorld(); cc.updateProjectionMatrix();
@@ -443,6 +451,11 @@ export function buildCrystals(scene, envMap, lite = false) {
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
   const update = (t) => { items.forEach((it, i) => { if (!it.bob && t > 0) return; const y = it.bob ? it.y + Math.sin(t * 1.3 + it.ph) * 0.2 : it.y; q.setFromEuler(e.set(it.tilt || 0, it.bob ? t * 0.5 + it.ph : it.ph, 0)); m4.compose(v.set(it.x, y, it.z), q, sc.set(it.s, it.s * 1.08, it.s)); im.setMatrixAt(i, m4); }); im.instanceMatrix.needsUpdate = true; };
   update(0); im.frustumCulled = false; im.castShadow = false; im.name = 'crystals'; scene.add(im);
+  { const cg = shardClusterGeom(); const cm = new THREE.MeshStandardMaterial({ color: '#a8f2f6', vertexColors: true, metalness: 0.15, roughness: 0.12, flatShading: true, emissive: '#36d6e6', emissiveIntensity: 1.5, envMap, envMapIntensity: 1.2 });
+    cm.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n { float fac = abs(dot(normal, normalize(vViewPosition))); totalEmissiveRadiance *= vColor.r * (0.35 + 1.9 * fac * fac); } /* inner glow: bright core facing the viewer, darker rim */'); };
+    for (const [list, nm] of [[regC, 'crystals_canyon'], [regE, 'crystals_echo']]) { const L = lite ? list.filter((_, i) => i % 2 === 0) : list; const mesh = new THREE.InstancedMesh(cg, cm, L.length);
+      L.forEach((it, i) => { q.setFromEuler(e.set(it.tilt, it.ph, it.tilt * 0.5)); m4.compose(v.set(it.x, it.y, it.z), q, sc.set(it.s, it.s, it.s)); mesh.setMatrixAt(i, m4); });
+      mesh.computeBoundingSphere(); mesh.castShadow = false; mesh.name = nm; scene.add(mesh); } }
   return { mesh: im, update, items };
 }
 

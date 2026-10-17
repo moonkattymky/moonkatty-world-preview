@@ -81,30 +81,37 @@ export function buildSky(sunDir, earthDir, lite = false) {
 }
 
 // Asteroid belt + Ark orbital station + MK-01 (sky set pieces; no fog)
-export function buildSpace(scene, hullMat) {
+export function buildSpace(scene, hullMat, lite = false) {
   const g = new THREE.Group(); g.name = 'space';
   // pass 22: asteroid belt = a band arcing over the sky behind the concept/play direction; 8 frustum-culled instanced chunks, tumbling rocks with a warm rim
   const bg = new THREE.Group(); bg.name = 'belt'; scene.add(bg); /* not in the yaw-rotating space group: the band stays put, the rocks tumble */
-  const beltU = { value: 0 }; const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, fog: false, color: new THREE.Color('#c2b39c') });
+  const beltU = { value: 0 }; const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, fog: false, color: new THREE.Color('#a4a8ae') });
   rockMat.onBeforeCompile = (sh) => { sh.uniforms.uTime = beltU;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
       uniform float uTime; mat3 rotA(vec3 a, float t){ float c = cos(t), s = sin(t), ic = 1.0 - c; return mat3(c + a.x * a.x * ic, a.y * a.x * ic + a.z * s, a.z * a.x * ic - a.y * s, a.x * a.y * ic - a.z * s, c + a.y * a.y * ic, a.z * a.y * ic + a.x * s, a.x * a.z * ic + a.y * s, a.y * a.z * ic - a.x * s, c + a.z * a.z * ic); }`)
       .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
       float fi = float(gl_InstanceID); vec3 tax = normalize(vec3(fract(sin(fi * 12.9898) * 43758.5), fract(sin(fi * 78.233) * 13758.5), fract(sin(fi * 39.425) * 23421.6)) - 0.5 + 1e-3); mat3 tR = rotA(tax, uTime * (0.03 + 0.1 * fract(fi * 0.618)) + fi); objectNormal = tR * objectNormal;`)
       .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = tR * transformed;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `{ float fr = 1.0 - abs(dot(normal, normalize(vViewPosition))); outgoingLight += vec3(1.0, 0.8, 0.55) * pow(fr, 2.5) * 0.45; outgoingLight += diffuseColor.rgb * 0.06; }
+    sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `{ float fr = 1.0 - abs(dot(normal, normalize(vViewPosition))); outgoingLight += vec3(0.85, 0.88, 0.95) * pow(fr, 2.5) * 0.3; outgoingLight += diffuseColor.rgb * 0.05; outgoingLight = mix(outgoingLight, vec3(0.04, 0.055, 0.09), 0.38); /* distance/space fade: cool, grey, low contrast */ }
       #include <opaque_fragment>`); };
-  const Fh = new THREE.Vector3(0.592, 0, -0.806), Rh = new THREE.Vector3(0.806, 0, 0.592); const E = 38 * Math.PI / 180;
+  // pass 23: far (r ~5.6 km) and high (apex 44 deg): fine dust points + small rocks + a few large silhouettes. Desktop: 6 culled chunks + 3 point chunks; phones: 1 instanced mesh + 1 point cloud
+  const Fh = new THREE.Vector3(0.592, 0, -0.806), Rh = new THREE.Vector3(0.806, 0, 0.592); const E = 44 * Math.PI / 180;
   const Ap = Fh.clone().multiplyScalar(-Math.cos(E)).add(new THREE.Vector3(0, Math.sin(E), 0)); const Nb = new THREE.Vector3().crossVectors(Rh, Ap).normalize();
-  const r = seeded(7); const NC = 8, PER = 120; const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3();
+  const r = seeded(7); const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3();
+  const gauss = () => (r() + r() + r() - 1.5) / 1.5; const R0 = 5600, OFF = 1100;
+  const place = (ph, spread) => { const R = R0 + gauss() * 520 * spread; const off = OFF + gauss() * 380 * spread; return p.copy(Rh).multiplyScalar(Math.cos(ph) * R).addScaledVector(Ap, Math.sin(ph) * R).addScaledVector(Nb, off); };
   const geos = [rockGeom(0, 11, [1.2, 0.9, 1], 0.45), rockGeom(0, 23, [1, 0.8, 1.3], 0.5), rockGeom(1, 37, [1.1, 0.85, 1], 0.35)];
-  const gauss = () => (r() + r() + r() - 1.5) / 1.5;
-  for (let cI = 0; cI < NC; cI++) { const geo = cI % 4 === 3 ? geos[2] : geos[cI % 2]; const n = geo === geos[2] ? 30 : PER; const belt = new THREE.InstancedMesh(geo, rockMat, n);
-    for (let i = 0; i < n; i++) { const ph = Math.PI * (0.13 + 0.74 * (cI + r()) / NC); const R = 3300 + gauss() * 420; const off = 650 + gauss() * 330; /* band plane offset from the viewer -> reads as a broad strip, not an edge-on line */
-      p.copy(Rh).multiplyScalar(Math.cos(ph) * R).addScaledVector(Ap, Math.sin(ph) * R).addScaledVector(Nb, off);
-      const big = geo === geos[2]; const s0 = big ? 26 + r() ** 2 * 80 : 3.5 + r() ** 5 * 50; sc.set(s0 * (0.8 + r() * 0.5), s0 * (0.6 + r() * 0.4), s0 * (0.8 + r() * 0.5));
+  const chunks = lite ? [[0, 1, geos[0], 110, 14]] : [0, 1, 2, 3, 4, 5].map(k => [k / 6, (k + 1) / 6, geos[k % 2], 150, 0]).concat([[0, 0.5, geos[2], 10, 10], [0.5, 1, geos[2], 10, 10]]);
+  chunks.forEach(([u0, u1, geo, n, nBig], cI) => { const belt = new THREE.InstancedMesh(geo, rockMat, n + (lite ? nBig : 0));
+    for (let i = 0; i < belt.count; i++) { const big = geo === geos[2] || i >= n; const ph = Math.PI * (0.12 + 0.76 * (u0 + (u1 - u0) * r())); place(ph, big ? 0.7 : 1);
+      const s0 = big ? 80 + r() ** 2 * 110 : 6 + r() ** 4 * 30; sc.set(s0 * (0.8 + r() * 0.5), s0 * (0.6 + r() * 0.4), s0 * (0.8 + r() * 0.5));
       q.setFromEuler(e.set(r() * 6, r() * 6, r() * 6)); m.compose(p, q, sc); belt.setMatrixAt(i, m); }
-    belt.computeBoundingSphere(); belt.boundingSphere.radius += 200; belt.frustumCulled = true; belt.name = 'belt' + cI; bg.add(belt); }
+    belt.computeBoundingSphere(); belt.boundingSphere.radius += 250; belt.frustumCulled = true; belt.name = 'belt' + cI; bg.add(belt); });
+  { const NP = lite ? 5000 : 15000, NCH = lite ? 1 : 3; const pm = new THREE.PointsMaterial({ size: lite ? 1.6 : 1.4, sizeAttenuation: false, vertexColors: true, fog: false });
+    for (let c = 0; c < NCH; c++) { const pos = new Float32Array(NP / NCH * 3), col = new Float32Array(NP / NCH * 3);
+      for (let i = 0; i < NP / NCH; i++) { const ph = Math.PI * (0.12 + 0.76 * (c + r()) / NCH); place(ph, 0.8 + r() * 0.5); pos.set([p.x, p.y, p.z], i * 3); const k = 0.18 + r() ** 2 * 0.42; col.set([k * 0.95, k * 0.97, k * 1.04], i * 3); }
+      const gp = new THREE.BufferGeometry(); gp.setAttribute('position', new THREE.BufferAttribute(pos, 3)); gp.setAttribute('color', new THREE.BufferAttribute(col, 3)); gp.computeBoundingSphere();
+      const pts = new THREE.Points(gp, pm); pts.name = 'beltDust' + c; bg.add(pts); } }
   // pass 21: Ark station rebuilt in its own local frame (ring in XY, spin axis Z): detailed, lit, frustum-culled
   const b = new Builder(); const st = new THREE.Group(); st.name = 'ark'; st.position.set(2300, 2050, -2500); st.rotation.set(1.15, 0.5, 0); st.scale.setScalar(1.3); g.add(st);
   b.add('ivory', G.torus(220, 18, 10, 64), { color: C.ivory });
