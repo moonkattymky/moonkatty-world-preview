@@ -60,15 +60,15 @@ export function buildSky(sunDir, earthDir) {
         vec3 c=mix(ocean,ground,l); vec3 q=p*3.0+vec3(fbm3(p*4.+uTime*0.01),fbm3(p*4.+5.),0.)*1.4; float cl=smoothstep(0.44,0.68,fbm3(q*1.8)); c=mix(c,vec3(0.85,0.88,0.93),cl*0.6);
         float ndl=dot(normalize(vN),sun); float lit=smoothstep(-0.15,0.35,ndl); vec3 col=c*(0.04+1.25*lit);
         float fr=pow(1.-max(dot(normalize(vN),vV),0.),3.); col+=vec3(0.25,0.55,1.0)*fr*(0.25+1.4*lit);
-        float lum=dot(col,vec3(0.3,0.59,0.11)); col=mix(vec3(lum),col,0.55)*0.5; gl_FragColor=vec4(col,1.); }`,
+        float lum=dot(col,vec3(0.3,0.59,0.11)); col=mix(vec3(lum),col,0.55)*0.42; gl_FragColor=vec4(col,1.); }`,
   });
   const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14), earthMat); earth.renderOrder = -8;
-  const ED = 4200, ER = 820; earth.position.copy(earthDir).multiplyScalar(ED); earth.scale.setScalar(ER); earth.rotation.set(0.4, 2.2, 0.2);
+  const ED = 4200, ER = 760; earth.position.copy(earthDir).multiplyScalar(ED); earth.scale.setScalar(ER); earth.rotation.set(0.4, 2.2, 0.2);
   group.add(earth);
   const haloMat = new THREE.ShaderMaterial({
     fog: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.BackSide, uniforms: { sun: { value: sunDir.clone() } },
     vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vN=normalize(mat3(modelMatrix)*normal); vec4 w=modelMatrix*vec4(position,1.); vV=normalize(cameraPosition-w.xyz); gl_Position=projectionMatrix*viewMatrix*w; }`,
-    fragmentShader: `uniform vec3 sun; varying vec3 vN; varying vec3 vV; void main(){ float d=dot(normalize(vN),vV); float a=pow(smoothstep(0.0,0.42,-d),2.0); float lit=0.3+0.7*smoothstep(-0.5,0.4,dot(normalize(vN),sun)); gl_FragColor=vec4(vec3(0.3,0.58,0.95)*a*lit*1.2,1.); }`,
+    fragmentShader: `uniform vec3 sun; varying vec3 vN; varying vec3 vV; void main(){ float d=dot(normalize(vN),vV); float a=pow(smoothstep(0.0,0.42,-d),2.0); float lit=0.3+0.7*smoothstep(-0.5,0.4,dot(normalize(vN),sun)); gl_FragColor=vec4(vec3(0.3,0.58,0.95)*a*lit*0.85,1.); }`,
   });
   const halo = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 10), haloMat); halo.position.copy(earth.position); halo.scale.setScalar(ER * 1.09); halo.renderOrder = -7; group.add(halo);
   return { group, earth, starMat, earthMat };

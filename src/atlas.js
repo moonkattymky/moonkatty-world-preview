@@ -11,7 +11,7 @@ export const R = {
   corridor: [0, 640, 1024, 96], rocket: [0, 736, 1024, 160],
   tower: [0, 896, 512, 128], lattice: [512, 896, 128, 128], panel: [640, 896, 192, 128], solar: [832, 896, 192, 128],
 };
-const GLOW_HUES = [['#ffb347', 'orange'], ['#67d7f0', 'cyan'], ['#ff5533', 'red'], ['#ffe08a', 'yellow'], ['#fff4e0', 'white'], ['#7af0c8', 'mint']];
+const GLOW_HUES = [['#ffb347', 'orange'], ['#67d7f0', 'cyan'], ['#ff5533', 'red'], ['#ffe08a', 'yellow'], ['#fff4e0', 'white'], ['#7af0c8', 'mint'], ['#ff7414', 'amber']];
 const GLOW_ROWS = 8;
 export function rectUV(name) { const [x, y, w, h] = R[name]; return [x / S, 1 - (y + h) / S, (x + w) / S, 1 - y / S]; } // u0,v0,u1,v1
 export function swatchUV(name) { const [u0, v0, u1, v1] = rectUV(name); return [(u0 + u1) / 2, (v0 + v1) / 2]; }
@@ -41,7 +41,7 @@ export function makeAtlas() {
   // glow ramp (albedo dim, emissive rows from dark to full)
   { const [x, y, w, h] = R.glow; const cw = w / GLOW_HUES.length, rh = h / GLOW_ROWS;
     GLOW_HUES.forEach(([hex], i) => { for (let r = 0; r < GLOW_ROWS; r++) { const lin = (r + 0.5) / GLOW_ROWS; const c = new THREE.Color(hex); const k = Math.max(0.0001, lin); const ce = new THREE.Color(c.r * k, c.g * k, c.b * k); // linear
-      P(Math.floor(x + cw * i), y + rh * r, Math.ceil(cw), rh, '#' + new THREE.Color(c.r * 0.25, c.g * 0.25, c.b * 0.25).getHexString(), '#' + ce.getHexString(), 0.3, 0); } }); }
+      P(Math.floor(x + cw * i), y + rh * r, Math.ceil(cw), rh, '#' + new THREE.Color(c.r * 0.25, c.g * 0.25, c.b * 0.25).getHexString(), '#' + ce.getHexString(), 0.95, 0); } }); }
   // dome cap (concept: soft grey-beige shell, subtle segmented panels, thin gold band near the base, no vertical gold ribs)
   { const [x, y, w, h] = R.domeCap; P(x, y, w, h, IV, null, 0.5, 0.02);
     const g = a.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(255,250,240,0.18)'); g.addColorStop(1, 'rgba(90,82,70,0.12)'); a.fillStyle = g; a.fillRect(x, y, w, h);

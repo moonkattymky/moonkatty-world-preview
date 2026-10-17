@@ -41,7 +41,7 @@ function finial(b, x, y, z, h) {
 }
 export function dome(b, s, d, r, o = {}) {
   const { x, z } = sd(s, d); const y = groundAt(x, z) - 0.15;
-  colliders.push({ x, z, r: r * 1.15 }); const seg = r > 4 ? 20 : 16;
+  colliders.push({ x, z, r: r * 1.15 }); const seg = r > 4 ? 18 : 14;
   // wide skirt platform (concept: low stepped deck ringed in gold, warm edge lights)
   b.add('dark', G.cyl(r * 1.5, r * 1.58, 0.45, seg), { pos: [x, y - 0.25, z], color: '#3a4250' });
   b.add('ivory', G.cyl(r * 1.4, r * 1.48, 0.3, seg), { pos: [x, y + 0.05, z], color: '#b8ad98' });
@@ -72,24 +72,25 @@ function reactor(b, s, d) {
   for (const a of doors) door(b, x, y + 0.3, z, a, R * 1.0, 1.6, 2.0);
   const yt = y + 0.3 + H;
   // rounded shoulder so the outer wall reads as a fat ring (concept) rather than a flat drum
-  b.add('ivory', G.torus(R - 0.15, 0.7, 5, 36).rotateZ(PI / 36), { pos: [x, yt - 0.15, z], rot: [PI / 2, 0, 0], color: C.ivory });
+  b.add('ivory', G.torus(R - 0.15, 0.68, 5, 36).rotateZ(PI / 36), { pos: [x, yt - 0.2, z], rot: [PI / 2, 0, 0], color: C.ivory });
   b.add('ivory', G.torus(R + 0.05, 0.32, 4, 36), { pos: [x, y + 0.55, z], rot: [PI / 2, 0, 0], color: C.ivory2 });
   b.add('ivory', G.ring(Ri, R, 36), { pos: [x, yt, z], color: C.ivory2 });
   b.add('gold', G.torus(R, 0.3, 4, 32), { pos: [x, yt, z], rot: [PI / 2, 0, 0], color: C.gold });
   // raised inner lip around the molten pit (concept: thick rounded rim with gold top line)
-  b.add('ivory', G.cyl(Ri + 0.1, Ri + 0.75, 0.55, 36, true), { pos: [x, yt, z], color: C.ivory, ao: [yt - 0.3, yt + 1.2] });
-  b.add('ivory', G.ring(Ri, Ri + 0.15, 36), { pos: [x, yt + 0.55, z], color: C.ivory2 });
-  b.add('gold', G.torus(Ri + 0.08, 0.13, 4, 36), { pos: [x, yt + 0.57, z], rot: [PI / 2, 0, 0], color: C.gold });
+  b.add('ivory', G.cyl(Ri + 0.1, Ri + 0.75, 0.3, 36, true), { pos: [x, yt, z], color: C.ivory, ao: [yt - 0.3, yt + 1.2] });
+  b.add('ivory', G.ring(Ri, Ri + 0.15, 36), { pos: [x, yt + 0.3, z], color: C.ivory2 });
+  b.add('gold', G.torus(Ri + 0.08, 0.13, 4, 36), { pos: [x, yt + 0.32, z], rot: [PI / 2, 0, 0], color: C.gold });
   b.add('gold', G.torus(Ri + 0.72, 0.08, 3, 36), { pos: [x, yt + 0.05, z], rot: [PI / 2, 0, 0], color: C.goldD });
   // ring of warm lights on the inner lip around the core + walkway railing posts / deck plates
-  for (let i = 0; i < 28; i++) { const a = i / 28 * PI * 2; b.add('glow', G.box(0.32, 0.12, 0.22), { pos: [x + Math.sin(a) * (Ri + 0.42), yt + 0.6, z + Math.cos(a) * (Ri + 0.42)], rot: [0, a, 0], color: i % 2 ? C.winHot : C.win, intensity: 4 }); }
+  for (let i = 0; i < 28; i++) { const a = i / 28 * PI * 2; b.add('glow', G.box(0.32, 0.12, 0.22), { pos: [x + Math.sin(a) * (Ri + 0.42), yt + 0.36, z + Math.cos(a) * (Ri + 0.42)], rot: [0, a, 0], color: i % 2 ? C.winHot : C.win, intensity: 4 }); }
   for (let i = 0; i < 18; i++) { const a = i / 18 * PI * 2 + 0.09; const rr = Ri + 1.25; b.add('gold', G.cyl(0.05, 0.05, 0.55, 4), { pos: [x + Math.sin(a) * rr, yt + 0.02, z + Math.cos(a) * rr], color: C.gold2 }); b.add('dark', G.box(0.08, 0.02, 1.0), { pos: [x + Math.sin(a + 0.17) * (Ri + 1.1), yt + 0.012, z + Math.cos(a + 0.17) * (Ri + 1.1)], rot: [0, a + 0.17, 0], color: '#8a8070' }); }
   b.add('gold', G.torus(Ri + 1.25, 0.035, 3, 36), { pos: [x, yt + 0.57, z], rot: [PI / 2, 0, 0], color: C.gold2 });
   // deep glowing pit: walls glow hotter toward the molten floor, with dark vertical ribs
-  const pitD = 2.6;
-  b.add('glow', G.cyl(Ri, Ri * 0.92, pitD + 0.55, 36, true), { pos: [x, yt - pitD, z], flip: true, color: (px, py, pz) => { const hh = pitD + 0.55; const ly = py > yt - pitD - 1 ? py - (yt - pitD) : py; const t = THREE.MathUtils.clamp(ly / hh, 0, 1); const k = 3.2 - 1.6 * t; return [k, k * 0.2, k * 0.035]; } });
+  const pitD = 0.85;
+  b.add('glow', G.cyl(Ri, Ri * 0.92, pitD + 0.55, 36, true), { pos: [x, yt - pitD, z], flip: true, color: (px, py, pz) => { const hh = pitD + 0.55; const ly = py > yt - pitD - 1 ? py - (yt - pitD) : py; const t = THREE.MathUtils.clamp(ly / hh, 0, 1); const k = 1.1 - 0.5 * t; return [k, k * 0.17, k * 0.012]; } });
   for (let i = 0; i < 20; i++) { const a = i / 20 * PI * 2; b.add('dark', G.box(0.16, pitD + 0.8, 0.1), { pos: [x + Math.sin(a) * (Ri * 0.96 - 0.06), yt - pitD / 2 + 0.4, z + Math.cos(a) * (Ri * 0.96 - 0.06)], rot: [0, a, 0], color: '#5a3a20' }); }
-  b.add('glow', G.disc(Ri * 0.93, 32), { pos: [x, yt - pitD, z], color: (px, py, pz) => { const t = Math.hypot(px - x, pz - z) / Ri; const k = 4.2 - 1.4 * t; return [k, k * 0.4, k * 0.07]; } });
+  b.add('glow', G.disc(Ri * 0.97, 32), { pos: [x, yt + 0.2, z], color: (px, py, pz) => { const t = Math.hypot(px - x, pz - z) / Ri; const k = 0.45 - 0.2 * t; return [k, k * 0.16, k * 0.01]; } });
+  b.add('glow', G.disc(Ri * 0.42, 24), { pos: [x, yt + 0.215, z], color: '#ffb347', intensity: 1.25 }); for (const f of [0.55, 0.78]) b.add('dark', G.ring(Ri * f, Ri * f + 0.34, 48), { pos: [x, yt + 0.218, z], color: '#1c0d06' }); // molten core: hot centre + crust rings
   // small rooftop units
   for (let i = 0; i < 6; i++) { const a = i / 6 * PI * 2 + 0.5; const rr = (R + Ri + 0.75) / 2; b.add('ivory', G.cyl(0.35, 0.45, 0.6, 10), { pos: [x + Math.sin(a) * rr, yt, z + Math.cos(a) * rr], color: C.ivory }); b.add('glow', G.octa(0.14), { pos: [x + Math.sin(a) * rr, yt + 0.7, z + Math.cos(a) * rr], color: C.win, intensity: 4 }); }
   return { x, y: yt, z };
@@ -224,8 +225,7 @@ function beaconPad(b, s, d, beams, height = 46) {
   b.add('dark', G.cyl(1.35, 1.55, 0.4, 24), { pos: [x, y + 0.7, z], color: '#2c3644' });
   b.add('gold', G.torus(1.35, 0.07, 3, 24), { pos: [x, y + 1.1, z], rot: [PI / 2, 0, 0], color: C.gold2 });
   b.add('glow', G.disc(1.1, 24), { pos: [x, y + 1.11, z], color: C.cyan, intensity: 4.5 });
-  beams.push({ x, y: y + 1.1, z, r: 0.75, h: height, color: C.cyan, I: 0.95 });
-  beams.push({ x, y: y + 1.1, z, r: 1.5, h: height * 0.12, color: C.cyan, I: 0.2 });
+  beams.push({ x, y: y + 1.1, z, r: 0.7, h: height, color: C.cyan, I: 0.9, taper: 0.45 });
 }
 
 // glowing portal cave carved into the crater wall: rocky arch, dark tunnel, gold/cyan gate, cyan pads + beams
@@ -242,11 +242,12 @@ function portalCave(b, beams) {
   const y = y0; const R = 8.2;
   colliders.push({ x: mx, z: mz, r: 3 });
   const at = (dx, dz, dy = 0) => [mx + Math.cos(yaw) * dx + fx * dz, y + dy, mz - Math.sin(yaw) * dx + fz * dz];
-  b.add('dark', rockyArch(R + 1.6, 2.1, 3), { pos: at(0, 0.2), rot: [0, yaw, 0], color: '#4b4845', ao: [y - 1, y + 10] });
-  b.add('dark', rockyArch(R + 4.2, 2.9, 7), { pos: at(0, -1.8), rot: [0, yaw, 0], color: '#42403d' });
+  b.add('dark', rockyArch(R + 1.6, 2.1, 3), { pos: at(0, 0.2), rot: [0, yaw, 0], color: '#3d3a37', ao: [y - 1, y + 10] });
+  b.add('dark', rockyArch(R + 4.2, 2.9, 7), { pos: at(0, -1.8), rot: [0, yaw, 0], color: '#383532' });
   // tunnel (inside visible) + glowing back
   b.add('dark', new THREE.CylinderGeometry(R, R * 0.7, 14, 16, 1, true, -PI / 2, PI).rotateX(PI / 2).rotateZ(0).translate(0, 0, -7), { pos: at(0, 0.4), rot: [0, yaw, 0], color: '#040508', flip: true });
-  b.add('dark', new THREE.CircleGeometry(R - 0.6, 20, 0, PI), { pos: at(0, -0.9), rot: [0, yaw, 0], color: '#080c12' });
+  b.add('dark', new THREE.CircleGeometry(R + 0.4, 20, 0, PI), { pos: at(0, -0.9), rot: [0, yaw, 0], color: '#060708' });
+  b.add('dark', new THREE.CircleGeometry(R + 0.3, 24, 0, PI), { pos: at(0, 0.6, -0.4), rot: [0, yaw, 0], color: '#050607' }); // deep-shadow mouth face: hides the lit inner arch so the opening reads as a dark cave
   b.add('glow', new THREE.PlaneGeometry(2 * R - 3, 0.7).translate(0, 0.35, 0), { pos: at(0, -0.8, 0.02), rot: [0, yaw, 0], color: C.cyan, intensity: 1.6 }); // faint cyan floor glow deep inside
   b.add('dark', new THREE.PlaneGeometry(2 * R + 0.2, 0.4).rotateX(-PI / 2), { pos: at(0, -4, 0.05), rot: [0, yaw, 0], color: '#2a3442' });
   for (let k = 0; k < 5; k++) { const a = (k + 0.5) / 5 * PI; b.add('glow', G.octa(0.22), { pos: at(Math.cos(a) * (R - 0.9), -0.6, Math.sin(a) * (R - 0.9)), rot: [0, yaw, 0], color: C.cyan, intensity: 2.5 }); }
@@ -268,7 +269,10 @@ function portalCave(b, beams) {
   return { x: mx, y, z: mz, yaw };
 }
 
-function lamp(b, x, z, color = C.win) { const y = groundAt(x, z); b.add('dark', G.cyl(0.07, 0.1, 1.2, 5), { pos: [x, y, z], color: '#555c66' }); b.add('glow', G.octa(0.13), { pos: [x, y + 1.3, z], color, intensity: 4 }); }
+function lamp(b, x, z, color = C.win) { const y = groundAt(x, z);
+  b.add('gold', G.cyl(0.16, 0.2, 0.18, 6), { pos: [x, y - 0.02, z], color: C.goldD }); b.add('ivory', G.cyl(0.06, 0.085, 1.15, 6), { pos: [x, y + 0.14, z], color: C.ivory });
+  b.add('gold', G.torus(0.08, 0.025, 3, 6), { pos: [x, y + 0.75, z], rot: [PI / 2, 0, 0], color: C.gold }); b.add('gold', G.cyl(0.13, 0.07, 0.12, 6), { pos: [x, y + 1.27, z], color: C.gold });
+  b.add('glow', G.octa(0.13), { pos: [x, y + 1.5, z], color, intensity: 4 }); b.add('gold', G.cone(0.1, 0.16, 6), { pos: [x, y + 1.62, z], color: C.gold2 }); }
 function crate(b, x, z, s = 1, yaw = 0) { const y = groundAt(x, z); b.add('ivory', G.box(1.2 * s, 0.9 * s, 0.9 * s), { pos: [x, y + 0.45 * s, z], rot: [0, yaw, 0], color: C.ivory2 }); b.add('gold', G.box(1.25 * s, 0.12 * s, 0.95 * s), { pos: [x, y + 0.65 * s, z], rot: [0, yaw, 0], color: C.gold }); colliders.push({ x, z, r: 0.8 * s }); }
 function solar(b, x, z, yaw) { const y = groundAt(x, z); b.add('dark', G.cyl(0.1, 0.12, 1.4, 5), { pos: [x, y, z], color: '#555c66' }); b.add('dark', G.box(3.2, 0.08, 1.8), { pos: [x, y + 1.5, z], rot: [-0.5, yaw, 0], color: '#1b3c5a' }); b.add('gold', G.box(3.35, 0.05, 0.08), { pos: [x, y + 1.5, z], rot: [-0.5, yaw, 0], color: C.gold }); }
 

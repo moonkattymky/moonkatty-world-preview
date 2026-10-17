@@ -30,7 +30,7 @@ renderer.shadowMap.enabled = !LOW; renderer.shadowMap.type = THREE.PCFSoftShadow
 document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2('#1b2330', 0.0011);
+scene.fog = new THREE.FogExp2('#1e2024', 0.0011);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.2, 9000);
 
 // light: sun from camera-left in the concept framing, cool sky fill, warm bounce
@@ -38,12 +38,12 @@ const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const sunDir = v3(-Rt.x * 0.75 - F.x * 0.45, 0.62, -Rt.z * 0.75 - F.z * 0.45).normalize();
 const earthYaw = 0.322, earthEl = 0.096; // radians relative to concept forward
 const ef = v3(F.x, 0, F.z).applyAxisAngle(v3(0, 1, 0), -earthYaw); const earthDir = ef.multiplyScalar(Math.cos(earthEl)).add(v3(0, Math.sin(earthEl), 0)).normalize();
-const hemi = new THREE.HemisphereLight('#a9c1e6', '#4a443c', 0.6); scene.add(hemi);
+const hemi = new THREE.HemisphereLight('#b3b6bc', '#4f4840', 0.6); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff1dc', 2.3); sun.castShadow = true;
 sun.shadow.mapSize.set(MOBILE ? 1024 : 2048, MOBILE ? 1024 : 2048); const sc = sun.shadow.camera; sc.left = -70; sc.right = 70; sc.top = 70; sc.bottom = -70; sc.near = 1; sc.far = 400; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 scene.add(sun, sun.target);
-const fill = new THREE.DirectionalLight('#6f9bd8', 0.55); fill.position.copy(earthDir).multiplyScalar(100); scene.add(fill);
-const front = new THREE.DirectionalLight('#c9d6f0', 0.55); front.position.set(-F.x * 80 - Rt.x * 40, 60, -F.z * 80 - Rt.z * 40); scene.add(front); // soft key from behind the concept camera (lights the left hillside)
+const fill = new THREE.DirectionalLight('#8f9aab', 0.45); fill.position.copy(earthDir).multiplyScalar(100); scene.add(fill);
+const front = new THREE.DirectionalLight('#d6d3cc', 0.55); front.position.set(-F.x * 80 - Rt.x * 40, 60, -F.z * 80 - Rt.z * 40); scene.add(front); // soft key from behind the concept camera (lights the left hillside)
 const coreLight = new THREE.PointLight('#ff9a40', 60, 32, 1.6); scene.add(coreLight);
 
 // environment for gold/ivory reflections: dark sky, light ground, warm sun panel
@@ -105,7 +105,7 @@ flame.position.set(0, 0.85, -0.45); flame.visible = false; catRoot.add(flame);
 function play(name, fade = 0.25) { const a = actions[name]; if (!a || current === a) return; a.reset().fadeIn(fade).play(); if (current) current.fadeOut(fade); current = a; }
 const catURL = Q.get('cat') || 'assets/moonkatty.glb';
 const catPromise = new GLTFLoader().loadAsync(catURL + '?v=' + Date.now()).then(gltf => {
-  const m = gltf.scene; m.traverse(o => { if (o.isMesh) { o.castShadow = !/Eye|Glow|Dome|Glint|Outline/i.test(Array.isArray(o.material) ? '' : o.material.name); o.receiveShadow = true; o.frustumCulled = false; const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const mt of ms) { if (mt.transmission > 0) { mt.transmission = 0; mt.transparent = true; mt.opacity = Math.min(mt.opacity, 0.35); mt.depthWrite = false; } /* transmission would re-render the whole opaque scene every frame */ if (mt.isMeshStandardMaterial) { mt.envMap = env; mt.envMapIntensity = /gold/i.test(mt.name) ? 1.6 : 0.6; } } } });
+  const m = gltf.scene; m.traverse(o => { if (o.isMesh) { o.castShadow = !/Eye|Glow|Dome|Glint|Outline/i.test(Array.isArray(o.material) ? '' : o.material.name); o.receiveShadow = true; o.frustumCulled = false; const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const mt of ms) { if (mt.transmission > 0) { mt.transmission = 0; mt.transparent = true; mt.opacity = Math.min(mt.opacity, 0.35); mt.depthWrite = false; } /* transmission would re-render the whole opaque scene every frame */ if (mt.isMeshStandardMaterial) { mt.envMap = env; mt.envMapIntensity = /gold/i.test(mt.name) ? 1.6 : 0.6; } if (/Face|Fur|Eye/i.test(mt.name) && mt.isMeshStandardMaterial) { /* cat-only warm fill: face reads bright orange inside the dome even with the sun behind (no scene light added) */ if (mt.map) mt.emissiveMap = mt.map; mt.emissive = new THREE.Color(/Eye/i.test(mt.name) ? '#8a8a8a' : '#ffc89a'); mt.emissiveIntensity = /Eye/i.test(mt.name) ? 0.3 : 0.42; mt.needsUpdate = true; } } } });
   catRoot.add(m); m.traverse(o => { if (!headBone && /^head$/i.test(o.name)) headBone = o; }); if (!headBone) m.traverse(o => { if (!headBone && /head/i.test(o.name) && !o.isMesh) headBone = o; });
   if (gltf.animations.length) { mixer = new THREE.AnimationMixer(m); for (const c of gltf.animations) actions[c.name] = mixer.clipAction(c); play('idle', 0); }
   return gltf;
@@ -130,7 +130,7 @@ composer.addPass(new OutputPass());
 const grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uVig: { value: 0.3 } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; uniform float uVig; varying vec2 vUv;
     void main(){ vec4 t = texture2D(tDiffuse, vUv); vec3 c = t.rgb; float l = dot(c, vec3(0.299, 0.587, 0.114));
-      c = mix(c, c * vec3(0.9, 0.97, 1.1), (1.0 - smoothstep(0.0, 0.45, l)) * 0.55); // cool shadows
+      c = mix(c, c * vec3(0.97, 0.99, 1.03), (1.0 - smoothstep(0.0, 0.45, l)) * 0.4); // very slightly cool shadows (neutral grey, no navy)
       c += vec3(0.045, 0.02, -0.025) * smoothstep(0.45, 1.0, l); // warm highlights
       c = mix(c, c * c * (3.0 - 2.0 * c), 0.18); // gentle S-curve
       vec2 d = vUv - 0.5; d.x *= 1.15; c *= 1.0 - uVig * smoothstep(0.3, 0.85, length(d) * 1.25);
