@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { groundAt, groundMesh, LEDGE, slopeAt, F, Rt, LOOKOUT, REGIONS, sd, CONCEPT, CAVE, PORTAL } from './terrain.js';
 import { noise2, seeded } from './noise.js';
 import { colliders, LAMPS } from './base.js';
+import { KEEP } from './world.js';
 import { mergeVertices } from '../vendor/three/jsm/utils/BufferGeometryUtils.js';
 
 const rnd = seeded(2024);
@@ -288,7 +289,7 @@ export function buildRocks(scene, culler, quality = 1) { LOD_SCALE = quality < 0
   // jagged distant mountain rim (big faceted peaks)
   for (let i = 0; i < 70; i++) { const a = rnd() * 6.283, r = 280 + rnd() * 400; const s0 = 9 + rnd() * 11; const tilt = (rnd() - 0.5) * 0.35;
     for (let k = 0; k < 3; k++) { const rr = r + k * s0 * 0.7 + (rnd() - 0.5) * 6, aa = a + (rnd() - 0.5) * 0.05; const x = Math.cos(aa) * rr, z = Math.sin(aa) * rr; const s = s0 * (1 - k * 0.18);
-      const gy = Math.min(groundAt(x, z), groundAt(x + Math.sin(aa) * s * 1.5, z - Math.cos(aa) * s * 1.5), groundAt(x - Math.sin(aa) * s * 1.5, z + Math.cos(aa) * s * 1.5)); L.wall.push({ x, y: gy - s * 0.25 + k * s0 * 0.3, z, s: [s * (1.6 + rnd() * 0.8), s * (0.9 + rnd() * 0.6), s * (0.9 + rnd() * 0.4)], r: [tilt * 0.3 + (rnd() - 0.5) * 0.06, -aa + Math.PI / 2 + (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.25] }); } }
+      const gy = Math.min(groundAt(x, z), groundAt(x + Math.sin(aa) * s * 1.5, z - Math.cos(aa) * s * 1.5), groundAt(x - Math.sin(aa) * s * 1.5, z + Math.cos(aa) * s * 1.5)); const it = { x, y: gy - s * 0.25 + k * s0 * 0.3, z, s: [s * (1.6 + rnd() * 0.8), s * (0.9 + rnd() * 0.6), s * (0.9 + rnd() * 0.4)], r: [tilt * 0.3 + (rnd() - 0.5) * 0.06, -aa + Math.PI / 2 + (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.25] }; if (Math.hypot(x - REGIONS.launch.x, z - REGIONS.launch.z) > 118) L.wall.push(it); /* keep the launch complex clear of peak slabs (rnd sequence unchanged) */ } }
   // crater walls: connected massifs ringing the hub (r 105-175). Crest heights follow ONE continuous rugged profile instead of per-piece random peaks,
   // so overlapping pieces fuse into big cliff masses. In the concept frame the profile is authored in screen space: a big continuous massif rising
   // behind the base on the left-middle and a lower broken ridge on the right.
@@ -362,11 +363,21 @@ export function buildRocks(scene, culler, quality = 1) { LOD_SCALE = quality < 0
   // merge lists: two prototypes (3 LODs each), one debris layer, one strata layer -> 8 instanced draws total
   const half = (l) => [l.filter((_, i) => i % 2 === 0), l.filter((_, i) => i % 2 === 1)]; const [c0, c1] = half(L.cliff);
   const A = [...L.bA, ...L.bC, ...L.bB, ...c0, ...c1]; // one boulder prototype (saves 3 main + 2 shadow draws)
+  // pass 20: rock seated on a slope: up axis follows the ground normal, sunk on the downhill side so nothing floats on steep walls
+  const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _eu = new THREE.Euler(), _n = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+  const slopeRock = (x, z, sz, rr) => { const e = Math.max(1.0, sz * 0.8); const hx = groundAt(x + e, z) - groundAt(x - e, z), hz = groundAt(x, z + e) - groundAt(x, z - e); _n.set(-hx / (2 * e), 1, -hz / (2 * e)).normalize(); const steep = 1 - _n.y;
+    _qa.setFromUnitVectors(_up, _n.clone().lerp(_up, 0.25).normalize()); _qb.setFromAxisAngle(_up, rr() * 6.283); _qa.multiply(_qb); _eu.setFromQuaternion(_qa, 'XYZ');
+    const f = sz * 0.7; const gmin = Math.min(groundAt(x, z), groundAt(x + f, z), groundAt(x - f, z), groundAt(x, z + f), groundAt(x, z - f)); const sy = sz * (0.55 + rr() * 0.45);
+    return { x, y: (groundAt(x, z) + gmin) / 2 - sy * (0.25 + steep * 0.45), z, s: [sz * (0.8 + rr() * 0.5), sy, sz * (0.8 + rr() * 0.5)], r: [_eu.x, _eu.y, _eu.z] }; };
+  // pass 20: rubble + boulders around the launch complex, canyon and echo field (kept out of structure footprints)
+  { const r4 = seeded(2020); const free = (x, z, pad) => !KEEP.some(k => Math.hypot(x - k.x, z - k.z) < k.r + pad);
+    const zone = (R, r0, r1, n, bigP, bigS) => { for (let c = 0, t = 0; c < Math.round(n * quality) && t < n * 30; t++) { const a = r4() * 6.283, d = r0 + Math.sqrt(r4()) * (r1 - r0); const x = R.x + Math.cos(a) * d, z = R.z + Math.sin(a) * d; const big = r4() < bigP; const sz = big ? 1.0 + r4() ** 1.6 * bigS : 0.3 + r4() * 0.5; if (!free(x, z, sz + 1.5)) continue; A.push(slopeRock(x, z, sz, r4)); c++; } };
+    zone(REGIONS.launch, 20, 130, 420, 0.3, 3.0); zone(REGIONS.echo, 14, 110, 320, 0.4, 3.5); zone(REGIONS.canyon, 10, 150, 420, 0.5, 5.0); }
   // pass 19: boulders + rubble on the reactor crater walls/floor (own RNG; drawn only near the region via LOD distance)
   { const r3 = seeded(1919); const R = REGIONS.reactor; const ah = Math.atan2(-R.z, -R.x); const ad = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
     for (let n = 0, t = 0; n < Math.round(900 * quality) && t < 30000; t++) { const a = r3() * 6.283, d = 27 + Math.sqrt(r3()) * 100; const x = R.x + Math.cos(a) * d, z = R.z + Math.sin(a) * d;
       if (d > 24 && ad(a, ah) * d < 9 + d * 0.06) continue; /* service road */ let bad = false; for (let i = 0; i < 14; i += 2) if (ad(a, i / 14 * 6.283) * d < 3.5 && d < 92) bad = true; for (let i = 0; i < 6; i++) { const ta = i / 6 * 6.283 + 0.3; if (Math.hypot(x - R.x - Math.cos(ta) * 33, z - R.z - Math.sin(ta) * 33) < 7.5) bad = true; } for (let i = 0; i < 14; i++) { const ba = i / 14 * 6.283; if (Math.hypot(x - R.x - Math.cos(ba) * 92, z - R.z - Math.sin(ba) * 92) < 8) bad = true; } if (bad) continue;
-      const big = r3() < 0.45; const sz = big ? 1.0 + r3() ** 1.7 * 3.8 : 0.25 + r3() * 0.45; const y = groundAt(x, z) - sz * 0.3; A.push({ x, y, z, s: [sz * (0.8 + r3() * 0.5), sz * (0.55 + r3() * 0.5), sz * (0.8 + r3() * 0.5)], r: [(r3() - 0.5) * 0.4, r3() * 6.283, (r3() - 0.5) * 0.4] }); n++; } }
+      const big = r3() < 0.55; const sz = big ? 1.2 + r3() ** 1.6 * 4.0 : 0.35 + r3() * 0.5; A.push(slopeRock(x, z, sz, r3)); n++; } }
   const debris = [...L.rubble, ...L.pebble, ...L.crumb];
   // pass 18: sparse small stones scattered over the walkable hub floor (gameplay view life); own RNG so other placements don't reshuffle; 1 draw call, no shadows/collision
   const matScatter = rockMaterial(true, 0.0, true, 0.15, false, false, 0.02); matScatter.color.setRGB(0.27, 0.262, 0.25); /* ground-matching regolith tone, smooth rounded shading */

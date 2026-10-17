@@ -137,9 +137,11 @@ function buildBuckets() {
   }
 }
 export function groundAt(x, z) { return groundMesh(x, z) + ledgeAt(x, z); } // terrain mesh + walkable concept ledge
-export const PATCH = { x: REGIONS.reactor.x, z: REGIONS.reactor.z, r: 150, cut: 143, on: { value: 1 } }; // high-res terrain patch for the reactor crater (base terrain is discarded inside `cut`)
+export const PATCH = { x: REGIONS.reactor.x, z: REGIONS.reactor.z, r: 150, cut: 143, on: { value: 1 } };
+export const PATCH2 = { x: REGIONS.launch.x, z: REGIONS.launch.z, r: 165, cut: 158, on: { value: 1 } }; // pass 20: launch complex patch (smooth blend into the hills)
+export const PATCHES = [PATCH, PATCH2]; // high-res terrain patch for the reactor crater (base terrain is discarded inside `cut`)
 export function groundMesh(x, z) { // exact height of the rendered terrain mesh
-  if (Math.hypot(x - PATCH.x, z - PATCH.z) < PATCH.cut) return heightAt(x, z); // patch is dense enough to follow heightAt
+  for (const P of PATCHES) if (Math.hypot(x - P.x, z - P.z) < P.cut) return heightAt(x, z); // patch is dense enough to follow heightAt
   const r = Math.hypot(x, z); if (!BUCKET || r >= GRID.maxR * 0.98) return heightAt(x, z);
   let a = Math.atan2(z, x); if (a < 0) a += Math.PI * 2;
   const list = BUCKET.get(rbOf(r) * AB + Math.floor(a / (Math.PI * 2) * AB) % AB); if (!list) return heightAt(x, z);
@@ -162,13 +164,19 @@ const SUNXZ = (() => { const x = -Rt.x * 0.75 - F.x * 0.45, z = -Rt.z * 0.75 - F
 export function terrainMaterial(patch = false) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.customProgramCacheKey = () => 'terrain' + patch; m.color.setRGB(0.74, 0.72, 0.69); // regolith: slightly brighter, less warm (pass 17)
   // procedural regolith: mottled albedo, dark pits, pebble speckle and a bump-mapped normal (fades with distance)
-  m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP; sh.uniforms.uAOMap = AOMAP; sh.uniforms.uPatchOn = PATCH.on;
+  m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP; sh.uniforms.uAOMap = AOMAP; sh.uniforms.uPatchOn = PATCH.on; sh.uniforms.uPatch2On = PATCH2.on;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
       varying vec3 vWP;
       float hh(vec2 p){ p = fract(p * vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(hh(i), hh(i + vec2(1, 0)), f.x), mix(hh(i + vec2(0, 1)), hh(i + vec2(1, 1)), f.x), f.y); }
-      uniform sampler2D uLampMap; uniform sampler2D uAOMap; uniform float uPatchOn;
+      uniform sampler2D uLampMap; uniform sampler2D uAOMap; uniform float uPatchOn; uniform float uPatch2On;
+      ${patch ? `float vor(vec2 p){ vec2 i = floor(p), f = fract(p); float m1 = 8., m2 = 8.; for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 o = vec2(x, y); vec2 r = o + vec2(hh(i + o), hh(i + o + 17.3)) - f; float dd = dot(r, r); if (dd < m1) { m2 = m1; m1 = dd; } else if (dd < m2) m2 = dd; } return sqrt(m2) - sqrt(m1); }
+      float clP(vec2 p, out float cv, out float sh){ vec2 wq = p * 0.045; p += vec2(vn(wq) - 0.5, vn(wq + 5.2) - 0.5) * 9.0; float ra = (vn(p * 0.012 + 3.7) - 0.5) * 1.1; float cs = cos(ra), sn = sin(ra); vec2 pr = vec2(cs * p.x - sn * p.y, sn * p.x + cs * p.y);
+        float yy = p.y * 0.11 + vn(vec2(p.x * 0.015, 7.0)) * 2.2 + p.x * 0.025; float b = fract(yy); sh = 1.0 + 0.16 * (1.0 - smoothstep(0.0, 0.1, b)) - 0.32 * smoothstep(0.7, 1.0, b); float led = smoothstep(0.0, 0.3, b) * 0.6 + b * 0.4;
+        float cr = vor(vec2(pr.x * 0.055, pr.y * 0.02 + floor(yy) * 0.23) + vec2(vn(pr * 0.08), vn(pr * 0.08 + 9.0)) * 0.6); float cr2 = vor(vec2(pr.x * 0.12 + pr.y * 0.03, pr.y * 0.05) + 11.0);
+        cv = max(1.0 - smoothstep(0.03, 0.15, cr), (1.0 - smoothstep(0.02, 0.08, cr2)) * 0.35); return led * 0.8 - cv * 0.7 + vn(p * 0.18) * 0.4; }
+      float clH(vec3 w, vec3 n, out float crev, out float wt, out float shd){ float ax = n.x * n.x, az = n.z * n.z, s = ax + az + 1e-3; float c1, c2, s1, s2; float h = (clP(vec2(w.z, w.y), c1, s1) * ax + clP(vec2(w.x, w.y) + 31.0, c2, s2) * az) / s; wt = smoothstep(0.12, 0.45, ax + az); crev = (c1 * ax + c2 * az) / s * wt; shd = mix(1.0, (s1 * ax + s2 * az) / s, wt); return h * wt; }` : ''}
       float rg(vec2 p){ return vn(p * 0.55) * 0.45 + vn(p * 1.7) * 0.33 + vn(p * 5.3) * 0.22; }
       // small impact craters: returns (albedo factor, dh/dx, dh/dz)
       vec3 craters(vec2 p0, float cs){
@@ -189,7 +197,7 @@ export function terrainMaterial(patch = false) {
         vec2 lu = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (lu.x > 0.0 && lu.x < 1.0 && lu.y > 0.0 && lu.y < 1.0) outgoingLight += diffuseColor.rgb * texture2D(uLampMap, lu).rgb * 9.0; }
       #include <opaque_fragment>`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-      ${patch ? '' : `if (uPatchOn > 0.5 && length(vWP.xz - vec2(${PATCH.x.toFixed(1)}, ${PATCH.z.toFixed(1)})) < ${PATCH.cut.toFixed(1)}) discard; /* covered by the high-res crater patch */`}
+      ${patch ? '' : `if (uPatchOn > 0.5 && length(vWP.xz - vec2(${PATCH.x.toFixed(1)}, ${PATCH.z.toFixed(1)})) < ${PATCH.cut.toFixed(1)}) discard; if (uPatch2On > 0.5 && length(vWP.xz - vec2(${PATCH2.x.toFixed(1)}, ${PATCH2.z.toFixed(1)})) < ${PATCH2.cut.toFixed(1)}) discard; /* covered by the high-res region patches */`}
       float tDist = length(vWP - cameraPosition); float tFade = 1.0 - smoothstep(40.0, 200.0, tDist); float tNear = 1.0 - smoothstep(18.0, 85.0, tDist);
       float tN = rg(vWP.xz); vec3 cr = vec3(1.0, 0.0, 0.0); if (tNear > 0.01) cr = craters(vWP.xz, 2.6); if (tDist < 28.0) { vec3 c2 = craters(vWP.xz + 31.7, 0.85); float w2 = 1.0 - smoothstep(14.0, 28.0, tDist); cr.x *= mix(1.0, c2.x, w2); cr.yz += c2.yz * 0.7 * w2; }
       { float w3 = (1.0 - smoothstep(70.0, 130.0, tDist)) * smoothstep(14.0, 24.0, tDist) * smoothstep(28.0, 36.0, length(vWP.xz)); if (w3 > 0.01) { vec3 c3 = craters(vWP.xz + 77.0, 6.5); cr.x *= mix(1.0, c3.x, w3); cr.yz += c3.yz * 1.4 * w3; } }
@@ -207,13 +215,15 @@ export function terrainMaterial(patch = false) {
               for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 c = qi + vec2(float(i), float(j)); float h = hh(c + 4.4); vec2 o = vec2(hh(c), hh(c + 7.7)) * 0.8 + 0.1 - (q - c); float dd = length(o); float rr = 0.18 + 0.2 * h; float on = step(0.45, hh(c + 2.2)) ; float v = dd / rr; if (v < d1 && on > 0.5) { d1 = v; } float vs = length(o + sd2 * 1.5) / rr; if (vs < d1s && on > 0.5) { d1s = vs; } }
               float aa = fwidth(q.x) * 3.0; float st = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, d1); float stS = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, d1s);
               float lit = st * (0.82 + 0.5 * (1.0 - d1)); float shad = (1.0 - st) * stS; diffuseColor.rgb *= mix(1.0, mix(1.0 - 0.45 * shad, lit, st), rw); } } }
+        ${patch ? 'vec3 fnw = normalize(cross(dFdx(vWP), dFdy(vWP))); float ccv, cwt, csh; float chh = clH(vWP, fnw, ccv, cwt, csh); diffuseColor.rgb *= mix(1.0, (1.0 - 0.45 * ccv) * csh * (0.92 + 0.16 * clamp(chh, 0.0, 1.0)), 1.0 - smoothstep(160.0, 260.0, tDist));' : ''}
         vec2 au = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (au.x > 0.0 && au.x < 1.0 && au.y > 0.0 && au.y < 1.0) diffuseColor.rgb *= texture2D(uAOMap, au).r; }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       if (tFade > 0.01) { float e = 0.15; float n0 = rg(vWP.xz * 1.6), nx = rg(vWP.xz * 1.6 + vec2(e, 0.)), nz = rg(vWP.xz * 1.6 + vec2(0., e));
         vec3 gW = vec3(-(nx - n0) / e, 0.0, -(nz - n0) / e) * 0.35 * tFade - vec3(cr.y, 0.0, cr.z) * 2.4 * tNear;
         if (tNear > 0.01) { float ge = 0.03; vec2 q = vWP.xz * 9.0; float g0 = vn(q), gx = vn(q + vec2(ge * 9.0, 0.)), gz = vn(q + vec2(0., ge * 9.0)); gW += vec3(-(gx - g0), 0.0, -(gz - g0)) * 0.9 * tNear * (1.0 - smoothstep(4.0, 30.0, tDist)); }
         if (tMid > 0.01) { float me = 0.06; vec2 q = vWP.xz * 2.6; float m0 = vn(q), mx = vn(q + vec2(me * 2.6, 0.)), mz = vn(q + vec2(0., me * 2.6)); gW += vec3(-(mx - m0), 0.0, -(mz - m0)) / me * 0.09 * tMid; }
-        normal = normalize(normal + (viewMatrix * vec4(gW, 0.0)).xyz); }`);
+        normal = normalize(normal + (viewMatrix * vec4(gW, 0.0)).xyz); }
+      ${patch ? '{ vec3 fnw = normalize(cross(dFdx(vWP), dFdy(vWP))); float ccv, cwt, csh; float H = clH(vWP, fnw, ccv, cwt, csh) * 0.75; vec3 sp = -vViewPosition; vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 R1 = cross(sy, normal), R2 = cross(normal, sx); float det = dot(sx, R1); vec3 grad = sign(det) * (dFdx(H) * R1 + dFdy(H) * R2); normal = normalize(abs(det) * normal - grad); }' : ''}`);
   };
   return m;
 }
@@ -232,15 +242,15 @@ function vertexColor(c, x, z, h, step) { const r = Math.hypot(x, z);
     c.lerp(cDark, 0.12 * (1 - smoothstep(10, 40, r)));
 }
 // pass 19: dense polar patch over the reactor crater (the far rings are ~60 m facets out there)
-function buildPatch(mat) {
-  const rs = [0]; let r = 1.5; while (r < PATCH.r) { rs.push(r); r += r < 120 ? 1.9 : 3; } rs.push(PATCH.r); const M = 112;
+function buildPatch(mat, PATCH, name, M = 112) {
+  const rs = [0]; let r = 1.5; while (r < PATCH.r) { rs.push(r); r += r < 120 ? 1.9 : 3; } rs.push(PATCH.r);
   const pos = [], col = [], idx = []; const c = new THREE.Color();
   rs.forEach((rr, k) => { const n = k === 0 ? 1 : M; for (let j = 0; j < n; j++) { const a = (j + (k % 2) * 0.5) / M * Math.PI * 2; const x = PATCH.x + Math.cos(a) * rr, z = PATCH.z + Math.sin(a) * rr; const h = heightAt(x, z); pos.push(x, h, z); vertexColor(c, x, z, h, 2.5); col.push(c.r, c.g, c.b); } });
   const id = (k, j) => k === 0 ? 0 : 1 + (k - 1) * M + ((j % M) + M) % M;
   for (let k = 0; k < rs.length - 1; k++) for (let j = 0; j < M; j++) { if (k === 0) { idx.push(0, id(1, j + 1), id(1, j)); continue; } const s = k % 2; const a = id(k, j), b = id(k, j + 1), cc = id(k + 1, j - (s ? 0 : 1) + (s ? 0 : 1)), d = id(k + 1, j + 1); idx.push(a, b, cc, b, d, cc); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
-  const ng = g.toNonIndexed(); ng.computeVertexNormals(); ng.computeBoundingSphere();
-  const mesh = new THREE.Mesh(ng, mat); mesh.name = 'terrain_patch'; mesh.receiveShadow = true; return mesh;
+  g.computeVertexNormals(); g.computeBoundingSphere(); mat.flatShading = false; /* smooth: no big triangulated facets on the crater wall */
+  const mesh = new THREE.Mesh(g, mat); mesh.name = name; mesh.receiveShadow = true; return mesh;
 }
 export function buildTerrain() {
   const topo = buildTopology(); PX = topo.px; PZ = topo.pz; TRI = topo.tris; const NV = topo.NV;
@@ -265,7 +275,7 @@ export function buildTerrain() {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(cl, 3)); g.computeVertexNormals(); g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, mat); mesh.name = 'terrain_' + key; mesh.receiveShadow = true; mesh.castShadow = false; group.add(mesh);
   }
-  group.add(buildPatch(terrainMaterial(true)));
+  const pmat = terrainMaterial(true); group.add(buildPatch(pmat, PATCH, 'terrain_patch')); group.add(buildPatch(pmat, PATCH2, 'terrain_patch2', 96));
   group.userData.tris = TRI.length / 3;
   return group;
 }
