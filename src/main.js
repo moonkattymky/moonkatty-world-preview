@@ -6,6 +6,7 @@ import { UnrealBloomPass } from '../vendor/three/jsm/postprocessing/UnrealBloomP
 import { OutputPass } from '../vendor/three/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from '../vendor/three/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from '../vendor/three/jsm/shaders/FXAAShader.js';
+import { makeFootprints } from './footprints.js';
 import { buildTerrain, groundAt, sd, F, Rt, LOOKOUT, CONCEPT, PLAY_START, LAMPMAP, LAMPMAP_R } from './terrain.js';
 import { Builder } from './builder.js';
 import { buildHub, colliders, C, LAMPS } from './base.js';
@@ -43,7 +44,8 @@ const sun = new THREE.DirectionalLight('#fff1dc', 2.3); sun.castShadow = true;
 sun.shadow.mapSize.set(MOBILE ? 1024 : 2048, MOBILE ? 1024 : 2048); const sc = sun.shadow.camera; sc.left = -70; sc.right = 70; sc.top = 70; sc.bottom = -70; sc.near = 1; sc.far = 400; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 scene.add(sun, sun.target);
 const fill = new THREE.DirectionalLight('#8f9aab', 0.45); fill.position.copy(earthDir).multiplyScalar(100); scene.add(fill);
-const front = new THREE.DirectionalLight('#d6d3cc', 0.55); front.position.set(-F.x * 80 - Rt.x * 40, 60, -F.z * 80 - Rt.z * 40); scene.add(front); // soft key from behind the concept camera (lights the left hillside)
+const front = new THREE.DirectionalLight('#d6d3cc', 0.55); front.position.set(-F.x * 80 - Rt.x * 40, 60, -F.z * 80 - Rt.z * 40); scene.add(front);
+const rim = new THREE.DirectionalLight('#ffc978', 0.75); rim.position.set(F.x * 80 + Rt.x * 20, 34, F.z * 80 + Rt.z * 20); scene.add(rim); // gentle warm gold rim from behind the base (toward the play/concept cameras) // soft key from behind the concept camera (lights the left hillside)
 const coreLight = new THREE.PointLight('#ff9a40', 60, 32, 1.6); scene.add(coreLight);
 
 // environment for gold/ivory reflections: dark sky, light ground, warm sun panel
@@ -129,7 +131,7 @@ const VIEWS = {
 // ---------- post ----------
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
 composer.addPass(new RenderPass(scene, camera));
-let bloom = null; if (BLOOM) { bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.38, 0.22, 2.2); composer.addPass(bloom); }
+let bloom = null; if (BLOOM) { bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.52, 0.36, 2.0); composer.addPass(bloom); }
 composer.addPass(new OutputPass());
 const grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uVig: { value: 0.3 } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; uniform float uVig; varying vec2 vUv;
@@ -152,12 +154,14 @@ document.getElementById('views').addEventListener('click', e => { const v = e.ta
 addEventListener('keydown', e => { if (e.code === 'KeyC') { VIEWS.concept(); camera.updateProjectionMatrix(); } if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && !ctrl.camFree) { ctrl.camFree = true; ctrl.camYaw = ctrl.yaw + Math.PI; camera.fov = 55; camera.updateProjectionMatrix(); } });
 renderer.domElement.addEventListener('pointerdown', () => { if (!ctrl.camFree && !SHOT) { ctrl.camFree = true; ctrl.camYaw = Math.atan2(camera.position.x - ctrl.pos.x, camera.position.z - ctrl.pos.z); } });
 
+const prints = makeFootprints(scene, groundAt); // boot-print ring buffer (1 call, hidden until walking)
 // ---------- loop ----------
 const clock = new THREE.Clock(); let t = 0; const ftimes = [];
 function frame(dt) {
   t += dt;
   if (!SHOT) ctrl.update(dt); else { ctrl.pos.y = groundAt(ctrl.pos.x, ctrl.pos.z); if (ctrl.camFree) { ctrl.camTarget.copy(ctrl.pos).add(new THREE.Vector3(0, 1.3, 0)); ctrl.updateCamera(1); } }
   catRoot.position.copy(ctrl.pos); catRoot.rotation.y = ctrl.yaw;
+  prints.update(ctrl.pos, ctrl.yaw, ctrl.onGround, ctrl.speed);
   if (headBone && headBone.userData.pre) headBone.quaternion.copy(headBone.userData.pre);
   if (mixer) { if (!ctrl.onGround) play(actions.jump ? 'jump' : 'idle', 0.15); else if (ctrl.speed > 0.6) { play('walk'); actions.walk && (actions.walk.timeScale = THREE.MathUtils.clamp(ctrl.speed / 3.8, 0.7, 2.2)); } else play('idle'); mixer.update(dt); }
   headLook(SHOT ? 1 : dt);

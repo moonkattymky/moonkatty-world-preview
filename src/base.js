@@ -251,8 +251,12 @@ function portalCave(b, beams) {
   { const cy = Math.atan2(CONCEPT.cam.x - mx, CONCEPT.cam.z - mz); const d = Math.atan2(Math.sin(cy - yaw), Math.cos(cy - yaw)); yaw += Math.max(-0.45, Math.min(0.45, d)); fx = Math.sin(yaw); fz = Math.cos(yaw); } // turn the mouth toward the concept camera so the recess reads deep
   colliders.push({ x: mx, z: mz, r: 3 });
   const at = (dx, dz, dy = 0) => [mx + Math.cos(yaw) * dx + fx * dz, y + dy, mz - Math.sin(yaw) * dx + fz * dz];
-  b.add('dark', rockyArch(R + 1.6, 2.1, 3), { pos: at(0, 0.2), rot: [0, yaw, 0], color: '#3d3a37', ao: [y - 1, y + 10] });
-  b.add('dark', rockyArch(R + 4.2, 2.9, 7), { pos: at(0, -1.8), rot: [0, yaw, 0], color: '#383532' });
+  { // inner arch faces fall off into darkness so the mouth reads as a deep cave from the concept camera
+    const archCol = (c, R0, span, kOut) => (px, py, pz) => { const lat = (px - c[0]) * Math.cos(yaw) - (pz - c[2]) * Math.sin(yaw); const rr = Math.hypot(lat, py - c[1]); const t = THREE.MathUtils.clamp((rr - R0) / span, 0, 1); const k = 0.003 + kOut * t * t; return [k * 1.02, k, k * 0.96]; };
+    const c1 = at(0, 0.2), c2 = at(0, -1.8);
+    b.add('dark', rockyArch(R + 1.6, 2.1, 3), { pos: c1, rot: [0, yaw, 0], ao: [y - 1, y + 10], color: archCol(c1, R + 0.5, 4.0, 0.016) });
+    b.add('dark', rockyArch(R + 4.2, 2.9, 7), { pos: c2, rot: [0, yaw, 0], color: archCol(c2, R + 2.2, 5.0, 0.034) });
+  }
   // tunnel (inside visible) + glowing back
   b.add('dark', new THREE.CylinderGeometry(R, R * 0.7, 14, 16, 1, true, -PI / 2, PI).rotateX(PI / 2).rotateZ(0).translate(0, 0, -7), { pos: at(0, 0.4), rot: [0, yaw, 0], color: '#040508', flip: true });
   b.add('dark', new THREE.CircleGeometry(R + 0.4, 20, 0, PI), { pos: at(0, -0.9), rot: [0, yaw, 0], color: '#060708' });

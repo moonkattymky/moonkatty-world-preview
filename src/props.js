@@ -57,7 +57,12 @@ export function chiselGeom(seed, cuts = 11, detail = 2) {
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeBoundingSphere(); return g;
 }
 // jagged crest for crater-wall pieces: lift upper vertices by position-hashed noise into sharp spires (no new triangles, crack-free)
-export function jagGeom(g, seed, amp = 0.9) { const P = g.attributes.position; for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (y <= 0.1) continue; const n = noise2(x * 2.3 + seed, z * 2.3 - seed * 0.7) * 0.5 + 0.5; const sp = Math.pow(n, 2.2) * amp * (y - 0.1) * 2.0; P.setY(i, y + sp); P.setX(i, x * (1 - 0.25 * Math.min(1, sp))); P.setZ(i, z * (1 - 0.25 * Math.min(1, sp))); } g.computeVertexNormals(); g.computeBoundingSphere(); return g; }
+export function jagGeom(g, seed, amp = 0.9) { // irregular crest: a couple of uneven peaks, broken plateau shelves, eroded flanks (crack-free: displacement hashed by position)
+  const P = g.attributes.position; for (let i = 0; i < P.count; i++) { let x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (y <= 0.05) continue;
+    const big = Math.pow(noise2(x * 1.1 + seed, z * 1.1 - seed) * 0.5 + 0.5, 4.0); const small = noise2(x * 4.7 - seed, z * 4.3 + y * 3.1) * 0.5 + 0.5; const k = (y - 0.05);
+    y += (big * amp * 2.2 + small * amp * 0.35) * k; if (y > 0.62 && big < 0.25) y = 0.62 + (y - 0.62) * 0.25; // plateau shelf where no peak
+    const er = 1 - 0.2 * small * k; P.setXYZ(i, x * er, y, z * er); }
+  g.computeVertexNormals(); g.computeBoundingSphere(); return g; }
 export function protoGeom(detail, seed, stretch = [1, 1, 1], strata = 0.65, light = 1) {
   const g = new THREE.IcosahedronGeometry(1, detail); const P = g.attributes.position; const v = new THREE.Vector3(); const rr = new Float32Array(P.count);
   for (let i = 0; i < P.count; i++) {
@@ -123,16 +128,16 @@ function rockMaterial(fog = true, bump = 2.2, smooth = false, key = 0.0, far = f
       float rkH(vec3 w){ vec2 a = w.xz * 2.3 + w.y * 1.7, b = vec2(w.x + w.y * 0.7, w.z - w.y * 0.7) * 3.1; return vor(a) * 0.55 + vor(b) * 0.3 + vn(a * 4.0) * 0.15; }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
       { float d = length(vWP - cameraPosition); float fd = 1.0 - smoothstep(30.0, 120.0, d); vec2 q = vWP.xz * 1.9 + vWP.yy * 1.3;
-        float n = vn(q) * 0.5 + vn(q * 3.7) * 0.3 + vn(q * 11.0) * 0.2; diffuseColor.rgb *= mix(1.0, 0.72 + 0.56 * n, fd * ${smooth ? '0.6' : '1.0'});
+        float n = vn(q) * 0.5 + vn(q * 3.7) * 0.3 + vn(q * 11.0) * 0.2; diffuseColor.rgb *= mix(1.0, 0.9 + 0.2 * n, fd);
         ${far ? 'float fdd = smoothstep(25.0, 60.0, d); float fh = farH(vWP); diffuseColor.rgb *= mix(1.0, 0.72 + 0.55 * fh, fdd);' : ''}
-        ${smooth ? 'float ck = crH(vWP); diffuseColor.rgb *= mix(1.0, 0.92 + 0.14 * ck, fd);' : 'float ck = rkH(vWP); diffuseColor.rgb *= mix(1.0, 0.55 + 0.6 * smoothstep(0.08, 0.42, ck), fd);'} }`)
+        ${smooth ? 'float ck = crH(vWP); diffuseColor.rgb *= mix(1.0, 0.95 + 0.08 * ck, fd);' : 'float ck = rkH(vWP); diffuseColor.rgb *= mix(1.0, 0.86 + 0.16 * smoothstep(0.08, 0.42, ck), fd);'} }`)
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
       { // crumbly micro-relief: derivative bump from a cellular/fbm height (no extra geometry)
         float d = length(vWP - cameraPosition); float fb = 1.0 - smoothstep(10.0, 70.0, d);
         if (fb > 0.01) { vec3 sp = -vViewPosition; vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 R1 = cross(sy, normal), R2 = cross(normal, sx); float det = dot(sx, R1);
           float H = ${smooth ? 'crH(vWP)' : 'rkH(vWP)'}; float dhx = dFdx(H), dhy = dFdy(H); vec3 grad = sign(det) * (dhx * R1 + dhy * R2); normal = normalize(mix(normal, normalize(abs(det) * normal - grad * ${bump.toFixed(2)}), fb)); }
         ${far ? 'float ffb = smoothstep(25.0, 60.0, d); if (ffb > 0.01) { vec3 sp = -vViewPosition; vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 R1 = cross(sy, normal), R2 = cross(normal, sx); float det = dot(sx, R1); float H = farH(vWP) * 1.6; vec3 grad = sign(det) * (dFdx(H) * R1 + dFdy(H) * R2); normal = normalize(mix(normal, normalize(abs(det) * normal - grad), ffb * 0.8)); }' : ''} }`)
-      .replace('#include <opaque_fragment>', `${key > 0 ? `{ vec3 kd = normalize((viewMatrix * vec4(${KEY}, 0.0)).xyz); outgoingLight += diffuseColor.rgb * vec3(1.0, 0.96, 0.9) * ${key.toFixed(2)} * max(dot(normal, kd), 0.0); }` : ''}
+      .replace('#include <opaque_fragment>', `${key > 0 ? `{ vec3 kd = normalize((viewMatrix * vec4(${KEY}, 0.0)).xyz); outgoingLight += diffuseColor.rgb * vec3(1.0, 0.96, 0.9) * (${key.toFixed(2)} * max(dot(normal, kd), 0.0) + 0.32); }` : ''}
       #include <opaque_fragment>`);
   };
   return m;
@@ -179,7 +184,7 @@ function makeKind(scene, name, lods, items, mat, castShadow) {
 }
 
 export function buildRocks(scene, culler, quality = 1) {
-  const mat = rockMaterial(true, 2.2, false, 0.9, true); mat.color.setScalar(1.15); const matFar = rockMaterial(true, 0.16, true, 1.3); matFar.flatShading = true; matFar.color.setScalar(1.5); const matWall = rockMaterial(true, 1.2, false, 0.35, true); matWall.color.setScalar(1.2);
+  const mat = rockMaterial(true, 0.5, false, 0.9, true); mat.color.setScalar(1.15); const matFar = rockMaterial(true, 0.0, true, 1.3); matFar.flatShading = true; matFar.color.setScalar(1.5); const matWall = rockMaterial(true, 1.2, false, 0.35, true); matWall.color.setScalar(1.2);
   const L = { crumb: [], pebble: [], rubble: [], bA: [], bB: [], bC: [], cliff: [], peak: [], wall: [] };
   const K = CONCEPT; const cgy = groundAt(K.cat.x, K.cat.z); const ccam = new THREE.PerspectiveCamera(K.fov, 16 / 9, 0.2, 5000);
   ccam.position.set(K.cam.x, cgy + K.eye, K.cam.z); ccam.lookAt(K.target.x, cgy + K.eye - K.drop, K.target.z); ccam.updateMatrixWorld(); ccam.updateProjectionMatrix();
@@ -254,19 +259,19 @@ export function buildRocks(scene, culler, quality = 1) {
       const gy = Math.min(groundAt(x, z), groundAt(x + Math.sin(aa) * s * 1.5, z - Math.cos(aa) * s * 1.5), groundAt(x - Math.sin(aa) * s * 1.5, z + Math.cos(aa) * s * 1.5)); L.wall.push({ x, y: gy - s * 0.25 + k * s0 * 0.3, z, s: [s * (1.6 + rnd() * 0.8), s * (0.9 + rnd() * 0.6), s * (0.9 + rnd() * 0.4)], r: [tilt * 0.3 + (rnd() - 0.5) * 0.06, -aa + Math.PI / 2 + (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.25] }); } }
   // crater walls: tall layered cliffs ringing the hub (r 105-175), gaps toward the outer regions
   { const gaps = Object.values(REGIONS).map(R => Math.atan2(R.z, R.x));
-    for (let i = 0; i < 170; i++) { const a = i / 170 * Math.PI * 2 + (rnd() - 0.5) * 0.04; if (gaps.some(g => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < 0.1)) continue;
+    for (let i = 0; i < 170; i++) { const a = i / 170 * Math.PI * 2 + (rnd() - 0.5) * 0.03; const hk = (0.55 + 0.9 * (noise2(Math.cos(a) * 2.2, Math.sin(a) * 2.2) * 0.5 + 0.5)) * (rnd() < 0.1 ? 1.7 : 1) * (0.75 + rnd() * 0.5); if (rnd() < 0.12) continue; // clustered heights, occasional tall peak, uneven spacing if (gaps.some(g => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < 0.1)) continue;
       const r0 = 105 + rnd() * 60; const s0 = 5 + rnd() * 8;
       for (let k = 0; k < 2; k++) { const rr = r0 + k * s0 * 0.9 + rnd() * 4, aa = a + (rnd() - 0.5) * 0.02; const x = Math.cos(aa) * rr, z = Math.sin(aa) * rr; const s = s0 * (1 - k * 0.15);
         const gy = Math.min(groundAt(x, z), groundAt(x + Math.sin(aa) * s, z - Math.cos(aa) * s), groundAt(x - Math.sin(aa) * s, z + Math.cos(aa) * s));
-        const hy = Math.min(s * (0.85 + rnd() * 0.9), 20); L.wall.push({ x, y: gy + k * 2.5 + hy * 0.25, z, s: [s * (2.3 + rnd() * 1.0), hy, s * (0.9 + rnd() * 0.4)], r: [(rnd() - 0.5) * 0.08, -aa + Math.PI / 2 + (rnd() - 0.5) * 0.35, (rnd() - 0.5) * 0.15], lodK: k ? 100 : undefined /* back layer: always the cheap 20-tri LOD */ }); } } }
+        const hy = Math.min(s * (0.6 + rnd() * 0.8) * hk, 24); L.wall.push({ x, y: gy + k * 2.5 + hy * 0.25, z, s: [s * (1.6 + rnd() * 2.4), hy, s * (0.8 + rnd() * 0.7)], r: [(rnd() - 0.5) * 0.1, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.18], lodK: k ? 100 : undefined /* back layer: always the cheap 20-tri LOD */ }); } } }
   // crumbs: dense angular fragments in the concept foreground, the lookout and the gameplay start area
   for (let i = 0, t = 0; i < 1200 * quality && t < 40000; t++) { const m = rnd(); let x, z;
     if (m < 0.22) { const p = sd((rnd() - 0.5) * 34, -60 + rnd() * 22); x = p.x; z = p.z; } else if (m < 0.8) { const p = sd(-3 + (rnd() - 0.5) * 36, -21 + (rnd() - 0.5) * 30); x = p.x; z = p.z; } else { const a = rnd() * 6.283, r = 8 + Math.sqrt(rnd()) * 60; x = Math.cos(a) * r; z = Math.sin(a) * r; }
     if (blocked(x, z, 0.2)) continue; const s = 0.05 + rnd() ** 2.5 * 0.3; put(L.crumb, x, z, s, 0.42, 0.3); i++; }
   // pebbles: dense small stones across the hub floor (gameplay view)
-  for (let i = 0, t = 0; i < 1400 * quality && t < 30000; t++) { const a = rnd() * 6.283, r = 6 + Math.sqrt(rnd()) * 70; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (blocked(x, z, 0.3)) continue; const s = 0.1 + rnd() ** 2 * 0.4; put(L.pebble, x, z, s, 0.3, 1.2); i++; }
+  for (let i = 0, t = 0; i < 500 * quality && t < 30000; t++) { const a = rnd() * 6.283, r = 6 + Math.sqrt(rnd()) * 70; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (blocked(x, z, 0.3)) continue; const s = 0.07 + rnd() ** 2 * 0.22; put(L.pebble, x, z, s, 0.3, 1.2); i++; }
   // gameplay area: scattered small stones + small crater rims of rocks around the hub
-  for (let i = 0, t = 0; i < 420 * quality && t < 8000; t++) { const p = sd(-3 + (rnd() - 0.5) * 34, -21 + (rnd() - 0.5) * 30); if (blocked(p.x, p.z, 0.4)) continue; put(L.rubble, p.x, p.z, 0.07 + rnd() ** 2 * 0.3, 0.3, 0.8); i++; }
+  for (let i = 0, t = 0; i < 200 * quality && t < 8000; t++) { const p = sd(-3 + (rnd() - 0.5) * 34, -21 + (rnd() - 0.5) * 30); if (blocked(p.x, p.z, 0.4)) continue; put(L.rubble, p.x, p.z, 0.07 + rnd() ** 2 * 0.3, 0.3, 0.8); i++; }
   for (let c = 0, t = 0; c < 16 && t < 400; t++) { const a = rnd() * 6.283, r = 12 + rnd() * 34; const cx = Math.cos(a) * r, cz = Math.sin(a) * r; const cr = 1.4 + rnd() * 2.4; if (blocked(cx, cz, cr + 1)) continue; c++;
     const n = Math.round(cr * 7); for (let k = 0; k < n; k++) { const b = k / n * 6.283 + rnd() * 0.3; const rr = cr * (0.92 + rnd() * 0.2); const x = cx + Math.cos(b) * rr, z = cz + Math.sin(b) * rr; put(L.bB, x, z, 0.16 + rnd() * 0.22, 0.35, 0.6, 0.7); } }
   // merge lists: two prototypes (3 LODs each), one debris layer, one strata layer -> 8 instanced draws total
@@ -274,10 +279,10 @@ export function buildRocks(scene, culler, quality = 1) {
   const A = [...L.bA, ...L.bC, ...L.bB, ...c0, ...c1]; // one boulder prototype (saves 3 main + 2 shadow draws)
   const debris = [...L.rubble, ...L.pebble, ...L.crumb];
   const kinds = {
-    rockA: makeKind(scene, 'rockA', [[protoGeom(2, 2, [1.25, 0.75, 1.05]), 8], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 30], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 200]], A, mat, 2),
+    rockA: makeKind(scene, 'rockA', [[protoGeom(2, 2, [1.25, 0.75, 1.05]), 8], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 24], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 200]], A, mat, 2),
     debris: makeKind(scene, 'debris', [[chiselGeom(14, 6, 0), 10]], debris, mat, 0),
     strata: makeKind(scene, 'strata', [[chiselGeom(9, 12, 2), 8], [chiselGeom(9, 12, 1), 3000]], L.peak, matFar, 0),
-    wall: makeKind(scene, 'wall', [[jagGeom(protoGeom(1, 33, [1, 1, 1], 0.55), 33, 0.22), 230], [jagGeom(protoGeom(0, 33, [1, 1, 1], 0.45), 33, 0.28), 3000]], L.wall, matWall, 0),
+    wall: makeKind(scene, 'wall', [[jagGeom(protoGeom(1, 33, [1, 1, 1], 0.55), 33, 0.3), 195], [jagGeom(protoGeom(0, 33, [1, 1, 1], 0.45), 33, 0.3), 3000]], L.wall, matWall, 0),
   };
     for (const k of Object.values(kinds)) culler.add(k);
   return { kinds, counts: Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.length])) };
