@@ -7,7 +7,7 @@ import { OutputPass } from '../vendor/three/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from '../vendor/three/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from '../vendor/three/jsm/shaders/FXAAShader.js';
 import { makeFootprints } from './footprints.js';
-import { buildTerrain, GRID, groundAt, sd, F, Rt, LOOKOUT, CONCEPT, PLAY_START, LAMPMAP, LAMPMAP_R, AOMAP } from './terrain.js';
+import { buildTerrain, GRID, groundAt, sd, F, Rt, LOOKOUT, CONCEPT, PLAY_START, LAMPMAP, LAMPMAP_R, AOMAP, REGIONS, PATCH } from './terrain.js';
 import { Builder, GQ } from './builder.js';
 import { buildHub, colliders, C, LAMPS } from './base.js';
 import { buildWorld } from './world.js';
@@ -18,9 +18,9 @@ import { Controller } from './controller.js';
 
 const Q = new URLSearchParams(location.search);
 const SHOT = Q.has('shot'); const VIEW = Q.get('view') || 'play';
-const LOW = Q.get('q') === 'low'; if (LOW) { GQ.s = 0.4; GRID.Mn = 72; GRID.Mf = 48; } // phones: fewer segments on all architecture + coarser near terrain rings
+const LOW = Q.get('q') === 'low'; if (LOW) { GQ.s = 0.4; GRID.Mn = 72; GRID.Mf = 40; } // phones: fewer segments on all architecture + coarser near terrain rings
 const MOBILE = Q.get('q') === 'mobile' || (!Q.get('q') && (matchMedia('(pointer:coarse)').matches || Math.min(innerWidth, innerHeight) < 480));
-if (MOBILE && !LOW) { GQ.s = 0.5; GRID.Mn = 84; GRID.Mf = 56; GRID.si = 1; GRID.sn = 4; GRID.sf = 1; } // auto phone preset: lighter architecture + terrain in fewer, larger chunks (fewer draw calls), keeps ridge/crystals/bloom/shadows
+if (MOBILE && !LOW) { GQ.s = 0.46; GRID.Mn = 84; GRID.Mf = 44; GRID.si = 1; GRID.sn = 4; GRID.sf = 1; } // auto phone preset: lighter architecture + terrain in fewer, larger chunks (fewer draw calls), keeps ridge/crystals/bloom/shadows
 const BLOOM = Q.get('bloom') !== '0' && !LOW;
 document.body.classList.toggle('shot', SHOT);
 
@@ -65,7 +65,7 @@ const env = makeEnv();
 // ---------- world ----------
 const terrain = buildTerrain(); scene.add(terrain);
 const b = new Builder(), wb = new Builder(); const beams = [];
-const WB = { launch: new Builder(), reactor: new Builder(), canyon: new Builder(), echo: new Builder(), roads: new Builder(), misc: new Builder() };
+const WB = { launch: new Builder(), reactor: new Builder(), reactorNear: new Builder(), reactorFar: new Builder(), canyon: new Builder(), echo: new Builder(), roads: new Builder(), misc: new Builder() };
 const hub = buildHub(b, beams); buildWorld(WB, beams); addBeams(wb, beams);
 { // warm light pools under the path lamps (terrain samples this map; no runtime lights)
   const N = 512, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, N, N); g.globalCompositeOperation = 'lighter';
@@ -83,7 +83,7 @@ mats.ivory = mats.hull; // placeholder fallback
 const built = b.build(mats, scene); for (const [n, B] of [...Object.entries(WB), ['beams', wb]]) { const bw = B.build(mats, scene, '_' + n); for (const k in bw) bw[k].castShadow = false; }
 // far chapter-region hulls sit behind the crater rim: skip them while the camera is low inside the hub basin (cheap occlusion cull)
 const farRegion = []; scene.traverse(o => { if (o.isMesh && /_(launch|echo|canyon|reactor)$/.test(o.name)) { o.geometry.computeBoundingSphere(); farRegion.push([o, o.geometry.boundingSphere.center.clone()]); } });
-const cullFarRegions = () => { const c = camera.position; const inHub = Math.hypot(c.x, c.z) < 125 && c.y < 45; for (const [o, ctr] of farRegion) o.visible = !inHub || ctr.distanceTo(c) < 380; { const farRidgeMesh = (cullFarRegions.fr ??= scene.getObjectByName('farRidge')); if (farRidgeMesh) farRidgeMesh.visible = !LOW && Math.hypot(c.x, c.z) < 140 && c.y < 60; } }; // far ridge is a backdrop layer for in-hub views only (no ring band from world/aerial)
+const cullFarRegions = () => { const c = camera.position; const inHub = Math.hypot(c.x, c.z) < 125 && c.y < 45; for (const [o, ctr] of farRegion) o.visible = !inHub || ctr.distanceTo(c) < 380; { const pm = (cullFarRegions.pm ??= scene.getObjectByName('terrain_patch')); if (pm) { const on = Math.hypot(c.x - PATCH.x, c.z - PATCH.z) < 330 && c.y < 200; pm.visible = on; PATCH.on.value = on ? 1 : 0; for (const o of (cullFarRegions.rl ??= scene.children.filter(o => /_reactor(Near|Far)$/.test(o.name)))) o.visible = /Near$/.test(o.name) ? on : !on && !(Math.hypot(c.x, c.z) < 125 && c.y < 45); } } /* reactor high-res patch only up close; base terrain fills the hole otherwise */ { const farRidgeMesh = (cullFarRegions.fr ??= scene.getObjectByName('farRidge')); if (farRidgeMesh) farRidgeMesh.visible = !LOW && Math.hypot(c.x, c.z) < 140 && c.y < 60; } }; // far ridge is a backdrop layer for in-hub views only (no ring band from world/aerial)
 const culler = new InstanceCuller();
 const rocks = buildRocks(scene, culler, LOW ? 0.6 : MOBILE ? 0.8 : 1);
 const crystals = buildCrystals(scene, env, LOW);
@@ -149,7 +149,9 @@ const catPromise = new GLTFLoader().loadAsync(catURL + '?v=' + Date.now()).then(
 // ---------- views ----------
 const VIEWS = {
   concept: () => { lookTarget = new THREE.Vector3(...(() => { const p = sd(45, -48); return [p.x, 2, p.z]; })()); const K = CONCEPT; ctrl.place(K.cat.x, K.cat.z, Math.atan2(F.x, F.z) + K.catYaw); const gy = groundAt(K.cat.x, K.cat.z); camera.position.set(K.cam.x, gy + K.eye, K.cam.z); camera.lookAt(K.target.x, gy + K.eye - K.drop, K.target.z); camera.fov = K.fov; ctrl.camFree = false; },
-  play: () => { lookTarget = null; const c = PLAY_START; ctrl.place(c.x, c.z, Math.atan2(F.x, F.z) + 0.25); ctrl.camYaw = Math.atan2(-F.x, -F.z) - 0.25; ctrl.camPitch = 0.22; ctrl.camDist = 7; ctrl.camFree = true; camera.fov = 55; },
+  ...Object.fromEntries([['reactor', 70, 80, 13], ['reactor2', 44, 53, 3.2]].map(([k, dc, dcam, up]) => [k, () => { lookTarget = null; const R = REGIONS.reactor; const ah = Math.atan2(-R.z, -R.x) + 0.35; const cx = R.x + Math.cos(ah) * dc, cz = R.z + Math.sin(ah) * dc; ctrl.place(cx, cz, Math.atan2(-Math.cos(ah), -Math.sin(ah))); const px = R.x + Math.cos(ah + 0.06) * dcam, pz = R.z + Math.sin(ah + 0.06) * dcam; camera.position.set(px, groundAt(px, pz) + up, pz); camera.lookAt(R.x, groundAt(R.x, R.z) + (k === 'reactor' ? 4 : 8), R.z); camera.fov = 55; ctrl.camFree = false; }])), // reactor crater QA shots: rim overlook + floor level
+  ...Object.fromEntries(['launch', 'canyon', 'echo'].map(k => [k, () => { lookTarget = null; const R = REGIONS[k]; const l = Math.hypot(R.x, R.z), dx = -R.x / l, dz = -R.z / l; const D = { reactor: 104, launch: 78, canyon: 40, echo: 52 }[k]; const c = { x: R.x + dx * D, z: R.z + dz * D }; const yaw = Math.atan2(-dx, -dz) + 0.2; ctrl.place(c.x, c.z, yaw); ctrl.camYaw = Math.atan2(dx, dz) + 0.2; ctrl.camPitch = k === "reactor" ? 0.32 : 0.12; ctrl.camDist = 7; ctrl.camFree = true; camera.fov = 55; }])), // chapter-region ground shots (QA views)
+  play: () => { lookTarget = null; const c = PLAY_START; ctrl.place(c.x, c.z, Math.atan2(F.x, F.z) + 0.25); ctrl.camYaw = Math.atan2(-F.x, -F.z) - 0.30; ctrl.camPitch = 0.15; ctrl.camDist = 7; ctrl.camFree = true; camera.fov = 55; },
   aerial: () => { lookTarget = null; const c = sd(-2, -57); ctrl.place(c.x, c.z, Math.atan2(F.x, F.z)); const p = sd(-70, -125); camera.position.set(p.x, 75, p.z); const t = sd(8, 25); camera.lookAt(t.x, -6, t.z); camera.fov = 50; ctrl.camFree = false; },
   world: () => { lookTarget = null; const c = sd(-2, -57); ctrl.place(c.x, c.z, Math.atan2(F.x, F.z)); camera.position.set(-260, 520, 820); camera.lookAt(40, 0, -60); camera.fov = 55; ctrl.camFree = false; },
   cave: () => { lookTarget = null; const c = sd(24, 20); ctrl.place(c.x, c.z, Math.atan2(F.x, F.z)); const p = sd(18, 14); camera.position.set(p.x, groundAt(p.x, p.z) + 7, p.z); const cv = hub.cave; camera.lookAt(cv.x, cv.y + 4, cv.z); camera.fov = 55; ctrl.camFree = false; },

@@ -87,7 +87,7 @@ export function heightAt(x, z) {
   h += 6 * Math.exp(-(((dc - cw - 18) / 14) ** 2));
   h -= 58 * (1 - smoothstep(cw * 0.55, cw + 16, dc)) * (0.85 + 0.3 * rid);
   // reactor crater
-  { const R = REGIONS.reactor; const d = Math.hypot(x - R.x, z - R.z); if (d < 220) h = lerp(h, h * 0.3, 1 - smoothstep(70, 200, d)) + crater(d, 82, 42, 18); }
+  { const R = REGIONS.reactor; const d = Math.hypot(x - R.x, z - R.z); if (d < 220) { h = lerp(h, h * 0.3, 1 - smoothstep(70, 200, d)); if (d < 82) { const u = clamp((d - 34) / 48, 0, 1); const k = u * 3, st = (Math.floor(k) + smoothstep(0.55, 1, k - Math.floor(k))) / 3; const a = Math.atan2(z - R.z, x - R.x); h += -30 * (1 - lerp(u, Math.min(st, 1), 0.75)) + (d < 36 ? 0.5 * noise2(x * 0.08, z * 0.08) : (1.6 * ridged(x * 0.05 + 2, z * 0.05, 2) + 1.2 * noise2(a * 6, d * 0.05)) * smoothstep(34, 40, d)); } h += 18 * Math.exp(-(((d / 82 - 1) / 0.28) ** 2)); } } /* pass 19: flat reactor floor, three terraced benches, jagged slopes */
   // launch complex pad
   { const L = REGIONS.launch; const d = Math.hypot(x - L.x, z - L.z); h = lerp(h, 3 + small, 1 - smoothstep(70, 115, d)); }
   // echo plateau
@@ -137,7 +137,9 @@ function buildBuckets() {
   }
 }
 export function groundAt(x, z) { return groundMesh(x, z) + ledgeAt(x, z); } // terrain mesh + walkable concept ledge
+export const PATCH = { x: REGIONS.reactor.x, z: REGIONS.reactor.z, r: 150, cut: 143, on: { value: 1 } }; // high-res terrain patch for the reactor crater (base terrain is discarded inside `cut`)
 export function groundMesh(x, z) { // exact height of the rendered terrain mesh
+  if (Math.hypot(x - PATCH.x, z - PATCH.z) < PATCH.cut) return heightAt(x, z); // patch is dense enough to follow heightAt
   const r = Math.hypot(x, z); if (!BUCKET || r >= GRID.maxR * 0.98) return heightAt(x, z);
   let a = Math.atan2(z, x); if (a < 0) a += Math.PI * 2;
   const list = BUCKET.get(rbOf(r) * AB + Math.floor(a / (Math.PI * 2) * AB) % AB); if (!list) return heightAt(x, z);
@@ -156,16 +158,17 @@ export function groundMesh(x, z) { // exact height of the rendered terrain mesh
 // warm light pools under the path lamps: a small world-space light map painted in main.js (one texture fetch, no extra lights)
 const TFILL = (() => { const x = Rt.x * 0.6 - F.x * 0.3, z = Rt.z * 0.6 - F.z * 0.3, y = 0.6, l = Math.hypot(x, y, z); return `vec3(${(x / l).toFixed(3)}, ${(y / l).toFixed(3)}, ${(z / l).toFixed(3)})`; })();
 export const LAMPMAP = { value: null }; export const LAMPMAP_R = 75; export const AOMAP = { value: new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1) }; AOMAP.value.needsUpdate = true;
-export function terrainMaterial() {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.color.setRGB(0.74, 0.72, 0.69); // regolith: slightly brighter, less warm (pass 17)
+const SUNXZ = (() => { const x = -Rt.x * 0.75 - F.x * 0.45, z = -Rt.z * 0.75 - F.z * 0.45, l = Math.hypot(x, z); return `${(x / l).toFixed(3)}, ${(z / l).toFixed(3)}`; })(); // sun direction on the ground plane (for painted rubble highlights/shadows)
+export function terrainMaterial(patch = false) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.customProgramCacheKey = () => 'terrain' + patch; m.color.setRGB(0.74, 0.72, 0.69); // regolith: slightly brighter, less warm (pass 17)
   // procedural regolith: mottled albedo, dark pits, pebble speckle and a bump-mapped normal (fades with distance)
-  m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP; sh.uniforms.uAOMap = AOMAP;
+  m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP; sh.uniforms.uAOMap = AOMAP; sh.uniforms.uPatchOn = PATCH.on;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
       varying vec3 vWP;
       float hh(vec2 p){ p = fract(p * vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(hh(i), hh(i + vec2(1, 0)), f.x), mix(hh(i + vec2(0, 1)), hh(i + vec2(1, 1)), f.x), f.y); }
-      uniform sampler2D uLampMap; uniform sampler2D uAOMap;
+      uniform sampler2D uLampMap; uniform sampler2D uAOMap; uniform float uPatchOn;
       float rg(vec2 p){ return vn(p * 0.55) * 0.45 + vn(p * 1.7) * 0.33 + vn(p * 5.3) * 0.22; }
       // small impact craters: returns (albedo factor, dh/dx, dh/dz)
       vec3 craters(vec2 p0, float cs){
@@ -186,6 +189,7 @@ export function terrainMaterial() {
         vec2 lu = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (lu.x > 0.0 && lu.x < 1.0 && lu.y > 0.0 && lu.y < 1.0) outgoingLight += diffuseColor.rgb * texture2D(uLampMap, lu).rgb * 9.0; }
       #include <opaque_fragment>`)
       .replace('#include <color_fragment>', `#include <color_fragment>
+      ${patch ? '' : `if (uPatchOn > 0.5 && length(vWP.xz - vec2(${PATCH.x.toFixed(1)}, ${PATCH.z.toFixed(1)})) < ${PATCH.cut.toFixed(1)}) discard; /* covered by the high-res crater patch */`}
       float tDist = length(vWP - cameraPosition); float tFade = 1.0 - smoothstep(40.0, 200.0, tDist); float tNear = 1.0 - smoothstep(18.0, 85.0, tDist);
       float tN = rg(vWP.xz); vec3 cr = vec3(1.0, 0.0, 0.0); if (tNear > 0.01) cr = craters(vWP.xz, 2.6); if (tDist < 28.0) { vec3 c2 = craters(vWP.xz + 31.7, 0.85); float w2 = 1.0 - smoothstep(14.0, 28.0, tDist); cr.x *= mix(1.0, c2.x, w2); cr.yz += c2.yz * 0.7 * w2; }
       { float w3 = (1.0 - smoothstep(70.0, 130.0, tDist)) * smoothstep(14.0, 24.0, tDist) * smoothstep(28.0, 36.0, length(vWP.xz)); if (w3 > 0.01) { vec3 c3 = craters(vWP.xz + 77.0, 6.5); cr.x *= mix(1.0, c3.x, w3); cr.yz += c3.yz * 1.4 * w3; } }
@@ -196,6 +200,13 @@ export function terrainMaterial() {
         if (tMid > 0.01) { vec2 pc = floor(vWP.xz * 2.2); float pr = hh(pc + 3.3); vec2 pf = fract(vWP.xz * 2.2) - 0.5 + (vec2(hh(pc), hh(pc + 7.1)) - 0.5) * 0.5; float pd = length(pf); float aa = clamp(1.0 - fwidth(vWP.x * 2.2) * 2.0, 0.0, 1.0);
           float peb = (1.0 - smoothstep(0.1, 0.17, pd)) * step(0.55, pr) * aa; float mot = vn(vWP.xz * 0.9 + 5.0) * 0.6 + vn(vWP.xz * 3.1) * 0.4;
           diffuseColor.rgb *= mix(1.0, (0.8 + 0.4 * mot) * (1.0 - 0.45 * peb * step(0.8, pr) + 0.22 * peb * (1.0 - step(0.8, pr))), tMid); }
+        { float rh = length(vWP.xz); float apr = smoothstep(5.0, 11.0, rh) * (1.0 - smoothstep(40.0, 60.0, rh)); /* pass 19: darker, rubbly regolith apron around the base (concept mid-ground) */
+          if (apr > 0.01) { float pat = vn(vWP.xz * 0.16 + 2.0) * 0.6 + vn(vWP.xz * 0.5 + 7.0) * 0.4; diffuseColor.rgb *= mix(1.0, 0.7 + 0.3 * pat, apr);
+            float rw = apr * smoothstep(11.0, 20.0, tDist) * (1.0 - smoothstep(90.0, 130.0, tDist)); if (rw > 0.01) { vec2 sd2 = vec2(${SUNXZ}) * 0.12;
+              vec2 q = vWP.xz * 1.1; vec2 qi = floor(q); float d1 = 9.0, d1s = 9.0, keep = 0.0, ks = 0.0;
+              for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 c = qi + vec2(float(i), float(j)); float h = hh(c + 4.4); vec2 o = vec2(hh(c), hh(c + 7.7)) * 0.8 + 0.1 - (q - c); float dd = length(o); float rr = 0.18 + 0.2 * h; float on = step(0.45, hh(c + 2.2)) ; float v = dd / rr; if (v < d1 && on > 0.5) { d1 = v; } float vs = length(o + sd2 * 1.5) / rr; if (vs < d1s && on > 0.5) { d1s = vs; } }
+              float aa = fwidth(q.x) * 3.0; float st = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, d1); float stS = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, d1s);
+              float lit = st * (0.82 + 0.5 * (1.0 - d1)); float shad = (1.0 - st) * stS; diffuseColor.rgb *= mix(1.0, mix(1.0 - 0.45 * shad, lit, st), rw); } } }
         vec2 au = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (au.x > 0.0 && au.x < 1.0 && au.y > 0.0 && au.y < 1.0) diffuseColor.rgb *= texture2D(uAOMap, au).r; }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       if (tFade > 0.01) { float e = 0.15; float n0 = rg(vWP.xz * 1.6), nx = rg(vWP.xz * 1.6 + vec2(e, 0.)), nz = rg(vWP.xz * 1.6 + vec2(0., e));
@@ -207,14 +218,8 @@ export function terrainMaterial() {
   return m;
 }
 
-export function buildTerrain() {
-  const topo = buildTopology(); PX = topo.px; PZ = topo.pz; TRI = topo.tris; const NV = topo.NV;
-  H = new Float32Array(NV); for (let i = 0; i < NV; i++) H[i] = heightAt(PX[i], PZ[i]);
-  buildBuckets();
-  const cA = new THREE.Color('#8e8e92'), cB = new THREE.Color('#717277'), cDark = new THREE.Color('#4a4e58'), cTeal = new THREE.Color('#2f6f78'), cOrange = new THREE.Color('#c0602a'), cLight = new THREE.Color('#aaa8a3');
-  const col = new Float32Array(NV * 3); const c = new THREE.Color();
-  for (let i = 0; i < NV; i++) {
-    const x = PX[i], z = PZ[i], h = H[i]; const r = Math.hypot(x, z); const step = Math.max(2.5, r * 0.05);
+const cA = new THREE.Color('#8e8e92'), cB = new THREE.Color('#717277'), cDark = new THREE.Color('#4a4e58'), cTeal = new THREE.Color('#2f6f78'), cOrange = new THREE.Color('#c0602a'), cLight = new THREE.Color('#aaa8a3');
+function vertexColor(c, x, z, h, step) { const r = Math.hypot(x, z);
     const hx = heightAt(x + step, z), hx2 = heightAt(x - step, z), hz = heightAt(x, z + step), hz2 = heightAt(x, z - step);
     const slope = clamp(Math.hypot(hx - hx2, hz - hz2) / (2 * step), 0, 2);
     const ao = clamp(1 - ((hx + hx2 + hz + hz2) / 4 - h) * 0.07 * (6 / Math.max(6, step)), 0.55, 1.12);
@@ -223,8 +228,26 @@ export function buildTerrain() {
     c.lerp(cDark, clamp(slope * 0.12 - 0.05, 0, 0.2));
     c.multiplyScalar(ao);
     const dc = segDist(x, z, CANYON_A, CANYON_B); if (h < -10) c.lerp(cTeal, clamp((-h - 10) / 45, 0, 0.75) * (1 - smoothstep(30, 60, dc)));
-    { const R = REGIONS.reactor; const d = Math.hypot(x - R.x, z - R.z); c.lerp(cOrange, (1 - smoothstep(20, 80, d)) * 0.8); }
+    { const R = REGIONS.reactor; const d = Math.hypot(x - R.x, z - R.z); c.lerp(cOrange, (1 - smoothstep(20, 80, d)) * 0.4); }
     c.lerp(cDark, 0.12 * (1 - smoothstep(10, 40, r)));
+}
+// pass 19: dense polar patch over the reactor crater (the far rings are ~60 m facets out there)
+function buildPatch(mat) {
+  const rs = [0]; let r = 1.5; while (r < PATCH.r) { rs.push(r); r += r < 120 ? 1.9 : 3; } rs.push(PATCH.r); const M = 112;
+  const pos = [], col = [], idx = []; const c = new THREE.Color();
+  rs.forEach((rr, k) => { const n = k === 0 ? 1 : M; for (let j = 0; j < n; j++) { const a = (j + (k % 2) * 0.5) / M * Math.PI * 2; const x = PATCH.x + Math.cos(a) * rr, z = PATCH.z + Math.sin(a) * rr; const h = heightAt(x, z); pos.push(x, h, z); vertexColor(c, x, z, h, 2.5); col.push(c.r, c.g, c.b); } });
+  const id = (k, j) => k === 0 ? 0 : 1 + (k - 1) * M + ((j % M) + M) % M;
+  for (let k = 0; k < rs.length - 1; k++) for (let j = 0; j < M; j++) { if (k === 0) { idx.push(0, id(1, j + 1), id(1, j)); continue; } const s = k % 2; const a = id(k, j), b = id(k, j + 1), cc = id(k + 1, j - (s ? 0 : 1) + (s ? 0 : 1)), d = id(k + 1, j + 1); idx.push(a, b, cc, b, d, cc); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
+  const ng = g.toNonIndexed(); ng.computeVertexNormals(); ng.computeBoundingSphere();
+  const mesh = new THREE.Mesh(ng, mat); mesh.name = 'terrain_patch'; mesh.receiveShadow = true; return mesh;
+}
+export function buildTerrain() {
+  const topo = buildTopology(); PX = topo.px; PZ = topo.pz; TRI = topo.tris; const NV = topo.NV;
+  H = new Float32Array(NV); for (let i = 0; i < NV; i++) H[i] = heightAt(PX[i], PZ[i]);
+  buildBuckets();
+  const col = new Float32Array(NV * 3); const c = new THREE.Color();
+  for (let i = 0; i < NV; i++) { vertexColor(c, PX[i], PZ[i], H[i], Math.max(2.5, Math.hypot(PX[i], PZ[i]) * 0.05));
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
   // bucket triangles into sectors
@@ -242,6 +265,7 @@ export function buildTerrain() {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(cl, 3)); g.computeVertexNormals(); g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, mat); mesh.name = 'terrain_' + key; mesh.receiveShadow = true; mesh.castShadow = false; group.add(mesh);
   }
+  group.add(buildPatch(terrainMaterial(true)));
   group.userData.tris = TRI.length / 3;
   return group;
 }

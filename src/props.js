@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { groundAt, groundMesh, LEDGE, slopeAt, F, Rt, LOOKOUT, REGIONS, sd, CONCEPT, CAVE, PORTAL } from './terrain.js';
 import { noise2, seeded } from './noise.js';
 import { colliders, LAMPS } from './base.js';
+import { mergeVertices } from '../vendor/three/jsm/utils/BufferGeometryUtils.js';
 
 const rnd = seeded(2024);
 export function rockGeom(detail, seed, stretch = [1, 1, 1], rough = 0.32, light = 1) {
@@ -116,6 +117,12 @@ export function strataGeom(seed, layers = 3, sides = 7) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals(); g.computeBoundingSphere(); return g;
 }
 
+// pass 19: rounded, squashed irregular pebble (smooth icosahedron, 20 tris) with baked AO: dark underside, lit top
+function pebbleGeom(seed) {
+  const g0 = new THREE.IcosahedronGeometry(1, 0); g0.deleteAttribute('normal'); g0.deleteAttribute('uv'); const g = mergeVertices(g0); const P = g.attributes.position; const r = seeded(seed); const col = [];
+  for (let i = 0; i < P.count; i++) { const k = 0.8 + r() * 0.4; let x = P.getX(i) * k, y = P.getY(i) * k, z = P.getZ(i) * k; y = y < 0 ? y * 0.5 : y; /* flat base */ P.setXYZ(i, x, y, z); const t = THREE.MathUtils.clamp((y + 0.5) / 1.4, 0, 1); const c = 0.5 + 0.55 * t; col.push(c * 1.02, c, c * 0.96); }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals(); return g;
+}
 function rockMaterial(fog = true, bump = 2.2, smooth = false, key = 0.0, far = false, crack = false, amb = 0.32, rug = 0, cliff = 0) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: !smooth, roughness: 0.95, metalness: 0.0, fog }); m.color.setScalar(0.82); m.customProgramCacheKey = () => 'rock' + bump + fog + smooth + key + far + crack + amb + rug + 'c' + cliff;
   m.onBeforeCompile = (sh) => {
@@ -132,7 +139,7 @@ function rockMaterial(fog = true, bump = 2.2, smooth = false, key = 0.0, far = f
       float vor(vec2 p){ vec2 i = floor(p), f = fract(p); float m1 = 8., m2 = 8.; for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 o = vec2(x, y); vec2 r = o + vec2(hh(i + o), hh(i + o + 17.3)) - f; float dd = dot(r, r); if (dd < m1) { m2 = m1; m1 = dd; } else if (dd < m2) m2 = dd; } return sqrt(m2) - sqrt(m1); }
       float crH(vec3 w){ vec2 a = w.xz * 5.0 + w.y * 3.3, c = vec2(w.x + w.y * 0.8, w.z - w.y * 0.8) * 11.0; return vn(a) * 0.45 + vn(c) * 0.3 + vn(a * 4.3) * 0.17 + vn(c * 3.1) * 0.08; }
       float farH(vec3 w){ float sb = smoothstep(0.25, 0.75, vn(vec2(w.y * 0.55, (w.x + w.z) * 0.03))); float cn = vn(w.xz * 0.3 + w.y * 0.45) * 0.7 + vn(w.xz * 0.9 - w.y * 0.8) * 0.3; return sb * 0.5 + cn * 0.5; }
-      float clP(vec2 p, out float cv, out float sh){ float yy = p.y * 0.12 + vn(vec2(p.x * 0.02, 7.0)) * 2.2 + p.x * 0.03; float b = fract(yy); sh = 1.0 + 0.18 * (1.0 - smoothstep(0.0, 0.1, b)) - 0.36 * smoothstep(0.7, 1.0, b); float led = smoothstep(0.0, 0.3, b) * 0.6 + b * 0.4; float cr = vor(vec2(p.x * 0.07, p.y * 0.022 + floor(yy) * 0.23)); float cr2 = vor(vec2(p.x * 0.17, p.y * 0.05) + 11.0); cv = max(1.0 - smoothstep(0.03, 0.17, cr), (1.0 - smoothstep(0.02, 0.09, cr2)) * 0.45); return led * 0.8 - cv * 0.8 + vn(p * 0.22) * 0.4; }
+      float clP(vec2 p, out float cv, out float sh){ vec2 wq = p * 0.045; p += vec2(vn(wq) - 0.5, vn(wq + 5.2) - 0.5) * 9.0; /* domain warp */ float ra = (vn(p * 0.012 + 3.7) - 0.5) * 1.1; float cs = cos(ra), sn = sin(ra); vec2 pr = vec2(cs * p.x - sn * p.y, sn * p.x + cs * p.y); /* per-region rotation for the crack field */ float yy = p.y * 0.12 + vn(vec2(p.x * 0.02, 7.0)) * 2.2 + p.x * 0.03; float b = fract(yy); sh = 1.0 + 0.18 * (1.0 - smoothstep(0.0, 0.1, b)) - 0.36 * smoothstep(0.7, 1.0, b); float led = smoothstep(0.0, 0.3, b) * 0.6 + b * 0.4; float cr = vor(vec2(pr.x * 0.07, pr.y * 0.022 + floor(yy) * 0.23) + vec2(vn(pr * 0.08), vn(pr * 0.08 + 9.0)) * 0.6); float cr2 = vor(vec2(pr.x * 0.15 + pr.y * 0.05, pr.y * 0.06) + 11.0); cv = max(1.0 - smoothstep(0.03, 0.17, cr), (1.0 - smoothstep(0.02, 0.09, cr2)) * 0.45); return led * 0.8 - cv * 0.8 + vn(p * 0.22) * 0.4; }
       float clH(vec3 w, vec3 n, out float crev, out float wt, out float shd){ float ax = n.x * n.x, az = n.z * n.z, s = ax + az + 1e-3; float c1, c2, s1, s2; float h = (clP(vec2(w.z, w.y), c1, s1) * ax + clP(vec2(w.x, w.y) + 31.0, c2, s2) * az) / s; wt = smoothstep(0.25, 0.7, ax + az); crev = (c1 * ax + c2 * az) / s * wt; shd = mix(1.0, (s1 * ax + s2 * az) / s, wt); return h * wt; }
       float rkH(vec3 w){ vec2 a = w.xz * 2.3 + w.y * 1.7, b = vec2(w.x + w.y * 0.7, w.z - w.y * 0.7) * 3.1; return vor(a) * 0.55 + vor(b) * 0.3 + vn(a * 4.0) * 0.15; }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
@@ -355,25 +362,30 @@ export function buildRocks(scene, culler, quality = 1) { LOD_SCALE = quality < 0
   // merge lists: two prototypes (3 LODs each), one debris layer, one strata layer -> 8 instanced draws total
   const half = (l) => [l.filter((_, i) => i % 2 === 0), l.filter((_, i) => i % 2 === 1)]; const [c0, c1] = half(L.cliff);
   const A = [...L.bA, ...L.bC, ...L.bB, ...c0, ...c1]; // one boulder prototype (saves 3 main + 2 shadow draws)
+  // pass 19: boulders + rubble on the reactor crater walls/floor (own RNG; drawn only near the region via LOD distance)
+  { const r3 = seeded(1919); const R = REGIONS.reactor; const ah = Math.atan2(-R.z, -R.x); const ad = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+    for (let n = 0, t = 0; n < Math.round(900 * quality) && t < 30000; t++) { const a = r3() * 6.283, d = 27 + Math.sqrt(r3()) * 100; const x = R.x + Math.cos(a) * d, z = R.z + Math.sin(a) * d;
+      if (d > 24 && ad(a, ah) * d < 9 + d * 0.06) continue; /* service road */ let bad = false; for (let i = 0; i < 14; i += 2) if (ad(a, i / 14 * 6.283) * d < 3.5 && d < 92) bad = true; for (let i = 0; i < 6; i++) { const ta = i / 6 * 6.283 + 0.3; if (Math.hypot(x - R.x - Math.cos(ta) * 33, z - R.z - Math.sin(ta) * 33) < 7.5) bad = true; } for (let i = 0; i < 14; i++) { const ba = i / 14 * 6.283; if (Math.hypot(x - R.x - Math.cos(ba) * 92, z - R.z - Math.sin(ba) * 92) < 8) bad = true; } if (bad) continue;
+      const big = r3() < 0.45; const sz = big ? 1.0 + r3() ** 1.7 * 3.8 : 0.25 + r3() * 0.45; const y = groundAt(x, z) - sz * 0.3; A.push({ x, y, z, s: [sz * (0.8 + r3() * 0.5), sz * (0.55 + r3() * 0.5), sz * (0.8 + r3() * 0.5)], r: [(r3() - 0.5) * 0.4, r3() * 6.283, (r3() - 0.5) * 0.4] }); n++; } }
   const debris = [...L.rubble, ...L.pebble, ...L.crumb];
   // pass 18: sparse small stones scattered over the walkable hub floor (gameplay view life); own RNG so other placements don't reshuffle; 1 draw call, no shadows/collision
-  const matScatter = rockMaterial(true, 0.0, true, 2.0, false, false, 0.1); matScatter.flatShading = true; matScatter.color.setScalar(0.55);
+  const matScatter = rockMaterial(true, 0.0, true, 0.15, false, false, 0.02); matScatter.color.setRGB(0.27, 0.262, 0.25); /* ground-matching regolith tone, smooth rounded shading */
   const scatter = []; { const r2 = seeded(1818); const PS = sd(-3, -21); let t = 0;
-    while (scatter.length < Math.round(560 * quality * (quality < 0.7 ? 0.4 : 1)) && t++ < 40000) { let x, z; const m = r2(); if (m < 0.3) { const a = r2() * 6.283, r = 1.5 + Math.sqrt(r2()) * 13; x = (PS.x + PCAM0.x) / 2 + Math.cos(a) * r; z = (PS.z + PCAM0.z) / 2 + Math.sin(a) * r; } /* denser around the gameplay start */ else if (m < 0.7) { const a = r2() * 6.283, r = 2.5 + Math.sqrt(r2()) * 30; x = PS.x + Math.cos(a) * r; z = PS.z + Math.sin(a) * r; } else { const a = r2() * 6.283, r = 8 + Math.sqrt(r2()) * 36; x = Math.cos(a) * r; z = Math.sin(a) * r; }
-      if (Math.hypot(x, z) > 46 || Math.hypot(x - K.cam.x, z - K.cam.z) < 14 || Math.hypot(x - PS.x, z - PS.z) < 2.2 || blocked(x, z, 1.6) || nearTrack(x, z, 1.3) || LAMPS.some(l => Math.hypot(l.x - x, l.z - z) < 1.7) || slopeAt(x, z) > 0.8) continue;
-      const s = 0.11 + r2() ** 1.8 * 0.36; const f = s * 0.7; const y = Math.min(groundAt(x, z), groundAt(x + f, z), groundAt(x - f, z), groundAt(x, z + f), groundAt(x, z - f)) - s * 0.22;
-      scatter.push({ x, y, z, s: [s * (0.85 + r2() * 0.5), s * (0.8 + r2() * 0.55), s * (0.85 + r2() * 0.5)], r: [(r2() - 0.5) * 0.5, r2() * 6.283, (r2() - 0.5) * 0.5], lodK: (() => { const dK = Math.hypot(x - K.cam.x, z - K.cam.z) - 3; return dK < 34 ? (34 / dK) ** 2 : 1; })() /* draw range shrinks so the concept camera never draws them (its triangle budget) */ }); } }
+    while (scatter.length < Math.round(720 * quality * (quality < 0.7 ? 0.3 : 1)) && t++ < 40000) { let x, z; const m = r2(); if (m < 0.12) { const a = r2() * 6.283, r = 0.5 + Math.sqrt(r2()) * 6; x = PCAM0.x + (PS.x - PCAM0.x) * 0.6 + Math.cos(a) * r; z = PCAM0.z + (PS.z - PCAM0.z) * 0.6 + Math.sin(a) * r; } /* right in front of the play camera */ else if (m < 0.36) { const a = r2() * 6.283, r = 1.5 + Math.sqrt(r2()) * 13; x = (PS.x + PCAM0.x) / 2 + Math.cos(a) * r; z = (PS.z + PCAM0.z) / 2 + Math.sin(a) * r; } /* denser around the gameplay start */ else if (m < 0.7) { const a = r2() * 6.283, r = 2.5 + Math.sqrt(r2()) * 30; x = PS.x + Math.cos(a) * r; z = PS.z + Math.sin(a) * r; } else { const a = r2() * 6.283, r = 8 + Math.sqrt(r2()) * 36; x = Math.cos(a) * r; z = Math.sin(a) * r; }
+      if (Math.hypot(x, z) > 46 || Math.hypot(x - K.cam.x, z - K.cam.z) < 14 || Math.hypot(x - PS.x, z - PS.z) < 1.1 || colliders.some(c => Math.hypot(x - c.x, z - c.z) < c.r + 1.6) || /* no collision: the spawn clearing may have pebbles */ nearTrack(x, z, 1.3) || LAMPS.some(l => Math.hypot(l.x - x, l.z - z) < 1.7) || slopeAt(x, z) > 0.8) continue;
+      const s = 0.08 + r2() ** 2.8 * 0.4; const sy = s * (0.36 + r2() * 0.28); const f = s * 0.6; const y = Math.min(groundAt(x, z), groundAt(x + f, z), groundAt(x - f, z), groundAt(x, z + f), groundAt(x, z - f)) - sy * 0.22; /* many tiny, few medium; flat and partly sunk */
+      scatter.push({ x, y, z, s: [s * (0.85 + r2() * 0.45), sy, s * (0.75 + r2() * 0.45)], r: [(r2() - 0.5) * 0.12, r2() * 6.283, (r2() - 0.5) * 0.12], lodK: (() => { const dK = Math.hypot(x - K.cam.x, z - K.cam.z) - 3; return dK < 34 ? (34 / dK) ** 2 : 1; })() /* draw range shrinks so the concept camera never draws them (its triangle budget) */ }); } }
   L.scatter = scatter;
   const kinds = {
     rockA: makeKind(scene, 'rockA', [[protoGeom(1, 2, [1.25, 0.75, 1.05]), 8], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 24], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 116]], A, mat, 2),
     debris: makeKind(scene, 'debris', [[chiselGeom(14, 6, 0), 7.5]], debris, matDebris, 0),
-    scatter: makeKind(scene, 'scatter', [[chiselGeom(23, 7, 0), 34]], scatter, matScatter, 0),
+    scatter: makeKind(scene, 'scatter', [[pebbleGeom(23), 34]], scatter, matScatter, 0),
     strata: makeKind(scene, 'strata', [[chiselGeom(9, 16, 2), 6.5], [chiselGeom(9, 12, 1), 14], [chiselGeom(9, 12, 0), 95]], L.peak, matFar, 0),
     wall: makeKind(scene, 'wall', [[mesaGeom(protoGeom(1, 33, [1, 1, 1], 0.55), 33), 118], [mesaGeom(protoGeom(0, 33, [1, 1, 1], 0.45), 33), 3000]], L.wall, matWall, 0),
   };
     for (const k of Object.values(kinds)) culler.add(k);
   // contact shadows / crevices: every rock near the hub darkens the regolith around its base (painted into the terrain AO map in main.js)
-  const contacts = []; for (const k of ['bA', 'bB', 'bC', 'cliff', 'peak', 'rubble', 'pebble', 'crumb']) for (const it of L[k]) { const sx = Array.isArray(it.s) ? Math.max(it.s[0], it.s[2]) : it.s; if (Math.abs(it.x) < 75 && Math.abs(it.z) < 75) contacts.push([it.x, it.z, sx, k === 'crumb' || k === 'pebble' ? 0.5 : 1]); }
+  const contacts = []; for (const k of ['bA', 'bB', 'bC', 'cliff', 'peak', 'rubble', 'pebble', 'crumb']) for (const it of L[k]) { const sx = Array.isArray(it.s) ? Math.max(it.s[0], it.s[2]) : it.s; if (Math.abs(it.x) < 75 && Math.abs(it.z) < 75) contacts.push([it.x, it.z, sx, k === 'crumb' || k === 'pebble' ? 0.5 : 1]); } for (const it of scatter) contacts.push([it.x, it.z, Math.max(it.s[0], it.s[2]) * 1.15, 0.85]); /* pebble contact shadows in the terrain AO map */
   return { kinds, contacts, counts: Object.fromEntries(Object.entries(L).map(([k, v]) => [k, v.length])) };
 }
 
