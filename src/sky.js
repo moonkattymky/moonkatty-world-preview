@@ -20,12 +20,12 @@ export function buildSky(sunDir, earthDir) {
     vertexShader: `varying vec3 vD; void main(){ vD=normalize(position); vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.); gl_Position=p.xyww; }`,
     fragmentShader: `uniform vec3 top,mid,hor,band; uniform samplerCube stars; varying vec3 vD; ${NOISE_GLSL}
       void main(){ float y=vD.y; vec3 c=mix(hor,mid,smoothstep(-0.05,0.18,y)); c=mix(c,top,smoothstep(0.18,0.8,y));
-        float b=exp(-pow(dot(vD,band)/0.16,2.)); float n=fbm3(vD*6.0); float n2=fbm3(vD*14.0+3.0); c+=vec3(0.07,0.085,0.13)*b*smoothstep(0.3,0.8,n)*1.4; c+=vec3(0.035,0.038,0.06)*b; c+=vec3(0.09,0.07,0.06)*b*b*smoothstep(0.5,0.85,n2)*0.8; c-=vec3(0.02)*b*smoothstep(0.55,0.75,fbm3(vD*9.0+7.0)); c+=textureCube(stars,vD).rgb*1.7*smoothstep(-0.12,0.0,y);
+        float b=exp(-pow(dot(vD,band)/0.16,2.)); float n=fbm3(vD*6.0); float n2=fbm3(vD*14.0+3.0); c+=vec3(0.07,0.085,0.13)*b*smoothstep(0.3,0.8,n)*2.1; c+=vec3(0.045,0.075,0.12)*exp(-pow((y-0.015)/0.07,2.)); c+=vec3(0.035,0.038,0.06)*b; c+=vec3(0.09,0.07,0.06)*b*b*smoothstep(0.5,0.85,n2)*0.8; c-=vec3(0.02)*b*smoothstep(0.55,0.75,fbm3(vD*9.0+7.0)); c+=textureCube(stars,vD).rgb*1.7*smoothstep(-0.12,0.0,y);
         gl_FragColor=vec4(c,1.); }`,
   });
   const dome = new THREE.Mesh(new THREE.SphereGeometry(6000, 24, 12), skyMat); dome.renderOrder = -10; dome.frustumCulled = false; group.add(dome);
   // stars
-  const r = seeded(99); const N = 14000; const pos = new Float32Array(N * 3), size = new Float32Array(N), col = new Float32Array(N * 3);
+  const r = seeded(99); const N = 26000; const pos = new Float32Array(N * 3), size = new Float32Array(N), col = new Float32Array(N * 3);
   const band = skyMat.uniforms.band.value;
   for (let i = 0; i < N; i++) {
     let v; do { v = new THREE.Vector3(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1); } while (v.lengthSq() > 1 || v.lengthSq() < 0.01);
@@ -65,16 +65,16 @@ export function buildSky(sunDir, earthDir) {
         vec3 q=p*3.2+vec3(fbm3(p*4.+uTime*0.01),fbm3(p*4.+5.),fbm3(p*4.+9.))*1.6; float cf=fbm3(q*1.9); float cl=smoothstep(0.56,0.64,cf); float cl2=smoothstep(0.6,0.66,fbm3(q*4.3+2.))*0.45; float cov=clamp(cl*0.92+cl2*(1.-cl),0.,1.);
         c=mix(c,vec3(0.92,0.94,0.97),cov);
         float ndl=dot(normalize(vN),sun); float lit=smoothstep(-0.2,0.45,ndl); vec3 col=c*(0.05+1.2*lit);
-        float fr=pow(1.-max(dot(normalize(vN),vV),0.),4.); col+=vec3(0.2,0.45,1.0)*fr*(0.08+0.55*lit);
+        float fr=pow(1.-max(dot(normalize(vN),vV),0.),4.); col+=vec3(0.2,0.45,1.0)*fr*(0.08+0.55*lit); float rim=pow(1.-max(dot(normalize(vN),vV),0.),2.2); col+=vec3(0.3,0.6,1.0)*smoothstep(0.55,1.0,rim)*(0.12+0.5*lit);
         float lum=dot(col,vec3(0.3,0.59,0.11)); col=mix(vec3(lum),col,0.9)*0.5; gl_FragColor=vec4(col,1.); }`,
   });
   const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), earthMat); earth.renderOrder = -8;
-  const ED = 4200, ER = 760; earth.position.copy(earthDir).multiplyScalar(ED); earth.scale.setScalar(ER); earth.rotation.set(0.4, 2.2, 0.2);
+  const ED = 4200, ER = 690; earth.position.copy(earthDir).multiplyScalar(ED); earth.scale.setScalar(ER); earth.rotation.set(0.4, 2.2, 0.2);
   group.add(earth);
   const haloMat = new THREE.ShaderMaterial({
     fog: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.BackSide, uniforms: { sun: { value: sunDir.clone() } },
     vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vN=normalize(mat3(modelMatrix)*normal); vec4 w=modelMatrix*vec4(position,1.); vV=normalize(cameraPosition-w.xyz); gl_Position=projectionMatrix*viewMatrix*w; }`,
-    fragmentShader: `uniform vec3 sun; varying vec3 vN; varying vec3 vV; void main(){ float d=dot(normalize(vN),vV); float a=pow(smoothstep(0.0,0.5,-d),3.0); float lit=0.3+0.7*smoothstep(-0.5,0.4,dot(normalize(vN),sun)); gl_FragColor=vec4(vec3(0.25,0.5,0.95)*a*lit*0.5,1.); }`,
+    fragmentShader: `uniform vec3 sun; varying vec3 vN; varying vec3 vV; void main(){ float d=dot(normalize(vN),vV); float a=pow(smoothstep(0.0,0.5,-d),3.0); float lit=0.3+0.7*smoothstep(-0.5,0.4,dot(normalize(vN),sun)); gl_FragColor=vec4(vec3(0.25,0.5,0.95)*a*lit*0.7,1.); }`,
   });
   const halo = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 10), haloMat); halo.position.copy(earth.position); halo.scale.setScalar(ER * 1.035); halo.renderOrder = -7; group.add(halo);
   return { group, earth, starMat, earthMat };

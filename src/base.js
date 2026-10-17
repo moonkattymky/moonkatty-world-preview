@@ -96,7 +96,7 @@ function reactor(b, s, d) {
   return { x, y: yt, z, Ri };
 }
 
-function corridor(b, A, B, r = 1.05, h = 1.25) {
+function corridor(b, A, B, r = 1.05, h = r + 0.3) {
   const ya = groundAt(A.x, A.z), yb = groundAt(B.x, B.z);
   const a = new THREE.Vector3(A.x, ya + h, A.z), c = new THREE.Vector3(B.x, yb + h, B.z);
   const dir = c.clone().sub(a); const L = dir.length(); dir.normalize(); const q = quatFromDir(dir); const mid = a.clone().add(c).multiplyScalar(0.5);
@@ -105,7 +105,8 @@ function corridor(b, A, B, r = 1.05, h = 1.25) {
   for (let i = 0; i < n; i++) {
     const p = a.clone().addScaledVector(dir, (i + 0.5) * sl);
     b.add('tex', G.cyl(r, r, sl, 16, true).translate(0, -sl / 2, 0).rotateY(PI / 4), { region: 'corridor', pos: p.toArray(), quat: q, color: '#ffffff' });
-    if (i > 0) b.add('gold', G.torus(r * 1.05, 0.09, 3, 12), { pos: a.clone().addScaledVector(dir, i * sl).toArray(), quat: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir), color: i % 3 === 0 ? C.gold : C.gold2 });
+    if (i > 0) { const pc = a.clone().addScaledVector(dir, i * sl); b.add('ivory', G.cyl(r * 1.13, r * 1.13, 0.42, 16, true), { pos: pc.toArray(), quat: q, color: C.ivory2 }); } // raised segment collars (concept: chunky ribbed tubes)
+    if (i > 0) b.add('gold', G.torus(r * 1.15, 0.12, 3, 14), { pos: a.clone().addScaledVector(dir, i * sl).toArray(), quat: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir), color: i % 3 === 0 ? C.gold : C.gold2 });
     for (const sg of [-1, 1]) b.add('glow', new THREE.PlaneGeometry(sl * 0.62, 0.2), { pos: [p.x + side.x * sg * r * 1.0, p.y + 0.12, p.z + side.z * sg * r * 1.0], rot: [0, yaw + (sg < 0 ? PI : 0), 0], color: C.win, intensity: 1.8 });
     if (i % 2 === 1) b.add('dark', G.box(0.5, h, 0.8), { pos: [p.x, p.y - r - h / 2 + 0.6, p.z], rot: [0, yaw, 0], color: '#4a5260' });
   }
@@ -315,8 +316,8 @@ export function buildHub(b, beams) {
   // corridors (auto-trimmed to module radii)
   const P = (s, d) => sd(s, d);
   const M = { ring: [0, 0, 8.5], L: [-22, 3, 5], Bk: [-3.5, 25, 5.6], sm: [-9, 16.5, 2.8], Rd: [19.5, 9, 4.6], Fd: [10.5, -6.5, 3.8], Bd: [25, 24, 3.2], dish: [-14, 12, 4.3] };
-  const link = (a, c, r = 1.0) => { const A = M[a], B = M[c]; const ds = B[0] - A[0], dd = B[1] - A[1]; const l = Math.hypot(ds, dd); const ux = ds / l, uy = dd / l; corridor(b, P(A[0] + ux * (A[2] - 0.3), A[1] + uy * (A[2] - 0.3)), P(B[0] - ux * (B[2] - 0.3), B[1] - uy * (B[2] - 0.3)), r); };
-  link('ring', 'L'); link('ring', 'Fd', 0.95); link('ring', 'Rd'); link('ring', 'dish'); link('dish', 'sm', 0.85); link('sm', 'Bk', 0.85); link('Rd', 'Bd', 0.9); link('dish', 'L', 0.9); link('ring', 'Bk', 0.95);
+  const link = (a, c, r = 1.3) => { const A = M[a], B = M[c]; const ds = B[0] - A[0], dd = B[1] - A[1]; const l = Math.hypot(ds, dd); const ux = ds / l, uy = dd / l; corridor(b, P(A[0] + ux * (A[2] - 0.3), A[1] + uy * (A[2] - 0.3)), P(B[0] - ux * (B[2] - 0.3), B[1] - uy * (B[2] - 0.3)), r); };
+  link('ring', 'L', 1.4); link('ring', 'Fd', 1.2); link('ring', 'Rd', 1.3); link('ring', 'dish', 1.3); link('dish', 'sm', 1.05); link('sm', 'Bk', 1.05); link('Rd', 'Bd', 1.1); link('dish', 'L', 1.15); link('ring', 'Bk', 1.2);
   // props
   const rnd = (() => { let a = 7; return () => (a = (a * 16807) % 2147483647) / 2147483647; })();
   for (let i = 0; i < 12; i++) { const a = i / 12 * PI * 2; const p = { x: Math.cos(a) * 38, z: Math.sin(a) * 38 }; lamp(b, p.x, p.z, i % 2 ? C.win : C.gold2); }

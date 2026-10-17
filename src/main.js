@@ -7,7 +7,7 @@ import { OutputPass } from '../vendor/three/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from '../vendor/three/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from '../vendor/three/jsm/shaders/FXAAShader.js';
 import { makeFootprints } from './footprints.js';
-import { buildTerrain, groundAt, sd, F, Rt, LOOKOUT, CONCEPT, PLAY_START, LAMPMAP, LAMPMAP_R } from './terrain.js';
+import { buildTerrain, groundAt, sd, F, Rt, LOOKOUT, CONCEPT, PLAY_START, LAMPMAP, LAMPMAP_R, AOMAP } from './terrain.js';
 import { Builder } from './builder.js';
 import { buildHub, colliders, C, LAMPS } from './base.js';
 import { buildWorld } from './world.js';
@@ -37,7 +37,7 @@ const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.2, 90
 // light: sun from camera-left in the concept framing, cool sky fill, warm bounce
 const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const sunDir = v3(-Rt.x * 0.75 - F.x * 0.45, 0.62, -Rt.z * 0.75 - F.z * 0.45).normalize();
-const earthYaw = 0.322, earthEl = 0.096; // radians relative to concept forward
+const earthYaw = 0.296, earthEl = 0.138; // radians relative to concept forward
 const ef = v3(F.x, 0, F.z).applyAxisAngle(v3(0, 1, 0), -earthYaw); const earthDir = ef.multiplyScalar(Math.cos(earthEl)).add(v3(0, Math.sin(earthEl), 0)).normalize();
 const hemi = new THREE.HemisphereLight('#b3b6bc', '#4f4840', 0.6); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff1dc', 2.3); sun.castShadow = true;
@@ -86,6 +86,11 @@ const cullFarRegions = () => { const c = camera.position; const inHub = Math.hyp
 const culler = new InstanceCuller();
 const rocks = buildRocks(scene, culler, LOW ? 0.6 : MOBILE ? 0.8 : 1);
 const crystals = buildCrystals(scene, env);
+{ // terrain contact-shadow / crevice map (1024², +-75 m): dark soft pools under every rock -> rugged lit-top / dark-crevice contrast
+  const N = 1024, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, N, N);
+  for (const [x, z, s, w] of rocks.contacts) { const u = (x / (2 * LAMPMAP_R) + 0.5) * N, v = (z / (2 * LAMPMAP_R) + 0.5) * N; const r = Math.max(1.5, s * 1.35 / (2 * LAMPMAP_R) * N); const a = 0.5 * w;
+    const gr = g.createRadialGradient(u, v, 0, u, v, r); gr.addColorStop(0, `rgba(0,0,0,${a})`); gr.addColorStop(0.55, `rgba(0,0,0,${a * 0.45})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(u - r, v - r, 2 * r, 2 * r); }
+  const t = new THREE.CanvasTexture(c); t.flipY = true; AOMAP.value = t; }
 { const pts = []; for (let i = 0; i <= 46; i++) { const t = i / 46; pts.push(TRACK_MAIN(t)); }
   const loop = []; for (let i = 0; i <= 64; i++) { const a = i / 64 * Math.PI * 2; loop.push({ x: Math.cos(a) * 31, z: Math.sin(a) * 31 }); }
   const spur = []; for (let i = 0; i <= 20; i++) { const t = i / 20; spur.push(sd(-1.5 - t * 3 + Math.sin(t * 3) * 1.5, -11 - t * 20)); }
