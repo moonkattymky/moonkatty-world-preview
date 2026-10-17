@@ -60,11 +60,11 @@ function launchComplex(b, beams, bn) {
     bn.add('glow', G.box(2.2, 3.2, 2.2), { pos: [gx - 3.6, y + 31, gz + 2.0], color: C.win, intensity: 2.0 }); bn.add('ivory', G.box(2.5, 0.4, 2.5), { pos: [gx - 3.6, y + 32.8, gz + 2.0], color: C.ivory });
     for (const yy of [12, 28, 44, 60]) for (const sg of [-1, 1]) bn.add('glow', G.box(0.35, 0.35, 0.35), { pos: [gx + sg * 3.3, y + yy, gz + 3.3], color: C.win, intensity: 4 }); }
   // spherical fuel tanks on legs + pipes to the pad
-  for (const ad of [-100, -78, -56]) { const c = at(ad * D, 44); const gy = groundAt(c.x, c.z); KEEP.push({ x: c.x, z: c.z, r: 9 });
+  for (const ad of [64, 88, 112]) { const c = at(ad * D, 58); /* pass 22: moved behind the pad so launch2 sees the rocket base */ const gy = groundAt(c.x, c.z); KEEP.push({ x: c.x, z: c.z, r: 9 });
     bn.add('ivory', G.sphere(5.6, 20, 14), { pos: [c.x, gy + 7.2, c.z], color: C.ivory }); bn.add('gold', G.torus(5.62, 0.22, 3, 24), { pos: [c.x, gy + 7.2, c.z], rot: [PI / 2, 0, 0], color: C.gold });
     for (let k = 0; k < 6; k++) { const la = k / 6 * PI * 2; bn.add('dark', G.box(0.5, 7.2, 0.5), { pos: [c.x + Math.cos(la) * 4.4, gy + 3.4, c.z + Math.sin(la) * 4.4], color: '#3a4250' }); }
     bn.add('dark', G.cyl(5.8, 6.2, 0.5, 16), { pos: [c.x, gy - 0.2, c.z], color: '#2e3540' }); bn.add('gold', G.cyl(0.25, 0.25, 4, 6), { pos: [c.x, gy + 12.6, c.z], color: C.goldD }); bn.add('glow', G.octa(0.3), { pos: [c.x, gy + 16.8, c.z], color: '#ff5030', intensity: 5 });
-    const path = []; for (let k = 0; k <= 12; k++) { const t = k / 12; const r = 38 - t * 13; path.push(at(ad * D + (1 - t) * 0.0, r)); } pipeRun(bn, path, { r: 0.6, every: 6, startY: gy + 2.2, endY: y + 2.0, lights: false }); }
+    const path = []; for (let k = 0; k <= 12; k++) { const t = k / 12; const r = 52 - t * 27; path.push(at(ad * D, r)); } pipeRun(bn, path, { r: 0.6, every: 6, startY: gy + 2.2, endY: y + 2.0, lights: false }); }
   // horizontal tanks: gold bands, end caps, saddles, header pipe to the pad
   for (let i = 0; i < 3; i++) { const p = { x: x - 40 + i * 14, z: z + 40 }; const yy = groundAt(p.x, p.z); KEEP.push({ x: p.x, z: p.z, r: 9 });
     const ty = yy + 5.7; b.add('ivory', G.cyl(5, 5, 14, 16).translate(0, -7, 0).rotateX(PI / 2), { pos: [p.x, ty, p.z], color: C.ivory }); /* axis along z: three tanks side by side */
@@ -141,6 +141,7 @@ function reactorCrater(b, beams, bn, bf) { // pass 19: a real reactor complex on
 
 function canyon(b, beams, bn) { // pass 21: winding canyon floor - beacons follow the meander, landing-site camp around the region centre
   const s0 = canyonS(REGIONS.canyon.x, REGIONS.canyon.z); const P = (s, o = 0) => { const p = canyonPoint(s, o); return { ...p, y: groundAt(p.x, p.z) }; };
+  { const cp = canyonPoint(s0 - 84, -2); KEEP.push({ x: cp.x, z: cp.z, r: 20 }); } /* QA camera spot */
   const dirAt = (s) => { const a = canyonPoint(s - 2), c = canyonPoint(s + 2); return Math.atan2(c.z - a.z, c.x - a.x); };
   for (const s of [120, 250, s0 - 135, s0 + 110, 640]) { const p = P(s); beams.push({ x: p.x, y: p.y, z: p.z, r: 1.2, h: 12, color: '#3fe0d0', I: 0.18 }); b.add('glow', G.disc(3, 12), { pos: [p.x, p.y + 0.3, p.z], color: C.cyan, intensity: 3 }); KEEP.push({ x: p.x, z: p.z, r: 4 }); }
   // floor marker lamps: two neat rows along the winding floor

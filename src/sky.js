@@ -83,11 +83,28 @@ export function buildSky(sunDir, earthDir, lite = false) {
 // Asteroid belt + Ark orbital station + MK-01 (sky set pieces; no fog)
 export function buildSpace(scene, hullMat) {
   const g = new THREE.Group(); g.name = 'space';
-  const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9, fog: false });
-  const ag = rockGeom(0, 11, [1.2, 0.9, 1], 0.45); const r = seeded(7); const N = 110;
-  const belt = new THREE.InstancedMesh(ag, rockMat, N); const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
-  for (let i = 0; i < N; i++) { const a = -0.3 + r() * 2.6; const rr = 2600 + r() * 500; const y = 700 + Math.sin(a * 2) * 250 + (r() - 0.5) * 300; const s = 6 + r() ** 3 * 45; q.setFromEuler(e.set(r() * 6, r() * 6, r() * 6)); m.compose(new THREE.Vector3(-Math.cos(a) * rr * 0.7 - 1400, y + 300, Math.sin(a) * rr + 600), q, new THREE.Vector3(s, s * 0.8, s)); belt.setMatrixAt(i, m); }
-  belt.frustumCulled = false; g.add(belt);
+  // pass 22: asteroid belt = a band arcing over the sky behind the concept/play direction; 8 frustum-culled instanced chunks, tumbling rocks with a warm rim
+  const bg = new THREE.Group(); bg.name = 'belt'; scene.add(bg); /* not in the yaw-rotating space group: the band stays put, the rocks tumble */
+  const beltU = { value: 0 }; const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, fog: false, color: new THREE.Color('#c2b39c') });
+  rockMat.onBeforeCompile = (sh) => { sh.uniforms.uTime = beltU;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
+      uniform float uTime; mat3 rotA(vec3 a, float t){ float c = cos(t), s = sin(t), ic = 1.0 - c; return mat3(c + a.x * a.x * ic, a.y * a.x * ic + a.z * s, a.z * a.x * ic - a.y * s, a.x * a.y * ic - a.z * s, c + a.y * a.y * ic, a.z * a.y * ic + a.x * s, a.x * a.z * ic + a.y * s, a.y * a.z * ic - a.x * s, c + a.z * a.z * ic); }`)
+      .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+      float fi = float(gl_InstanceID); vec3 tax = normalize(vec3(fract(sin(fi * 12.9898) * 43758.5), fract(sin(fi * 78.233) * 13758.5), fract(sin(fi * 39.425) * 23421.6)) - 0.5 + 1e-3); mat3 tR = rotA(tax, uTime * (0.03 + 0.1 * fract(fi * 0.618)) + fi); objectNormal = tR * objectNormal;`)
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = tR * transformed;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `{ float fr = 1.0 - abs(dot(normal, normalize(vViewPosition))); outgoingLight += vec3(1.0, 0.8, 0.55) * pow(fr, 2.5) * 0.45; outgoingLight += diffuseColor.rgb * 0.06; }
+      #include <opaque_fragment>`); };
+  const Fh = new THREE.Vector3(0.592, 0, -0.806), Rh = new THREE.Vector3(0.806, 0, 0.592); const E = 38 * Math.PI / 180;
+  const Ap = Fh.clone().multiplyScalar(-Math.cos(E)).add(new THREE.Vector3(0, Math.sin(E), 0)); const Nb = new THREE.Vector3().crossVectors(Rh, Ap).normalize();
+  const r = seeded(7); const NC = 8, PER = 120; const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3();
+  const geos = [rockGeom(0, 11, [1.2, 0.9, 1], 0.45), rockGeom(0, 23, [1, 0.8, 1.3], 0.5), rockGeom(1, 37, [1.1, 0.85, 1], 0.35)];
+  const gauss = () => (r() + r() + r() - 1.5) / 1.5;
+  for (let cI = 0; cI < NC; cI++) { const geo = cI % 4 === 3 ? geos[2] : geos[cI % 2]; const n = geo === geos[2] ? 30 : PER; const belt = new THREE.InstancedMesh(geo, rockMat, n);
+    for (let i = 0; i < n; i++) { const ph = Math.PI * (0.13 + 0.74 * (cI + r()) / NC); const R = 3300 + gauss() * 420; const off = 650 + gauss() * 330; /* band plane offset from the viewer -> reads as a broad strip, not an edge-on line */
+      p.copy(Rh).multiplyScalar(Math.cos(ph) * R).addScaledVector(Ap, Math.sin(ph) * R).addScaledVector(Nb, off);
+      const big = geo === geos[2]; const s0 = big ? 26 + r() ** 2 * 80 : 3.5 + r() ** 5 * 50; sc.set(s0 * (0.8 + r() * 0.5), s0 * (0.6 + r() * 0.4), s0 * (0.8 + r() * 0.5));
+      q.setFromEuler(e.set(r() * 6, r() * 6, r() * 6)); m.compose(p, q, sc); belt.setMatrixAt(i, m); }
+    belt.computeBoundingSphere(); belt.boundingSphere.radius += 200; belt.frustumCulled = true; belt.name = 'belt' + cI; bg.add(belt); }
   // pass 21: Ark station rebuilt in its own local frame (ring in XY, spin axis Z): detailed, lit, frustum-culled
   const b = new Builder(); const st = new THREE.Group(); st.name = 'ark'; st.position.set(2300, 2050, -2500); st.rotation.set(1.15, 0.5, 0); st.scale.setScalar(1.3); g.add(st);
   b.add('ivory', G.torus(220, 18, 10, 64), { color: C.ivory });
@@ -104,5 +121,5 @@ export function buildSpace(scene, hullMat) {
   const hm = hullMat.clone(); hm.fog = false; const mats = { hull: hm };
   const built = b.build(mats, st); for (const k in built) { built[k].castShadow = built[k].receiveShadow = false; built[k].frustumCulled = true; }
   scene.add(g);
-  return { group: g, mats };
+  return { group: g, mats, beltU };
 }

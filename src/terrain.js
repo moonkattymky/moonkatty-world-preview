@@ -28,6 +28,10 @@ const CAN_L = Math.hypot(CANYON_B.x - CANYON_A.x, CANYON_B.z - CANYON_A.z), CAN_
 export function canyonMeander(s) { return 18 * Math.sin(s * 0.0105 + 0.6) + 7 * Math.sin(s * 0.029 + 2.1); }
 export function canyonPoint(s, off = 0) { const m = canyonMeander(s) + off; return { x: CANYON_A.x + CAN_U.x * s - CAN_U.z * m, z: CANYON_A.z + CAN_U.z * s + CAN_U.x * m }; }
 export function canyonS(x, z) { return (x - CANYON_A.x) * CAN_U.x + (z - CANYON_A.z) * CAN_U.z; }
+// pass 22: crisp terraced profile - 5 tiers of steep risers (fr 0.3-0.7) with flat lit ledges between
+export function canyonInfo(x, z) { const px = x - CANYON_A.x, pz = z - CANYON_A.z; const cs = px * CAN_U.x + pz * CAN_U.z, cv = -px * CAN_U.z + pz * CAN_U.x; const sc = clamp(cs, 0, CAN_L);
+  const d = Math.hypot(cv - canyonMeander(sc), Math.max(0, -cs, cs - CAN_L)); const fl = 16 + 5 * noise2(sc * 0.02, 3.3), ww = 30 + 9 * noise2(sc * 0.015, 9.1) + 4 * noise2(x * 0.05, z * 0.05);
+  const u = clamp((d - fl) / ww, 0, 1); const k = u * 5, kf = Math.floor(Math.min(k, 4.999)), fr = k - kf; const st = Math.min(1, (kf + smoothstep(0.3, 0.7, fr)) / 5); return { d, fl, ww, u, kf, fr, st }; }
 export const CANYON = { A: CANYON_A, B: CANYON_B, L: CAN_L, U: CAN_U };
 const LAUNCH_CRATERS = [[20, 88, 12], [52, 72, 6], [248, 70, 8], [300, 98, 13], [338, 66, 5], [35, 112, 5], [283, 58, 3.5], [8, 130, 9], [95, 120, 7], [230, 120, 10], [318, 128, 6], [62, 98, 3]]; // [deg, r, R] around the launch pad, clear of the structures
 const SMALL_CRATERS = [
@@ -89,11 +93,7 @@ export function heightAt(x, z) {
   // small craters in the hub
   for (const [cx, cz, cr] of SMALL_CRATERS) { const d = Math.hypot(x - cx, z - cz); if (d < cr * 2) h += crater(d, cr, cr * 0.22, cr * 0.12); }
   // landing canyon
-  { const px = x - CANYON_A.x, pz = z - CANYON_A.z; const cs = px * CAN_U.x + pz * CAN_U.z, cv = -px * CAN_U.z + pz * CAN_U.x; const sc = clamp(cs, 0, CAN_L);
-    const d = Math.hypot(cv - canyonMeander(sc), Math.max(0, -cs, cs - CAN_L)); if (d < 140) {
-      const fl = 16 + 5 * noise2(sc * 0.02, 3.3), ww = 30 + 9 * noise2(sc * 0.015, 9.1) + 4 * noise2(x * 0.05, z * 0.05); const u = clamp((d - fl) / ww, 0, 1);
-      const k = u * 4, kf = Math.floor(Math.min(k, 3.999)), st = Math.min(1, (kf + smoothstep(0.1, 0.78, k - kf)) / 4); /* tall risers + narrow benches = layered walls */
-      h += 6 * Math.exp(-(((d - fl - ww - 12) / 13) ** 2)); h -= 58 * (1 - st) * (0.88 + 0.24 * rid); } }
+  { const ci = canyonInfo(x, z); if (ci.d < 140) { const st = ci.st; h -= (large * 0.6 + medium * 0.85) * (1 - hub * 0.95) * (1 - smoothstep(0.0, 0.5, st)); /* flatter canyon floor */ h += 6 * Math.exp(-(((ci.d - ci.fl - ci.ww - 12) / 13) ** 2)); h -= 58 * (1 - st) * (0.88 + 0.24 * rid); } }
   // reactor crater
   { const R = REGIONS.reactor; const d = Math.hypot(x - R.x, z - R.z); if (d < 220) { h = lerp(h, h * 0.3, 1 - smoothstep(70, 200, d)); if (d < 82) { const u = clamp((d - 34) / 48, 0, 1); const k = u * 3, st = (Math.floor(k) + smoothstep(0.55, 1, k - Math.floor(k))) / 3; const a = Math.atan2(z - R.z, x - R.x); h += -30 * (1 - lerp(u, Math.min(st, 1), 0.75)) + (d < 36 ? 0.5 * noise2(x * 0.08, z * 0.08) : (1.6 * ridged(x * 0.05 + 2, z * 0.05, 2) + 1.2 * noise2(a * 6, d * 0.05)) * smoothstep(34, 40, d)); } h += 18 * Math.exp(-(((d / 82 - 1) / 0.28) ** 2)); } } /* pass 19: flat reactor floor, three terraced benches, jagged slopes */
   // launch complex pad
@@ -157,7 +157,7 @@ export const PATCH3 = { x: _c3.x, z: _c3.z, rect: { ux: CAN_U.x, uz: CAN_U.z, hl
 export const PATCHES = [PATCH, PATCH2, PATCH3];
 function inPatch(P, x, z) { if (!P.rect) return Math.hypot(x - P.x, z - P.z) < P.cut; const dx = x - P.x, dz = z - P.z; const R = P.rect; return Math.abs(dx * R.ux + dz * R.uz) < R.hl - P.cut && Math.abs(-dx * R.uz + dz * R.ux) < R.hw - P.cut; } // high-res terrain patch for the reactor crater (base terrain is discarded inside `cut`)
 export function groundMesh(x, z) { // exact height of the rendered terrain mesh
-  for (const P of PATCHES) if (inPatch(P, x, z)) return heightAt(x, z); // patch is dense enough to follow heightAt
+  for (const P of PATCHES) if (inPatch(P, x, z)) return P === PATCH3 && RP ? rectPatchHeight(x, z) : heightAt(x, z); // patch is dense enough to follow heightAt
   const r = Math.hypot(x, z); if (!BUCKET || r >= GRID.maxR * 0.98) return heightAt(x, z);
   let a = Math.atan2(z, x); if (a < 0) a += Math.PI * 2;
   const list = BUCKET.get(rbOf(r) * AB + Math.floor(a / (Math.PI * 2) * AB) % AB); if (!list) return heightAt(x, z);
@@ -177,8 +177,8 @@ export function groundMesh(x, z) { // exact height of the rendered terrain mesh
 const TFILL = (() => { const x = Rt.x * 0.6 - F.x * 0.3, z = Rt.z * 0.6 - F.z * 0.3, y = 0.6, l = Math.hypot(x, y, z); return `vec3(${(x / l).toFixed(3)}, ${(y / l).toFixed(3)}, ${(z / l).toFixed(3)})`; })();
 export const LAMPMAP = { value: null }; export const LAMPMAP_R = 75; export const AOMAP = { value: new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1) }; AOMAP.value.needsUpdate = true;
 const SUNXZ = (() => { const x = -Rt.x * 0.75 - F.x * 0.45, z = -Rt.z * 0.75 - F.z * 0.45, l = Math.hypot(x, z); return `${(x / l).toFixed(3)}, ${(z / l).toFixed(3)}`; })(); // sun direction on the ground plane (for painted rubble highlights/shadows)
-export function terrainMaterial(patch = false) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.customProgramCacheKey = () => 'terrain' + patch; m.color.setRGB(0.74, 0.72, 0.69); // regolith: slightly brighter, less warm (pass 17)
+export function terrainMaterial(patch = false, canyon = false) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.customProgramCacheKey = () => 'terrain' + patch + canyon; m.color.setRGB(0.74, 0.72, 0.69); // regolith: slightly brighter, less warm (pass 17)
   // procedural regolith: mottled albedo, dark pits, pebble speckle and a bump-mapped normal (fades with distance)
   m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP; sh.uniforms.uAOMap = AOMAP; sh.uniforms.uPatchOn = PATCH.on; sh.uniforms.uPatch2On = PATCH2.on; sh.uniforms.uPatch3On = PATCH3.on;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;').replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
@@ -220,9 +220,9 @@ export function terrainMaterial(patch = false) {
       ${patch ? '' : `if (uPatchOn > 0.5 && length(vWP.xz - vec2(${PATCH.x.toFixed(1)}, ${PATCH.z.toFixed(1)})) < ${PATCH.cut.toFixed(1)}) discard; if (uPatch2On > 0.5 && length(vWP.xz - vec2(${PATCH2.x.toFixed(1)}, ${PATCH2.z.toFixed(1)})) < ${PATCH2.cut.toFixed(1)}) discard; if (uPatch3On > 0.5) { vec2 d3 = vWP.xz - vec2(${PATCH3.x.toFixed(2)}, ${PATCH3.z.toFixed(2)}); vec2 u3 = vec2(${PATCH3.rect.ux.toFixed(5)}, ${PATCH3.rect.uz.toFixed(5)}); if (abs(dot(d3, u3)) < ${(PATCH3.rect.hl-PATCH3.cut).toFixed(1)} && abs(dot(d3, vec2(-u3.y, u3.x))) < ${(PATCH3.rect.hw-PATCH3.cut).toFixed(1)}) discard; } /* covered by the high-res region patches */`}
       float tDist = length(vWP - cameraPosition); float tFade = 1.0 - smoothstep(40.0, 200.0, tDist); float tNear = 1.0 - smoothstep(18.0, 85.0, tDist);
       ${patch ? '' : 'float pFlat = 1.0;'}${patch ? 'float pFW = length(fwidth(vWP)); float pFlat = smoothstep(0.55, 0.85, normalize(vWN).y); tFade *= pFlat; tNear *= pFlat; /* xz-projected regolith detail streaks on steep walls */' : ''}
-      float tN = rg(vWP.xz); vec3 cr = vec3(1.0, 0.0, 0.0); if (tNear > 0.01) cr = craters(vWP.xz, 2.6); if (tDist < 28.0) { vec3 c2 = craters(vWP.xz + 31.7, 0.85); float w2 = 1.0 - smoothstep(14.0, 28.0, tDist); cr.x *= mix(1.0, c2.x, w2); cr.yz += c2.yz * 0.7 * w2; }
-      { float w3 = pFlat * (1.0 - smoothstep(70.0, 130.0, tDist)) * smoothstep(14.0, 24.0, tDist) * smoothstep(28.0, 36.0, length(vWP.xz)); if (w3 > 0.01) { vec3 c3 = craters(vWP.xz + 77.0, 6.5); cr.x *= mix(1.0, c3.x, w3); cr.yz += c3.yz * 1.4 * w3; } }
-      { float w4 = pFlat * (1.0 - smoothstep(60.0, 110.0, tDist)) * smoothstep(8.0, 16.0, tDist); if (w4 > 0.01) { vec3 c4 = craters(vWP.xz + 13.3, 1.7); cr.x *= mix(1.0, c4.x, w4); cr.x *= mix(1.0, c4.x * c4.x, w4); cr.yz += c4.yz * 1.7 * w4; } }
+      float tN = rg(vWP.xz); vec3 cr = vec3(1.0, 0.0, 0.0); if (tNear > 0.01) cr = craters(vWP.xz, 2.6); ${canyon ? 'float sY = vWP.y * 0.42 + (vn(vWP.xz * 0.035) - 0.5) * 1.4; float sF = fract(sY); float sA = 1.0 - smoothstep(0.25, 0.8, fwidth(sY)); float stp = 1.0 - smoothstep(0.75, 0.9, normalize(vWN).y); float lay = vn(vec2(floor(vWP.y / 4.6 + (vn(vWP.xz * 0.02) - 0.5) * 0.8) * 3.7, 2.0)); diffuseColor.rgb *= mix(vec3(1.0), mix(vec3(1.06, 0.99, 0.9), vec3(0.9, 0.92, 0.95), lay) * (0.92 + 0.12 * smoothstep(0.15, 0.85, sF) - 0.2 * (1.0 - smoothstep(0.0, 0.09 + fwidth(sY), sF)) * sA), stp); /* horizontal strata on the risers */ ' + 'cr.x = mix(1.0, cr.x, 0.3); cr.yz *= 0.25; /* canyon floor: small sparse pits, no sponge */' : ''} if (tDist < 28.0) { vec3 c2 = craters(vWP.xz + 31.7, 0.85); float w2 = 1.0 - smoothstep(14.0, 28.0, tDist); cr.x *= mix(1.0, c2.x, w2); cr.yz += c2.yz * 0.7 * w2; }
+      { float w3 = ${canyon ? '0.0' : '1.0'} * pFlat * (1.0 - smoothstep(70.0, 130.0, tDist)) * smoothstep(14.0, 24.0, tDist) * smoothstep(28.0, 36.0, length(vWP.xz)); if (w3 > 0.01) { vec3 c3 = craters(vWP.xz + 77.0, 6.5); cr.x *= mix(1.0, c3.x, w3); cr.yz += c3.yz * 1.4 * w3; } }
+      { float w4 = ${canyon ? '0.35' : '1.0'} * pFlat * (1.0 - smoothstep(60.0, 110.0, tDist)) * smoothstep(8.0, 16.0, tDist); if (w4 > 0.01) { vec3 c4 = craters(vWP.xz + 13.3, 1.7); cr.x *= mix(1.0, c4.x, w4); cr.x *= mix(1.0, c4.x * c4.x, w4); cr.yz += c4.yz * 1.7 * w4; } }
       float tMid = (1.0 - smoothstep(55.0, 140.0, tDist)) * smoothstep(6.0, 14.0, tDist)${patch ? ' * pFlat' : ''}; // mid-ground craters (2-3 m) between the ledge and the base
       { float speck = (smoothstep(0.78, 0.95, vn(vWP.xz * 13.0)) - 0.6 * smoothstep(0.8, 0.95, vn(vWP.xz * 9.0 + 3.1))) * pFlat; float grain = vn(vWP.xz * 31.0) * 0.4 + vn(vWP.xz * 67.0) * 0.3 + vn(vWP.xz * 140.0) * 0.15 + hh(floor(vWP.xz * 90.0)) * 0.15;
         diffuseColor.rgb *= mix(1.0, (0.86 + 0.26 * tN) * (1.0 + 0.22 * speck), tFade) * mix(1.0, cr.x * (0.66 + 0.68 * grain), tNear) * (1.0 + 0.45 * (1.0 - smoothstep(3.0, 24.0, tDist)));
@@ -236,7 +236,7 @@ export function terrainMaterial(patch = false) {
               for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 c = qi + vec2(float(i), float(j)); float h = hh(c + 4.4); vec2 o = vec2(hh(c), hh(c + 7.7)) * 0.8 + 0.1 - (q - c); float dd = length(o); float rr = 0.18 + 0.2 * h; float on = step(0.45, hh(c + 2.2)) ; float v = dd / rr; if (v < d1 && on > 0.5) { d1 = v; } float vs = length(o + sd2 * 1.5) / rr; if (vs < d1s && on > 0.5) { d1s = vs; } }
               float aa = fwidth(q.x) * 3.0; float st = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, d1); float stS = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, d1s);
               float lit = st * (0.82 + 0.5 * (1.0 - d1)); float shad = (1.0 - st) * stS; diffuseColor.rgb *= mix(1.0, mix(1.0 - 0.45 * shad, lit, st), rw); } } }
-        ${patch ? 'float ccv, cwt, csh; float chh = clH(vWP, normalize(vWN), pFW, ccv, cwt, csh); diffuseColor.rgb *= mix(1.0, (1.0 - 0.4 * ccv) * csh * (0.94 + 0.12 * clamp(chh, 0.0, 1.0)), 1.0 - smoothstep(160.0, 260.0, tDist));' : ''}
+        ${patch && !canyon ? 'float ccv, cwt, csh; float chh = clH(vWP, normalize(vWN), pFW, ccv, cwt, csh); diffuseColor.rgb *= mix(1.0, (1.0 - 0.4 * ccv) * csh * (0.94 + 0.12 * clamp(chh, 0.0, 1.0)), 1.0 - smoothstep(160.0, 260.0, tDist));' : ''}
         vec2 au = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (au.x > 0.0 && au.x < 1.0 && au.y > 0.0 && au.y < 1.0) diffuseColor.rgb *= texture2D(uAOMap, au).r; }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       if (tFade > 0.01) { float e = 0.15; float n0 = rg(vWP.xz * 1.6), nx = rg(vWP.xz * 1.6 + vec2(e, 0.)), nz = rg(vWP.xz * 1.6 + vec2(0., e));
@@ -244,7 +244,7 @@ export function terrainMaterial(patch = false) {
         if (tNear > 0.01) { float ge = 0.03; vec2 q = vWP.xz * 9.0; float g0 = vn(q), gx = vn(q + vec2(ge * 9.0, 0.)), gz = vn(q + vec2(0., ge * 9.0)); gW += vec3(-(gx - g0), 0.0, -(gz - g0)) * 0.9 * tNear * (1.0 - smoothstep(4.0, 30.0, tDist)); }
         if (tMid > 0.01) { float me = 0.06; vec2 q = vWP.xz * 2.6; float m0 = vn(q), mx = vn(q + vec2(me * 2.6, 0.)), mz = vn(q + vec2(0., me * 2.6)); gW += vec3(-(mx - m0), 0.0, -(mz - m0)) / me * 0.09 * tMid; }
         normal = normalize(normal + (viewMatrix * vec4(gW, 0.0)).xyz); }
-      ${patch ? '{ float ccv, cwt, csh; float H = clH(vWP, normalize(vWN), pFW, ccv, cwt, csh) * 0.6 * (1.0 - smoothstep(0.6, 2.0, pFW)); vec3 sp = -vViewPosition; vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 R1 = cross(sy, normal), R2 = cross(normal, sx); float det = dot(sx, R1); vec3 grad = sign(det) * (dFdx(H) * R1 + dFdy(H) * R2); normal = normalize(abs(det) * normal - grad); }' : ''}`);
+      ${patch && !canyon ? '{ float ccv, cwt, csh; float H = clH(vWP, normalize(vWN), pFW, ccv, cwt, csh) * 0.6 * (1.0 - smoothstep(0.6, 2.0, pFW)); vec3 sp = -vViewPosition; vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 R1 = cross(sy, normal), R2 = cross(normal, sx); float det = dot(sx, R1); vec3 grad = sign(det) * (dFdx(H) * R1 + dFdy(H) * R2); normal = normalize(abs(det) * normal - grad); }' : ''}`);
   };
   return m;
 }
@@ -258,7 +258,7 @@ function vertexColor(c, x, z, h, step) { const r = Math.hypot(x, z);
     c.lerp(cLight, clamp(fbm(x * 0.15 + 4, z * 0.15, 2) * 0.8 + slope * 0.15, 0, 0.55)); // rocky faces read lighter, like the concept
     c.lerp(cDark, clamp(slope * 0.12 - 0.05, 0, 0.2));
     c.multiplyScalar(ao);
-    const dc = Math.abs(-(x - CANYON_A.x) * CAN_U.z + (z - CANYON_A.z) * CAN_U.x - canyonMeander(clamp(canyonS(x, z), 0, CAN_L))); if (h < -6) { const cw = 1 - smoothstep(55, 80, dc); const lay = 0.5 + 0.5 * Math.sin(h * 0.42 + fbm(x * 0.02, z * 0.02, 2) * 2.5); c.lerp(lay > 0.5 ? cTan : cSlate, clamp(slope * 0.9, 0, 0.7) * cw * (0.35 + 0.65 * smoothstep(0.1, 0.45, Math.abs(lay - 0.5)))); c.lerp(cTeal, clamp((-h - 40) / 25, 0, 0.45) * cw); } /* pass 21: layered tan/grey canyon walls, teal only on the deep floor */
+    const dc = Math.abs(-(x - CANYON_A.x) * CAN_U.z + (z - CANYON_A.z) * CAN_U.x - canyonMeander(clamp(canyonS(x, z), 0, CAN_L))); if (h < -6) { const cw = 1 - smoothstep(55, 80, dc); const lay = 0.5 + 0.5 * Math.sin(h * 0.42 + fbm(x * 0.02, z * 0.02, 2) * 2.5); c.lerp(lay > 0.5 ? cTan : cSlate, clamp(slope * 0.9, 0, 0.7) * cw * (0.35 + 0.65 * smoothstep(0.1, 0.45, Math.abs(lay - 0.5)))); } /* pass 21: layered tan/grey canyon walls, teal only on the deep floor */
     { const R = REGIONS.reactor; const d = Math.hypot(x - R.x, z - R.z); c.lerp(cOrange, (1 - smoothstep(20, 80, d)) * 0.4); }
     c.lerp(cDark, 0.12 * (1 - smoothstep(10, 40, r)));
 }
@@ -273,12 +273,37 @@ function buildPatch(mat, PATCH, name, M = 112) {
   g.computeVertexNormals(); g.computeBoundingSphere(); mat.flatShading = false; /* smooth: no big triangulated facets on the crater wall */
   const mesh = new THREE.Mesh(g, mat); mesh.name = name; mesh.receiveShadow = true; return mesh;
 }
-function buildRectPatch(mat, P, name) { const R = P.rect; const ss = []; for (let t = -R.hl; t < R.hl; t += 3.2) ss.push(t); ss.push(R.hl);
-  const vs = []; for (let v = -R.hw; v < R.hw; ) { vs.push(v); v += Math.abs(v) < 62 ? 1.8 : 4; } vs.push(R.hw);
-  const pos = [], col = [], idx = []; const c = new THREE.Color(); const NV = vs.length;
-  for (const t of ss) for (const v of vs) { const x = P.x + R.ux * t - R.uz * v, z = P.z + R.uz * t + R.ux * v; const h = heightAt(x, z); pos.push(x, h, z); vertexColor(c, x, z, h, 2.0); col.push(c.r, c.g, c.b); }
-  for (let i = 0; i < ss.length - 1; i++) for (let j = 0; j < NV - 1; j++) { const a = i * NV + j, b = a + 1, cc = a + NV, d = cc + 1; if ((i + j) % 2) idx.push(a, b, cc, b, d, cc); else idx.push(a, d, cc, a, b, d); }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals(); g.computeBoundingSphere();
+// pass 22: canyon patch = crisp low-poly rock: jittered coarse grid, flat-shaded non-indexed faces, per-face strata colours
+const CPAL = ['#9c8f7c', '#8d8983', '#a99d88', '#857b6e', '#97928a', '#a0927e'].map(h => new THREE.Color(h)); const cLedge = new THREE.Color('#c4b9a5'), cFloorA = new THREE.Color('#827f79'), cFloorB = new THREE.Color('#9a968e');
+let RP = null; // rect patch grid for exact ground queries
+function rpDiag(i, j) { const q = Math.sin(i * 91.7 + j * 47.3) * 9631.17; return q - Math.floor(q) > 0.5; } // random diagonals: no zig-zag pattern
+function rpVert(i, j) { return i * RP.NV + j; }
+function rectPatchHeight(x, z) { const R = PATCH3.rect; const dx = x - PATCH3.x, dz = z - PATCH3.z; const t = dx * R.ux + dz * R.uz, v = -dx * R.uz + dz * R.ux;
+  const i0 = Math.floor((t + R.hl) / RP.dt); let j0 = 0; while (j0 < RP.vs.length - 2 && RP.vs[j0 + 1] < v) j0++;
+  for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) { const i = i0 + di, j = j0 + dj; if (i < 0 || j < 0 || i >= RP.NI - 1 || j >= RP.NV - 1) continue;
+    const a = rpVert(i, j), b = a + 1, c = a + RP.NV, d = c + 1; const tris = rpDiag(i, j) ? [[a, b, c], [b, d, c]] : [[a, d, c], [a, b, d]];
+    for (const [A, B, Cc] of tris) { const x1 = RP.X[A], z1 = RP.Z[A], x2 = RP.X[B], z2 = RP.Z[B], x3 = RP.X[Cc], z3 = RP.Z[Cc]; const det = (z2 - z3) * (x1 - x3) + (x3 - x2) * (z1 - z3); if (Math.abs(det) < 1e-9) continue;
+      const l1 = ((z2 - z3) * (x - x3) + (x3 - x2) * (z - z3)) / det, l2 = ((z3 - z1) * (x - x3) + (x1 - x3) * (z - z3)) / det, l3 = 1 - l1 - l2; if (l1 >= -1e-6 && l2 >= -1e-6 && l3 >= -1e-6) return l1 * RP.H[A] + l2 * RP.H[B] + l3 * RP.H[Cc]; } }
+  return heightAt(x, z); }
+function buildRectPatch(mat, P, name) { const R = P.rect; const dt = 4.0; const ss = []; for (let t = -R.hl; t < R.hl - 0.5; t += dt) ss.push(t); ss.push(R.hl);
+  const vs = []; for (let v = -R.hw; v < R.hw - 0.5; ) { vs.push(v); v += Math.abs(v) < 72 ? 2.6 : 5; } vs.push(R.hw);
+  const NI = ss.length, NV = vs.length; const X = new Float32Array(NI * NV), Z = new Float32Array(NI * NV), Hh = new Float32Array(NI * NV);
+  for (let i = 0; i < NI; i++) for (let j = 0; j < NV; j++) { const edge = i === 0 || j === 0 || i === NI - 1 || j === NV - 1; const hj = (a, b) => { const q = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return q - Math.floor(q) - 0.5; };
+    const t = ss[i] + (edge ? 0 : hj(i, j) * dt * 0.3), dv = j < NV - 1 ? vs[j + 1] - vs[j] : 2.6, v = vs[j] + (edge ? 0 : hj(j + 0.37, i + 0.71) * dv * 0.28);
+    const x = P.x + R.ux * t - R.uz * v, z = P.z + R.uz * t + R.ux * v; const k = i * NV + j; X[k] = x; Z[k] = z; Hh[k] = heightAt(x, z); }
+  RP = { X, Z, H: Hh, NI, NV, vs, dt };
+  const pos = [], col = []; const c = new THREE.Color(); const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), n = new THREE.Vector3();
+  const face = (A, B, Cc) => { const ax = X[A], ay = Hh[A], az = Z[A]; e1.set(X[B] - ax, Hh[B] - ay, Z[B] - az); e2.set(X[Cc] - ax, Hh[Cc] - ay, Z[Cc] - az); n.crossVectors(e1, e2).normalize(); if (n.y < 0) n.negate();
+    const cx = (ax + X[B] + X[Cc]) / 3, cz = (az + Z[B] + Z[Cc]) / 3, ch = (ay + Hh[B] + Hh[Cc]) / 3; const ci = canyonInfo(cx, cz); const rv = fbm(cx * 0.9, cz * 0.9, 1) * 0.12 + (Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5 % 1) * 0.05;
+    if (ci.d < ci.fl + 1.5) { c.copy(cFloorA).lerp(cFloorB, clamp(0.5 + fbm(cx * 0.06, cz * 0.06, 2) * 1.4, 0, 1)); }
+    else if (ci.d < ci.fl + ci.ww + 6) { const band = Math.floor((ch + 90) / 3.6 + fbm(cx * 0.01, cz * 0.01, 2) * 1.6); c.copy(CPAL[((band % 6) + 6) % 6]);
+      if (n.y > 0.8) c.lerp(cLedge, 0.55); }
+    else vertexColor(c, cx, cz, ch, 3.0);
+    c.multiplyScalar(1 + rv - 0.04); const wall = ci.d >= ci.fl + 1.5 && ci.d < ci.fl + ci.ww + 6 && n.y <= 0.8;
+    for (const k of [A, B, Cc]) { let f = 1; if (wall) { const vi = canyonInfo(X[k], Z[k]); const ph = clamp((vi.fr - 0.3) / 0.4, 0, 1); f = vi.fr < 0.3 ? 0.62 : vi.fr > 0.7 ? 1.12 : 0.62 + 0.5 * ph; } /* shadowed undercut at the riser foot -> lit lip at the top */
+      pos.push(X[k], Hh[k], Z[k]); col.push(c.r * f, c.g * f, c.b * f); } };
+  for (let i = 0; i < NI - 1; i++) for (let j = 0; j < NV - 1; j++) { const a = i * NV + j, b = a + 1, cc = a + NV, d = cc + 1; if (rpDiag(i, j)) { face(a, b, cc); face(b, d, cc); } else { face(a, d, cc); face(a, b, d); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals(); g.computeBoundingSphere();
   const mesh = new THREE.Mesh(g, mat); mesh.name = name; mesh.receiveShadow = true; return mesh; }
 export function buildTerrain() {
   const topo = buildTopology(); PX = topo.px; PZ = topo.pz; TRI = topo.tris; const NV = topo.NV;
@@ -303,7 +328,7 @@ export function buildTerrain() {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(cl, 3)); g.computeVertexNormals(); g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, mat); mesh.name = 'terrain_' + key; mesh.receiveShadow = true; mesh.castShadow = false; group.add(mesh);
   }
-  const pmat = terrainMaterial(true); group.add(buildPatch(pmat, PATCH, 'terrain_patch')); group.add(buildPatch(pmat, PATCH2, 'terrain_patch2', 96)); group.add(buildRectPatch(pmat, PATCH3, 'terrain_patch3'));
+  const pmat = terrainMaterial(true); group.add(buildPatch(pmat, PATCH, 'terrain_patch')); group.add(buildPatch(pmat, PATCH2, 'terrain_patch2', 96)); group.add(buildRectPatch(terrainMaterial(true, true), PATCH3, 'terrain_patch3'));
   group.userData.tris = TRI.length / 3;
   return group;
 }
