@@ -289,6 +289,12 @@ function lamp(b, x, z, color = C.win) { const y = groundAt(x, z); LAMPS.push({ x
   b.add('gold', G.torus(0.08, 0.025, 3, 6), { pos: [x, y + 0.75, z], rot: [PI / 2, 0, 0], color: C.gold }); b.add('gold', G.cyl(0.13, 0.07, 0.12, 6), { pos: [x, y + 1.27, z], color: C.gold });
   b.add('glow', G.octa(0.13), { pos: [x, y + 1.5, z], color, intensity: 4 }); b.add('gold', G.cone(0.1, 0.16, 6), { pos: [x, y + 1.62, z], color: C.gold2 }); }
 function crate(b, x, z, s = 1, yaw = 0) { const y = groundAt(x, z); b.add('ivory', G.box(1.2 * s, 0.9 * s, 0.9 * s), { pos: [x, y + 0.45 * s, z], rot: [0, yaw, 0], color: C.ivory2 }); b.add('gold', G.box(1.25 * s, 0.12 * s, 0.95 * s), { pos: [x, y + 0.65 * s, z], rot: [0, yaw, 0], color: C.gold }); colliders.push({ x, z, r: 0.8 * s }); }
+// small auxiliary pod (storage / airlock hut): squat ivory drum + low cap, gold band, one lit hatch (concept: little modules scattered around the base)
+function pod(b, x, z, r = 1.6, yaw = 0) { const y = groundAt(x, z) - 0.1; colliders.push({ x, z, r: r + 0.4 });
+  b.add('ivory', G.cyl(r, r * 1.04, r * 0.7, 10, true), { pos: [x, y, z], color: C.ivory2 }); b.add('ivory', G.cap(r, 10, 3), { pos: [x, y + r * 0.7, z], scale: [1, 0.55, 1], color: C.ivory });
+  b.add('gold', G.torus(r * 1.02, 0.07, 3, 10), { pos: [x, y + r * 0.7, z], rot: [PI / 2, 0, 0], color: C.gold });
+  const hx = x + Math.sin(yaw) * r * 1.0, hz = z + Math.cos(yaw) * r * 1.0; b.add('glow', G.box(0.55, 0.75, 0.08), { pos: [hx, y + 0.5, hz], rot: [0, yaw, 0], color: C.winHot, intensity: 2.2 });
+  b.add('gold', G.cyl(0.05, 0.05, 0.6, 4), { pos: [x, y + r * 1.25, z], color: C.gold2 }); }
 function solar(b, x, z, yaw) { const y = groundAt(x, z); b.add('dark', G.cyl(0.1, 0.12, 1.4, 5), { pos: [x, y, z], color: '#555c66' }); b.add('dark', G.box(3.2, 0.08, 1.8), { pos: [x, y + 1.5, z], rot: [-0.5, yaw, 0], color: '#1b3c5a' }); b.add('gold', G.box(3.35, 0.05, 0.08), { pos: [x, y + 1.5, z], rot: [-0.5, yaw, 0], color: C.gold }); }
 
 // rover tread marks from the lookout down to the base (as in the concept foreground)
@@ -339,5 +345,8 @@ export function buildHub(b, beams) {
   for (const [s0, d0, n, yw] of [[30, -6, 4, 0.4], [-28, -8, 3, -0.3], [8, 44, 4, 0.1]]) for (let i = 0; i < n; i++) { const p = P(s0 + i * 3.6 * Math.cos(yw), d0 + i * 3.6 * Math.sin(yw)); solar(b, p.x, p.z, faceCam + PI + yw); }
   for (const [s0, d0, h] of [[-17, -2, 4.5], [27, 14, 3.5], [3, 12, 5], [-12, 26, 4], [17, 30, 4.5], [33, 22, 3]]) { const p = P(s0, d0); const y = groundAt(p.x, p.z); b.add('dark', G.cyl(0.35, 0.45, 0.3, 8), { pos: [p.x, y, p.z], color: '#4a5260' }); antenna(b, p.x, y + 0.3, p.z, h); }
   for (const [s0, d0] of [[-18, -18], [14, -24], [26, -16], [-24, 22], [30, 30], [-6, 38], [20, 40], [-30, -2]]) { const p = P(s0, d0); lamp(b, p.x, p.z, C.gold2); }
+  // pass 15: a few small auxiliary pods + crate stacks around the periphery so the base reads more spread out (merged: 0 extra draw calls)
+  for (const [s0, d0, r, yw] of [[-31.5, 8, 1.7, -0.6], [-33, -3, 1.35, 0.2], [26.5, -1.5, 1.5, -0.3], [33, 16, 1.6, -1.2], [-21, 31, 1.4, 2.6]]) { const p = P(s0, d0); pod(b, p.x, p.z, r, faceCam + yw); }
+  for (const [s0, d0, sc, yw] of [[-29, 11.5, 0.75, 0.4], [-28.2, 12.6, 0.6, 1.2], [-35.5, -0.5, 0.7, 2.1], [29.5, 0.5, 0.7, 0.6], [30.2, 1.7, 0.55, 1.9], [35.5, 13, 0.8, 0.2]]) { const p = P(s0, d0); crate(b, p.x, p.z, sc, yw); }
   return { reactor: R, cave };
 }

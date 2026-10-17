@@ -178,14 +178,20 @@ export function terrainMaterial() {
       .replace('#include <color_fragment>', `#include <color_fragment>
       float tDist = length(vWP - cameraPosition); float tFade = 1.0 - smoothstep(40.0, 200.0, tDist); float tNear = 1.0 - smoothstep(18.0, 85.0, tDist);
       float tN = rg(vWP.xz); vec3 cr = vec3(1.0, 0.0, 0.0); if (tNear > 0.01) cr = craters(vWP.xz, 2.6); if (tDist < 28.0) { vec3 c2 = craters(vWP.xz + 31.7, 0.85); float w2 = 1.0 - smoothstep(14.0, 28.0, tDist); cr.x *= mix(1.0, c2.x, w2); cr.yz += c2.yz * 0.7 * w2; }
-      { float w3 = (1.0 - smoothstep(70.0, 130.0, tDist)) * smoothstep(14.0, 24.0, tDist) * smoothstep(28.0, 36.0, length(vWP.xz)); if (w3 > 0.01) { vec3 c3 = craters(vWP.xz + 77.0, 6.5); cr.x *= mix(1.0, c3.x, w3); cr.yz += c3.yz * 1.4 * w3; } } // mid-ground craters (2-3 m) between the ledge and the base
+      { float w3 = (1.0 - smoothstep(70.0, 130.0, tDist)) * smoothstep(14.0, 24.0, tDist) * smoothstep(28.0, 36.0, length(vWP.xz)); if (w3 > 0.01) { vec3 c3 = craters(vWP.xz + 77.0, 6.5); cr.x *= mix(1.0, c3.x, w3); cr.yz += c3.yz * 1.4 * w3; } }
+      { float w4 = (1.0 - smoothstep(60.0, 110.0, tDist)) * smoothstep(8.0, 16.0, tDist); if (w4 > 0.01) { vec3 c4 = craters(vWP.xz + 13.3, 1.7); cr.x *= mix(1.0, c4.x, w4); cr.x *= mix(1.0, c4.x * c4.x, w4); cr.yz += c4.yz * 1.7 * w4; } }
+      float tMid = (1.0 - smoothstep(55.0, 140.0, tDist)) * smoothstep(6.0, 14.0, tDist); // mid-ground craters (2-3 m) between the ledge and the base
       { float speck = smoothstep(0.78, 0.95, vn(vWP.xz * 13.0)) - 0.6 * smoothstep(0.8, 0.95, vn(vWP.xz * 9.0 + 3.1)); float grain = vn(vWP.xz * 31.0) * 0.4 + vn(vWP.xz * 67.0) * 0.3 + vn(vWP.xz * 140.0) * 0.15 + hh(floor(vWP.xz * 90.0)) * 0.15;
         diffuseColor.rgb *= mix(1.0, (0.86 + 0.26 * tN) * (1.0 + 0.22 * speck), tFade) * mix(1.0, cr.x * (0.66 + 0.68 * grain), tNear) * (1.0 + 0.45 * (1.0 - smoothstep(3.0, 24.0, tDist)));
+        if (tMid > 0.01) { vec2 pc = floor(vWP.xz * 2.2); float pr = hh(pc + 3.3); vec2 pf = fract(vWP.xz * 2.2) - 0.5 + (vec2(hh(pc), hh(pc + 7.1)) - 0.5) * 0.5; float pd = length(pf); float aa = clamp(1.0 - fwidth(vWP.x * 2.2) * 2.0, 0.0, 1.0);
+          float peb = (1.0 - smoothstep(0.1, 0.17, pd)) * step(0.55, pr) * aa; float mot = vn(vWP.xz * 0.9 + 5.0) * 0.6 + vn(vWP.xz * 3.1) * 0.4;
+          diffuseColor.rgb *= mix(1.0, (0.8 + 0.4 * mot) * (1.0 - 0.45 * peb * step(0.8, pr) + 0.22 * peb * (1.0 - step(0.8, pr))), tMid); }
         vec2 au = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (au.x > 0.0 && au.x < 1.0 && au.y > 0.0 && au.y < 1.0) diffuseColor.rgb *= texture2D(uAOMap, au).r; }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       if (tFade > 0.01) { float e = 0.15; float n0 = rg(vWP.xz * 1.6), nx = rg(vWP.xz * 1.6 + vec2(e, 0.)), nz = rg(vWP.xz * 1.6 + vec2(0., e));
         vec3 gW = vec3(-(nx - n0) / e, 0.0, -(nz - n0) / e) * 0.35 * tFade - vec3(cr.y, 0.0, cr.z) * 2.4 * tNear;
         if (tNear > 0.01) { float ge = 0.03; vec2 q = vWP.xz * 9.0; float g0 = vn(q), gx = vn(q + vec2(ge * 9.0, 0.)), gz = vn(q + vec2(0., ge * 9.0)); gW += vec3(-(gx - g0), 0.0, -(gz - g0)) * 0.9 * tNear * (1.0 - smoothstep(4.0, 30.0, tDist)); }
+        if (tMid > 0.01) { float me = 0.06; vec2 q = vWP.xz * 2.6; float m0 = vn(q), mx = vn(q + vec2(me * 2.6, 0.)), mz = vn(q + vec2(0., me * 2.6)); gW += vec3(-(mx - m0), 0.0, -(mz - m0)) / me * 0.09 * tMid; }
         normal = normalize(normal + (viewMatrix * vec4(gW, 0.0)).xyz); }`);
   };
   return m;
