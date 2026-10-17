@@ -11,9 +11,9 @@ export const REGIONS = {
 // Concept-camera frame: forward F (from lookout toward base), right Rt. sd(s,d) -> world xz
 export const F = { x: 0.592, z: -0.806 }, Rt = { x: 0.806, z: 0.592 };
 export function sd(s, d) { return { x: s * Rt.x + d * F.x, z: s * Rt.z + d * F.z }; }
-export const LOOKOUT = { ...sd(-2, -60), r: 19, h: 15.5 };
+export const LOOKOUT = { ...sd(-2, -54), r: 19, h: 10 };
 // The concept-art camera: cat on the lip of a ridge, base below at ~60 m
-export const CONCEPT = { cat: sd(-2.6, -57.0), cam: sd(-0.8, -60.1), target: sd(-5.5, 0), eye: 1.9, drop: 12.5, fov: 47, catYaw: -0.6 };
+export const CONCEPT = { cat: sd(-2.53, -51.23), cam: sd(-0.8, -54.1), target: sd(-5.5, 0), eye: 1.0, drop: 3.5, fov: 47, catYaw: -0.15 };
 const LIP = sd(-2, -56);
 export const PLAY_START = sd(-3, -21);
 export const PORTAL = sd(34, 36);

@@ -18,14 +18,14 @@ export function buildSky(sunDir, earthDir) {
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: { top: { value: new THREE.Color('#03050b') }, mid: { value: new THREE.Color('#070c18') }, hor: { value: new THREE.Color('#16283a') }, band: { value: new THREE.Vector3(0.35, 0.55, -0.76).normalize() } },
     vertexShader: `varying vec3 vD; void main(){ vD=normalize(position); vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.); gl_Position=p.xyww; }`,
-    fragmentShader: `uniform vec3 top,mid,hor,band; varying vec3 vD; ${NOISE_GLSL}
+    fragmentShader: `uniform vec3 top,mid,hor,band; uniform samplerCube stars; varying vec3 vD; ${NOISE_GLSL}
       void main(){ float y=vD.y; vec3 c=mix(hor,mid,smoothstep(-0.05,0.18,y)); c=mix(c,top,smoothstep(0.18,0.8,y));
-        float b=exp(-pow(dot(vD,band)/0.16,2.)); float n=fbm3(vD*6.0); float n2=fbm3(vD*14.0+3.0); c+=vec3(0.07,0.085,0.13)*b*smoothstep(0.3,0.8,n)*1.4; c+=vec3(0.035,0.038,0.06)*b; c+=vec3(0.09,0.07,0.06)*b*b*smoothstep(0.5,0.85,n2)*0.8; c-=vec3(0.02)*b*smoothstep(0.55,0.75,fbm3(vD*9.0+7.0));
+        float b=exp(-pow(dot(vD,band)/0.16,2.)); float n=fbm3(vD*6.0); float n2=fbm3(vD*14.0+3.0); c+=vec3(0.07,0.085,0.13)*b*smoothstep(0.3,0.8,n)*1.4; c+=vec3(0.035,0.038,0.06)*b; c+=vec3(0.09,0.07,0.06)*b*b*smoothstep(0.5,0.85,n2)*0.8; c-=vec3(0.02)*b*smoothstep(0.55,0.75,fbm3(vD*9.0+7.0)); c+=textureCube(stars,vD).rgb*1.7*smoothstep(-0.12,0.0,y);
         gl_FragColor=vec4(c,1.); }`,
   });
   const dome = new THREE.Mesh(new THREE.SphereGeometry(6000, 24, 12), skyMat); dome.renderOrder = -10; dome.frustumCulled = false; group.add(dome);
   // stars
-  const r = seeded(99); const N = 9500; const pos = new Float32Array(N * 3), size = new Float32Array(N), col = new Float32Array(N * 3);
+  const r = seeded(99); const N = 14000; const pos = new Float32Array(N * 3), size = new Float32Array(N), col = new Float32Array(N * 3);
   const band = skyMat.uniforms.band.value;
   for (let i = 0; i < N; i++) {
     let v; do { v = new THREE.Vector3(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1); } while (v.lengthSq() > 1 || v.lengthSq() < 0.01);
@@ -35,14 +35,21 @@ export function buildSky(sunDir, earthDir) {
     const m = r(); size[i] = m > 0.985 ? 3.6 + r() * 2 : m > 0.88 ? 2.2 + r() : 1.2 + r() * 0.9;
     const t = r(); const c = t < 0.15 ? [1, 0.85, 0.65] : t < 0.3 ? [0.7, 0.85, 1] : [1, 1, 1]; const br = 0.6 + r() * 0.6; col.set(c.map(x => x * br), i * 3);
   }
-  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); sg.setAttribute('size', new THREE.BufferAttribute(size, 1)); sg.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const starMat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
-    uniforms: { uTime: { value: 0 }, uPR: { value: 1 } },
-    vertexShader: `attribute float size; attribute vec3 color; varying vec3 vC; uniform float uTime,uPR; void main(){ vC=color*(0.8+0.2*sin(uTime*2.+position.x*0.13+position.z*0.07)); vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.); gl_Position=p.xyww; gl_PointSize=size*uPR; }`,
-    fragmentShader: `varying vec3 vC; void main(){ vec2 d=gl_PointCoord-0.5; float a=smoothstep(0.5,0.0,length(d)); gl_FragColor=vec4(vC*a*2.0,1.); }`,
-  });
-  const stars = new THREE.Points(sg, starMat); stars.frustumCulled = false; stars.renderOrder = -9; group.add(stars);
+  // stars baked into a cube map sampled by the sky dome (0 extra draw calls / primitives)
+  const FS = 1024; const faces = []; for (let f = 0; f < 6; f++) { const cv = document.createElement('canvas'); cv.width = cv.height = FS; const cx = cv.getContext('2d'); cx.fillStyle = '#000'; cx.fillRect(0, 0, FS, FS); faces.push(cx); }
+  for (let i = 0; i < N; i++) {
+    const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2]; const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z); let f, sc, tc, ma;
+    if (ax >= ay && ax >= az) { ma = ax; if (x > 0) { f = 0; sc = -z; tc = -y; } else { f = 1; sc = z; tc = -y; } }
+    else if (ay >= az) { ma = ay; if (y > 0) { f = 2; sc = x; tc = z; } else { f = 3; sc = x; tc = -z; } }
+    else { ma = az; if (z > 0) { f = 4; sc = x; tc = -y; } else { f = 5; sc = -x; tc = -y; } }
+    const u = (sc / ma + 1) / 2 * FS, v = (tc / ma + 1) / 2 * FS; const rad = size[i] * 0.55; const cx = faces[f];
+    const [cr, cg, cb] = [col[i * 3], col[i * 3 + 1], col[i * 3 + 2]].map(c => Math.min(255, Math.round(c * 215)));
+    const g = cx.createRadialGradient(u, v, 0, u, v, rad); g.addColorStop(0, `rgba(${cr},${cg},${cb},1)`); g.addColorStop(0.45, `rgba(${cr},${cg},${cb},0.55)`); g.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+    cx.fillStyle = g; cx.fillRect(u - rad, v - rad, rad * 2, rad * 2);
+  }
+  const starTex = new THREE.CubeTexture(faces.map(c => c.canvas)); starTex.colorSpace = THREE.SRGBColorSpace; starTex.generateMipmaps = false; starTex.minFilter = THREE.LinearFilter; starTex.needsUpdate = true;
+  skyMat.uniforms.stars = { value: starTex };
+  const starMat = { uniforms: { uTime: { value: 0 }, uPR: { value: 1 } } };
   // Earth
   const earthMat = new THREE.ShaderMaterial({
     fog: false, uniforms: { sun: { value: sunDir.clone() }, uTime: { value: 0 } },
@@ -53,10 +60,10 @@ export function buildSky(sunDir, earthDir) {
         vec3 c=mix(ocean,ground,l); vec3 q=p*3.0+vec3(fbm3(p*4.+uTime*0.01),fbm3(p*4.+5.),0.)*1.4; float cl=smoothstep(0.44,0.68,fbm3(q*1.8)); c=mix(c,vec3(0.85,0.88,0.93),cl*0.6);
         float ndl=dot(normalize(vN),sun); float lit=smoothstep(-0.15,0.35,ndl); vec3 col=c*(0.04+1.25*lit);
         float fr=pow(1.-max(dot(normalize(vN),vV),0.),3.); col+=vec3(0.25,0.55,1.0)*fr*(0.25+1.4*lit);
-        float lum=dot(col,vec3(0.3,0.59,0.11)); col=mix(vec3(lum),col,0.62)*0.6; gl_FragColor=vec4(col,1.); }`,
+        float lum=dot(col,vec3(0.3,0.59,0.11)); col=mix(vec3(lum),col,0.55)*0.5; gl_FragColor=vec4(col,1.); }`,
   });
   const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14), earthMat); earth.renderOrder = -8;
-  const ED = 4200, ER = 840; earth.position.copy(earthDir).multiplyScalar(ED); earth.scale.setScalar(ER); earth.rotation.set(0.4, 2.2, 0.2);
+  const ED = 4200, ER = 820; earth.position.copy(earthDir).multiplyScalar(ED); earth.scale.setScalar(ER); earth.rotation.set(0.4, 2.2, 0.2);
   group.add(earth);
   const haloMat = new THREE.ShaderMaterial({
     fog: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.BackSide, uniforms: { sun: { value: sunDir.clone() } },

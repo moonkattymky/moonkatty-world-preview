@@ -36,7 +36,7 @@ const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.2, 90
 // light: sun from camera-left in the concept framing, cool sky fill, warm bounce
 const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const sunDir = v3(-Rt.x * 0.75 - F.x * 0.45, 0.62, -Rt.z * 0.75 - F.z * 0.45).normalize();
-const earthYaw = 0.32, earthEl = -0.043; // radians relative to concept forward
+const earthYaw = 0.322, earthEl = 0.096; // radians relative to concept forward
 const ef = v3(F.x, 0, F.z).applyAxisAngle(v3(0, 1, 0), -earthYaw); const earthDir = ef.multiplyScalar(Math.cos(earthEl)).add(v3(0, Math.sin(earthEl), 0)).normalize();
 const hemi = new THREE.HemisphereLight('#a9c1e6', '#4a443c', 0.6); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff1dc', 2.3); sun.castShadow = true;

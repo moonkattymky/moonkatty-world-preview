@@ -47,7 +47,7 @@ function reactorCrater(b, beams) {
 
 function canyon(b, beams) {
   const pts = [[-420, -250], [-470, -120], [-520, 0], [-560, 120], [-610, 260]];
-  for (const [px, pz] of pts) { const yy = groundAt(px, pz); beams.push({ x: px, y: yy, z: pz, r: 1.2, h: 50, color: '#3fe0d0', I: 0.32 }); b.add('glow', G.disc(3, 12), { pos: [px, yy + 0.3, pz], color: C.cyan, intensity: 3 }); }
+  for (const [px, pz] of pts) { const yy = groundAt(px, pz); beams.push({ x: px, y: yy, z: pz, r: 1.2, h: 12, color: '#3fe0d0', I: 0.18 }); b.add('glow', G.disc(3, 12), { pos: [px, yy + 0.3, pz], color: C.cyan, intensity: 3 }); }
   // crashed lander on the rim
   const L = { x: -455, z: 160 }; const yy = groundAt(L.x, L.z);
   b.add('ivory', G.cyl(4, 5.5, 5, 8), { pos: [L.x, yy, L.z], rot: [0.25, 0.4, 0.15], color: C.ivory });
@@ -59,13 +59,13 @@ function echo(b, beams) {
   const { x, z } = REGIONS.echo; const y = groundAt(x, z);
   b.add('dark', G.cyl(16, 17, 1, 32), { pos: [x, y - 0.4, z], color: '#2c3644' });
   b.add('glow', G.ring(9, 10, 40), { pos: [x, y + 0.65, z], color: C.cyan, intensity: 3 });
-  beams.push({ x, y: y + 0.6, z, r: 4, h: 130, color: '#40e0e0', I: 1.0 });
+  beams.push({ x, y: y + 0.6, z, r: 4, h: 26, color: '#40e0e0', I: 0.35 });
   for (let i = 0; i < 9; i++) {
     const a = i / 9 * PI * 2; const rr = i % 2 ? 34 : 24; const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr; const yy = groundAt(px, pz); const h = 16 + (i % 3) * 7;
     b.add('ivory', G.cyl(0.6, 1.4, h, 8), { pos: [px, yy, pz], color: C.ivory });
     b.add('gold', G.torus(1.2, 0.18, 4, 10), { pos: [px, yy + h * 0.3, pz], rot: [PI / 2, 0, 0], color: C.gold });
     b.add('glow', G.octa(1.1), { pos: [px, yy + h + 1.2, pz], scale: [1, 1.6, 1], color: C.cyan, intensity: 5 });
-    beams.push({ x: px, y: yy + h, z: pz, r: 0.6, h: 60 + (i % 3) * 25, color: '#50e0e8', I: 1.0 });
+    beams.push({ x: px, y: yy + h, z: pz, r: 0.6, h: 10 + (i % 3) * 4, color: '#50e0e8', I: 0.4 });
   }
 }
 
