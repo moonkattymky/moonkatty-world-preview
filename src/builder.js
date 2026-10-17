@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/three/jsm/utils/BufferGeometryUtils.js';
+import { swatchUV, glowUV, rectUV } from './atlas.js';
 
-// Accumulates static geometry per material group, baked with vertex colors, merged into one mesh per group.
+// Accumulates static geometry and bakes it into a few merged meshes.
+// 'ivory' | 'dark' | 'gold' | 'glow' | 'tex' (atlas region) all end up in ONE atlas-textured mesh ('hull').
+// 'lattice' (alpha-tested, double sided) and 'beam' (additive) stay separate.
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _c = new THREE.Color();
 export class Builder {
   constructor() { this.groups = {}; }
@@ -13,26 +16,40 @@ export class Builder {
       _m.compose(new THREE.Vector3(...p), _q, new THREE.Vector3(...s));
     }
     g.applyMatrix4(_m);
-    if (group !== 'beam') g.deleteAttribute('uv'); else if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
-    if (group === 'beam' && o.uvY !== undefined) { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, o.uvY); }
-    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k);
-    const n = g.attributes.position.count, col = new Float32Array(n * 3);
-    const I = o.intensity ?? 1;
-    if (typeof o.color === 'function') { const P = g.attributes.position; for (let i = 0; i < n; i++) { const cc = o.color(P.getX(i), P.getY(i), P.getZ(i)); col[i * 3] = cc[0]; col[i * 3 + 1] = cc[1]; col[i * 3 + 2] = cc[2]; } }
-    else { _c.set(o.color || '#ffffff'); for (let i = 0; i < n; i++) { col[i * 3] = _c.r * I; col[i * 3 + 1] = _c.g * I; col[i * 3 + 2] = _c.b * I; } }
-    if (o.ao) { const P = g.attributes.position; const y0 = o.ao[0], y1 = o.ao[1]; for (let i = 0; i < n; i++) { const t = THREE.MathUtils.clamp((P.getY(i) - y0) / (y1 - y0), 0, 1); const f = 0.55 + 0.45 * t; col[i * 3] *= f; col[i * 3 + 1] *= f; col[i * 3 + 2] *= f; } }
+    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+    const n = g.attributes.position.count; const P = g.attributes.position;
+    if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
+    const uv = g.attributes.uv; const col = new Float32Array(n * 3); const I = o.intensity ?? 1;
+    const colorAt = (i) => typeof o.color === 'function' ? o.color(P.getX(i), P.getY(i), P.getZ(i)) : null;
+    if (group === 'beam') {
+      if (o.uvY !== undefined) for (let i = 0; i < n; i++) uv.setY(i, o.uvY);
+      _c.set(o.color || '#ffffff'); for (let i = 0; i < n; i++) { col[i * 3] = _c.r * I; col[i * 3 + 1] = _c.g * I; col[i * 3 + 2] = _c.b * I; }
+    } else if (group === 'glow') {
+      for (let i = 0; i < n; i++) { const cc = colorAt(i); let u; if (cc) { _c.setRGB(cc[0], cc[1], cc[2]); const mx = Math.max(cc[0], cc[1], cc[2]); u = glowUV(_c.clone().multiplyScalar(1 / mx), mx); } else u = glowUV(o.color || '#ffb347', I); uv.setXY(i, u[0], u[1]); col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = 1; }
+    } else {
+      if (group === 'tex' || group === 'lattice') {
+        const [u0, v0, u1, v1] = rectUV(group === 'lattice' ? 'lattice' : o.region);
+        let mnu = 1e9, mxu = -1e9, mnv = 1e9, mxv = -1e9; for (let i = 0; i < n; i++) { mnu = Math.min(mnu, uv.getX(i)); mxu = Math.max(mxu, uv.getX(i)); mnv = Math.min(mnv, uv.getY(i)); mxv = Math.max(mxv, uv.getY(i)); }
+        const du = (mxu - mnu) || 1, dv = (mxv - mnv) || 1; const pad = 0.0015;
+        for (let i = 0; i < n; i++) { let tu = (uv.getX(i) - mnu) / du, tv = (uv.getY(i) - mnv) / dv; if (o.flipV) tv = 1 - tv; uv.setXY(i, u0 + pad + tu * (u1 - u0 - 2 * pad), v0 + pad + tv * (v1 - v0 - 2 * pad)); }
+      } else { const s = swatchUV(group); for (let i = 0; i < n; i++) uv.setXY(i, s[0], s[1]); }
+      if (typeof o.color === 'function') for (let i = 0; i < n; i++) { const cc = colorAt(i); col.set(cc, i * 3); }
+      else { _c.set(o.color || '#ffffff'); for (let i = 0; i < n; i++) { col[i * 3] = _c.r * I; col[i * 3 + 1] = _c.g * I; col[i * 3 + 2] = _c.b * I; } }
+      if (o.ao) { const y0 = o.ao[0], y1 = o.ao[1]; for (let i = 0; i < n; i++) { const t = THREE.MathUtils.clamp((P.getY(i) - y0) / (y1 - y0), 0, 1); const f = 0.6 + 0.4 * t; col[i * 3] *= f; col[i * 3 + 1] *= f; col[i * 3 + 2] *= f; } }
+    }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     if (o.flip) flipGeom(g);
-    (this.groups[group] ||= []).push(g);
+    const key = group === 'beam' ? 'beam' : group === 'lattice' ? 'lattice' : 'hull';
+    (this.groups[key] ||= []).push(g);
     return g;
   }
-  build(materials, parent) {
+  tris() { const o = {}; for (const [k, l] of Object.entries(this.groups)) o[k] = l.reduce((s, g) => s + g.attributes.position.count / 3, 0); return o; }
+  build(materials, parent, suffix = '') {
     const out = {};
     for (const [k, list] of Object.entries(this.groups)) {
       const merged = mergeGeometries(list, false); merged.computeBoundingSphere();
-      const mesh = new THREE.Mesh(merged, materials[k]); mesh.name = 'merged_' + k;
-      const lit = !['glow', 'beam'].includes(k);
-      mesh.castShadow = lit; mesh.receiveShadow = lit;
+      const mesh = new THREE.Mesh(merged, materials[k]); mesh.name = 'merged_' + k + suffix;
+      mesh.castShadow = k !== 'beam'; mesh.receiveShadow = k !== 'beam';
       if (k === 'beam') mesh.renderOrder = 10;
       parent.add(mesh); out[k] = mesh;
     }
@@ -40,11 +57,10 @@ export class Builder {
   }
 }
 export function flipGeom(g) {
-  const P = g.attributes.position, N = g.attributes.normal, C = g.attributes.color, U = g.attributes.uv;
-  for (let i = 0; i < P.count; i += 3) for (const A of [P, N, C, U]) { if (!A) continue; for (let c = 0; c < A.itemSize; c++) { const t = A.array[i * A.itemSize + c]; A.array[i * A.itemSize + c] = A.array[(i + 2) * A.itemSize + c]; A.array[(i + 2) * A.itemSize + c] = t; } }
-  if (N) for (let i = 0; i < N.array.length; i++) N.array[i] *= -1;
+  const A2 = ['position', 'normal', 'color', 'uv'].map(k => g.attributes[k]).filter(Boolean);
+  for (let i = 0; i < g.attributes.position.count; i += 3) for (const A of A2) for (let c = 0; c < A.itemSize; c++) { const t = A.array[i * A.itemSize + c]; A.array[i * A.itemSize + c] = A.array[(i + 2) * A.itemSize + c]; A.array[(i + 2) * A.itemSize + c] = t; }
+  const N = g.attributes.normal; if (N) for (let i = 0; i < N.array.length; i++) N.array[i] *= -1;
 }
-// geometry helpers (base at y=0 for cylinders)
 export const G = {
   cyl: (rt, rb, h, seg = 24, open = false) => new THREE.CylinderGeometry(rt, rb, h, seg, 1, open).translate(0, h / 2, 0),
   box: (w, h, d) => new THREE.BoxGeometry(w, h, d),
@@ -55,5 +71,6 @@ export const G = {
   ring: (ri, ro, seg = 40) => new THREE.RingGeometry(ri, ro, seg).rotateX(-Math.PI / 2),
   disc: (r, seg = 40) => new THREE.CircleGeometry(r, seg).rotateX(-Math.PI / 2),
   octa: (r) => new THREE.OctahedronGeometry(r, 0),
+  plane: (w, h) => new THREE.PlaneGeometry(w, h),
 };
 export function quatFromDir(dir) { return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()); }

@@ -10,25 +10,27 @@ import { buildTerrain, groundAt, sd, F, Rt, LOOKOUT, CONCEPT, PLAY_START } from 
 import { Builder } from './builder.js';
 import { buildHub, colliders, C } from './base.js';
 import { buildWorld } from './world.js';
-import { buildRocks, buildCrystals, beamMaterial, addBeams } from './props.js';
+import { buildRocks, buildCrystals, beamMaterial, addBeams, InstanceCuller, buildTracks } from './props.js';
+import { makeAtlas, EMISSIVE_INTENSITY } from './atlas.js';
 import { buildSky, buildSpace } from './sky.js';
 import { Controller } from './controller.js';
 
 const Q = new URLSearchParams(location.search);
 const SHOT = Q.has('shot'); const VIEW = Q.get('view') || 'play';
 const LOW = Q.get('q') === 'low';
+const MOBILE = Q.get('q') === 'mobile' || (!Q.get('q') && (matchMedia('(pointer:coarse)').matches || Math.min(innerWidth, innerHeight) < 480));
 const BLOOM = Q.get('bloom') !== '0' && !LOW;
 document.body.classList.toggle('shot', SHOT);
 
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: SHOT });
-let PR = Math.min(devicePixelRatio, LOW ? 1 : 1.5); if (Q.get('pr')) PR = +Q.get('pr');
+let PR = Math.min(devicePixelRatio, LOW ? 1 : MOBILE ? 1.25 : 1.5); if (Q.get('pr')) PR = +Q.get('pr');
 renderer.setPixelRatio(PR); renderer.setSize(innerWidth, innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = +(Q.get('exp') || 1.0);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = +(Q.get('exp') || 0.92);
 renderer.shadowMap.enabled = !LOW; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2('#1c2532', 0.0007);
+scene.fog = new THREE.FogExp2('#1b2330', 0.0011);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.2, 9000);
 
 // light: sun from camera-left in the concept framing, cool sky fill, warm bounce
@@ -38,9 +40,10 @@ const earthYaw = 0.33, earthEl = 0.045; // radians relative to concept forward
 const ef = v3(F.x, 0, F.z).applyAxisAngle(v3(0, 1, 0), -earthYaw); const earthDir = ef.multiplyScalar(Math.cos(earthEl)).add(v3(0, Math.sin(earthEl), 0)).normalize();
 const hemi = new THREE.HemisphereLight('#a9c1e6', '#4a443c', 0.6); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff1dc', 2.3); sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = -70; sc.right = 70; sc.top = 70; sc.bottom = -70; sc.near = 1; sc.far = 400; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
+sun.shadow.mapSize.set(MOBILE ? 1024 : 2048, MOBILE ? 1024 : 2048); const sc = sun.shadow.camera; sc.left = -70; sc.right = 70; sc.top = 70; sc.bottom = -70; sc.near = 1; sc.far = 400; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 scene.add(sun, sun.target);
 const fill = new THREE.DirectionalLight('#6f9bd8', 0.55); fill.position.copy(earthDir).multiplyScalar(100); scene.add(fill);
+const front = new THREE.DirectionalLight('#c9d6f0', 0.55); front.position.set(-F.x * 80 - Rt.x * 40, 60, -F.z * 80 - Rt.z * 40); scene.add(front); // soft key from behind the concept camera (lights the left hillside)
 const coreLight = new THREE.PointLight('#ff9a40', 60, 32, 1.6); scene.add(coreLight);
 
 // environment for gold/ivory reflections: dark sky, light ground, warm sun panel
@@ -59,50 +62,70 @@ const env = makeEnv();
 // ---------- world ----------
 const terrain = buildTerrain(); scene.add(terrain);
 const b = new Builder(), wb = new Builder(); const beams = [];
-const hub = buildHub(b, beams); buildWorld(wb, beams); addBeams(wb, beams);
+const WB = { launch: new Builder(), reactor: new Builder(), canyon: new Builder(), echo: new Builder(), roads: new Builder(), misc: new Builder() };
+const hub = buildHub(b, beams); buildWorld(WB, beams); addBeams(wb, beams);
 coreLight.position.set(hub.reactor.x, hub.reactor.y + 2.5, hub.reactor.z);
+const atlas = makeAtlas();
+const hullOpts = { map: atlas.map, emissiveMap: atlas.emissiveMap, emissive: '#ffffff', emissiveIntensity: EMISSIVE_INTENSITY, roughnessMap: atlas.ormMap, metalnessMap: atlas.ormMap, roughness: 1, metalness: 1, vertexColors: true, envMap: env, envMapIntensity: 1.0 };
 const mats = {
-  ivory: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.48, metalness: 0.02, envMap: env, envMapIntensity: 0.55 }),
-  gold: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.92, envMap: env, envMapIntensity: 1.6 }),
-  dark: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.15, envMap: env, envMapIntensity: 0.4 }),
-  glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
+  hull: new THREE.MeshStandardMaterial(hullOpts),
+  lattice: new THREE.MeshStandardMaterial({ ...hullOpts, alphaTest: 0.5, side: THREE.DoubleSide }),
   beam: beamMaterial(),
 };
-const built = b.build(mats, scene); const builtWorld = wb.build(mats, scene); for (const k in builtWorld) { builtWorld[k].castShadow = false; builtWorld[k].name += '_world'; }
-const rocks = buildRocks(scene, LOW ? 0.6 : 1);
-const crystals = buildCrystals(scene);
+mats.ivory = mats.hull; // placeholder fallback
+const built = b.build(mats, scene); for (const [n, B] of [...Object.entries(WB), ['beams', wb]]) { const bw = B.build(mats, scene, '_' + n); for (const k in bw) bw[k].castShadow = false; }
+const culler = new InstanceCuller();
+const rocks = buildRocks(scene, culler, LOW ? 0.6 : MOBILE ? 0.8 : 1);
+const crystals = buildCrystals(scene, env);
+{ const pts = []; for (let i = 0; i <= 46; i++) { const t = i / 46; pts.push(sd(3.5 + Math.sin(t * 2.6) * 4 - t * 2, -55 + t * 44)); }
+  const loop = []; for (let i = 0; i <= 64; i++) { const a = i / 64 * Math.PI * 2; loop.push({ x: Math.cos(a) * 31, z: Math.sin(a) * 31 }); }
+  const spur = []; for (let i = 0; i <= 20; i++) { const t = i / 20; spur.push(sd(-1.5 - t * 3 + Math.sin(t * 3) * 1.5, -11 - t * 20)); }
+  const toPortal = []; for (let i = 0; i <= 20; i++) { const t = i / 20; toPortal.push(sd(22 + t * 9, 18 + t * 13 + Math.sin(t * 3) * 2)); }
+  buildTracks(scene, [pts, loop, spur, toPortal]); }
 const sky = buildSky(sunDir, earthDir); scene.add(sky.group); sky.starMat.uniforms.uPR.value = PR;
-const space = buildSpace(scene);
+const space = buildSpace(scene, mats.hull);
 
 // ---------- cat ----------
 const ctrl = new Controller(camera, renderer.domElement, colliders);
 const catRoot = new THREE.Group(); scene.add(catRoot);
-let mixer = null, actions = {}, current = null;
+let mixer = null, actions = {}, current = null, headBone = null, headYaw = 0;
+const _hq = new THREE.Quaternion(), _hp = new THREE.Quaternion(), _hr = new THREE.Quaternion(), _up = new THREE.Vector3(0, 1, 0), _hw = new THREE.Vector3();
+let lookTarget = null; // world point the cat looks at (concept), else camera forward while idle
+function headLook(dt) {
+  if (!headBone) return; catRoot.updateMatrixWorld(true);
+  let want = 0;
+  if (lookTarget && !ctrl.camFree) { headBone.getWorldPosition(_hw); want = Math.atan2(lookTarget.x - _hw.x, lookTarget.z - _hw.z) - ctrl.yaw; }
+  else if (ctrl.camFree && ctrl.speed < 0.6 && ctrl.onGround) { const d = new THREE.Vector3(); camera.getWorldDirection(d); want = Math.atan2(d.x, d.z) - ctrl.yaw; }
+  want = Math.atan2(Math.sin(want), Math.cos(want)); want = THREE.MathUtils.clamp(want, -0.95, 0.95);
+  headYaw = dt >= 0.5 ? want : headYaw + (want - headYaw) * Math.min(1, dt * 4);
+  headBone.userData.pre = (headBone.userData.pre || new THREE.Quaternion()).copy(headBone.quaternion); headBone.parent.getWorldQuaternion(_hp); _hr.setFromAxisAngle(_up, headYaw); _hq.copy(_hp).invert().multiply(_hr).multiply(_hp); headBone.quaternion.premultiply(_hq); headBone.updateMatrixWorld(true);
+}
 const flame = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 10, 1, true).rotateX(Math.PI).translate(0, -0.35, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 2.2, 0.8), transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
 flame.position.set(0, 0.85, -0.45); flame.visible = false; catRoot.add(flame);
 function play(name, fade = 0.25) { const a = actions[name]; if (!a || current === a) return; a.reset().fadeIn(fade).play(); if (current) current.fadeOut(fade); current = a; }
 const catURL = Q.get('cat') || 'assets/moonkatty.glb';
 const catPromise = new GLTFLoader().loadAsync(catURL + '?v=' + Date.now()).then(gltf => {
-  const m = gltf.scene; m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const mt of ms) { if (mt.isMeshStandardMaterial) { mt.envMap = env; mt.envMapIntensity = /gold/i.test(mt.name) ? 1.6 : 0.6; } } } });
-  catRoot.add(m);
+  const m = gltf.scene; m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const mt of ms) { if (mt.transmission > 0) { mt.transmission = 0; mt.transparent = true; mt.opacity = Math.min(mt.opacity, 0.35); mt.depthWrite = false; } /* transmission would re-render the whole opaque scene every frame */ if (mt.isMeshStandardMaterial) { mt.envMap = env; mt.envMapIntensity = /gold/i.test(mt.name) ? 1.6 : 0.6; } } } });
+  catRoot.add(m); m.traverse(o => { if (!headBone && /^head$/i.test(o.name)) headBone = o; }); if (!headBone) m.traverse(o => { if (!headBone && /head/i.test(o.name) && !o.isMesh) headBone = o; });
   if (gltf.animations.length) { mixer = new THREE.AnimationMixer(m); for (const c of gltf.animations) actions[c.name] = mixer.clipAction(c); play('idle', 0); }
   return gltf;
 }).catch(err => { console.warn('cat glb missing, using placeholder', err); const ph = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.9, 4, 12), mats.ivory); ph.position.y = 0.85; ph.castShadow = true; catRoot.add(ph); });
 
 // ---------- views ----------
 const VIEWS = {
-  concept: () => { const K = CONCEPT; ctrl.place(K.cat.x, K.cat.z, Math.atan2(F.x, F.z) + K.catYaw); const gy = groundAt(K.cat.x, K.cat.z); camera.position.set(K.cam.x, gy + K.eye, K.cam.z); camera.lookAt(K.target.x, gy + K.eye - K.drop, K.target.z); camera.fov = K.fov; ctrl.camFree = false; },
-  play: () => { const c = PLAY_START; ctrl.place(c.x, c.z, Math.atan2(F.x, F.z) + 0.25); ctrl.camYaw = Math.atan2(-F.x, -F.z) - 0.25; ctrl.camPitch = 0.22; ctrl.camDist = 7; ctrl.camFree = true; camera.fov = 55; },
-  aerial: () => { const c = sd(-2, -57); ctrl.place(c.x, c.z, Math.atan2(F.x, F.z)); const p = sd(-70, -125); camera.position.set(p.x, 75, p.z); const t = sd(8, 25); camera.lookAt(t.x, -6, t.z); camera.fov = 50; ctrl.camFree = false; },
-  world: () => { const c = sd(-2, -57); ctrl.place(c.x, c.z, Math.atan2(F.x, F.z)); camera.position.set(-260, 520, 820); camera.lookAt(40, 0, -60); camera.fov = 55; ctrl.camFree = false; },
-  base: () => { const c = sd(16, -28); ctrl.place(c.x, c.z, Math.atan2(F.x, F.z) - 0.4); const p = sd(36, -60); camera.position.set(p.x, 34, p.z); const t = sd(0, 10); camera.lookAt(t.x, 2, t.z); camera.fov = 50; ctrl.camFree = false; },
+  concept: () => { lookTarget = new THREE.Vector3(...(() => { const p = sd(45, -48); return [p.x, 2, p.z]; })()); const K = CONCEPT; ctrl.place(K.cat.x, K.cat.z, Math.atan2(F.x, F.z) + K.catYaw); const gy = groundAt(K.cat.x, K.cat.z); camera.position.set(K.cam.x, gy + K.eye, K.cam.z); camera.lookAt(K.target.x, gy + K.eye - K.drop, K.target.z); camera.fov = K.fov; ctrl.camFree = false; },
+  play: () => { lookTarget = null; const c = PLAY_START; ctrl.place(c.x, c.z, Math.atan2(F.x, F.z) + 0.25); ctrl.camYaw = Math.atan2(-F.x, -F.z) - 0.25; ctrl.camPitch = 0.22; ctrl.camDist = 7; ctrl.camFree = true; camera.fov = 55; },
+  aerial: () => { lookTarget = null; const c = sd(-2, -57); ctrl.place(c.x, c.z, Math.atan2(F.x, F.z)); const p = sd(-70, -125); camera.position.set(p.x, 75, p.z); const t = sd(8, 25); camera.lookAt(t.x, -6, t.z); camera.fov = 50; ctrl.camFree = false; },
+  world: () => { lookTarget = null; const c = sd(-2, -57); ctrl.place(c.x, c.z, Math.atan2(F.x, F.z)); camera.position.set(-260, 520, 820); camera.lookAt(40, 0, -60); camera.fov = 55; ctrl.camFree = false; },
+  cave: () => { lookTarget = null; const c = sd(24, 20); ctrl.place(c.x, c.z, Math.atan2(F.x, F.z)); const p = sd(18, 14); camera.position.set(p.x, groundAt(p.x, p.z) + 7, p.z); const cv = hub.cave; camera.lookAt(cv.x, cv.y + 4, cv.z); camera.fov = 55; ctrl.camFree = false; },
+  base: () => { lookTarget = null; const c = sd(16, -28); ctrl.place(c.x, c.z, Math.atan2(F.x, F.z) - 0.4); const p = sd(36, -60); camera.position.set(p.x, 34, p.z); const t = sd(0, 10); camera.lookAt(t.x, 2, t.z); camera.fov = 50; ctrl.camFree = false; },
 };
 (VIEWS[VIEW] || VIEWS.play)(); camera.updateProjectionMatrix();
 
 // ---------- post ----------
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
 composer.addPass(new RenderPass(scene, camera));
-let bloom = null; if (BLOOM) { bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.45, 1.25); composer.addPass(bloom); }
+let bloom = null; if (BLOOM) { bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.22, 1.3); composer.addPass(bloom); }
 composer.addPass(new OutputPass());
 const fxaa = new ShaderPass(FXAAShader); composer.addPass(fxaa);
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h); composer.setPixelRatio(PR); composer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); fxaa.material.uniforms.resolution.value.set(1 / (w * PR), 1 / (h * PR)); }
@@ -122,7 +145,9 @@ function frame(dt) {
   t += dt;
   if (!SHOT) ctrl.update(dt); else { ctrl.pos.y = groundAt(ctrl.pos.x, ctrl.pos.z); if (ctrl.camFree) { ctrl.camTarget.copy(ctrl.pos).add(new THREE.Vector3(0, 1.3, 0)); ctrl.updateCamera(1); } }
   catRoot.position.copy(ctrl.pos); catRoot.rotation.y = ctrl.yaw;
+  if (headBone && headBone.userData.pre) headBone.quaternion.copy(headBone.userData.pre);
   if (mixer) { if (!ctrl.onGround) play(actions.jump ? 'jump' : 'idle', 0.15); else if (ctrl.speed > 0.6) { play('walk'); actions.walk && (actions.walk.timeScale = THREE.MathUtils.clamp(ctrl.speed / 3.8, 0.7, 2.2)); } else play('idle'); mixer.update(dt); }
+  headLook(SHOT ? 1 : dt);
   flame.visible = ctrl.thrusting; if (flame.visible) flame.scale.y = 0.8 + Math.random() * 0.5;
   crystals.update(t); mats.beam.uniforms.uTime.value = t; sky.starMat.uniforms.uTime.value = t; sky.earthMat.uniforms.uTime.value = t;
   sky.group.position.copy(camera.position);
@@ -132,12 +157,13 @@ function frame(dt) {
   sun.target.position.set(Math.round(focus.x), 0, Math.round(focus.z)); sun.position.copy(sun.target.position).addScaledVector(sunDir, 200);
   coreLight.intensity = 55 + Math.sin(t * 2.3) * 8;
   fuelEl.style.width = (ctrl.fuel * 100).toFixed(0) + '%';
+  culler.update(camera);
   composer.render(dt);
 }
 function loop() { const dt = Math.min(clock.getDelta(), 0.05); const t0 = performance.now(); frame(dt); ftimes.push(performance.now() - t0); if (ftimes.length > 240) ftimes.shift(); requestAnimationFrame(loop); }
 
 // test / screenshot API
-window.MK = { camera, scene, sky,
+window.MK = { camera, scene, sky, renderer, head: () => headBone && [headBone.name, headBone.type, +headYaw.toFixed(2)],
   ready: false,
   setView(v) { VIEWS[v](); camera.updateProjectionMatrix(); },
   renderOnce(dt = 1 / 60) { frame(dt); },
@@ -147,9 +173,9 @@ window.MK = { camera, scene, sky,
     sm.needsUpdate = true; info.reset(); renderer.render(scene, camera); const withShadow = { calls: info.render.calls, triangles: info.render.triangles };
     sm.autoUpdate = true; info.reset(); composer.render(0); const frameAll = { calls: info.render.calls, triangles: info.render.triangles };
     info.autoReset = true;
-    const per = []; scene.traverse(o => { if ((o.isMesh || o.isPoints) && o.visible && o.geometry) { const g = o.geometry; const n = (g.index ? g.index.count : g.attributes.position.count) / (o.isPoints ? 1 : 3) * (o.isInstancedMesh ? o.count : 1); per.push([o.name || o.type, Math.round(n)]); } });
+    culler.update(camera, true); const per = []; scene.traverse(o => { if ((o.isMesh || o.isPoints) && o.visible && o.geometry) { const g = o.geometry; const n = (g.index ? g.index.count : g.attributes.position.count) / (o.isPoints ? 1 : 3) * (o.isInstancedMesh ? o.count : 1); per.push([o.name || o.type, Math.round(n)]); } });
     per.sort((x, y) => y[1] - x[1]);
-    return { mainPass: main, mainPlusShadowPass: withShadow, wholeFrameInclPost: frameAll, top: per.slice(0, 14) };
+    return { culler: culler.stats(), rocks: rocks.counts, mainPass: main, mainPlusShadowPass: withShadow, wholeFrameInclPost: frameAll, top: per.slice(0, 14) };
   },
   ctrlState() { return { pos: ctrl.pos.toArray().map(v => +v.toFixed(2)), onGround: ctrl.onGround, fuel: +ctrl.fuel.toFixed(2), anim: current ? current.getClip().name : null, thrust: ctrl.thrusting }; },
   frameTimes() { const a = [...ftimes].sort((x, y) => x - y); return { n: a.length, avg: a.reduce((s, x) => s + x, 0) / a.length, p50: a[Math.floor(a.length / 2)], p95: a[Math.floor(a.length * 0.95)] }; },

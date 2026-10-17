@@ -55,7 +55,7 @@ export function buildSky(sunDir, earthDir) {
         float fr=pow(1.-max(dot(normalize(vN),vV),0.),3.); col+=vec3(0.25,0.55,1.0)*fr*(0.25+1.4*lit);
         gl_FragColor=vec4(col,1.); }`,
   });
-  const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), earthMat); earth.renderOrder = -8; earth.frustumCulled = false;
+  const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), earthMat); earth.renderOrder = -8;
   const ED = 4200, ER = 780; earth.position.copy(earthDir).multiplyScalar(ED); earth.scale.setScalar(ER); earth.rotation.set(0.4, 2.2, 0.2);
   group.add(earth);
   const haloMat = new THREE.ShaderMaterial({
@@ -63,12 +63,12 @@ export function buildSky(sunDir, earthDir) {
     vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vN=normalize(mat3(modelMatrix)*normal); vec4 w=modelMatrix*vec4(position,1.); vV=normalize(cameraPosition-w.xyz); gl_Position=projectionMatrix*viewMatrix*w; }`,
     fragmentShader: `uniform vec3 sun; varying vec3 vN; varying vec3 vV; void main(){ float d=dot(normalize(vN),vV); float a=pow(smoothstep(0.0,0.34,-d),2.2); float lit=0.3+0.7*smoothstep(-0.5,0.4,dot(normalize(vN),sun)); gl_FragColor=vec4(vec3(0.3,0.62,1.0)*a*lit*1.1,1.); }`,
   });
-  const halo = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), haloMat); halo.position.copy(earth.position); halo.scale.setScalar(ER * 1.06); halo.renderOrder = -7; halo.frustumCulled = false; group.add(halo);
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12), haloMat); halo.position.copy(earth.position); halo.scale.setScalar(ER * 1.06); halo.renderOrder = -7; group.add(halo);
   return { group, earth, starMat, earthMat };
 }
 
 // Asteroid belt + Ark orbital station + MK-01 (sky set pieces; no fog)
-export function buildSpace(scene) {
+export function buildSpace(scene, hullMat) {
   const g = new THREE.Group(); g.name = 'space';
   const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9, fog: false });
   const ag = rockGeom(0, 11, [1.2, 0.9, 1], 0.45); const r = seeded(7); const N = 110;
@@ -77,16 +77,12 @@ export function buildSpace(scene) {
   belt.frustumCulled = false; g.add(belt);
   const b = new Builder();
   const ax = 2300, ay = 1500, az = -2500;
-  b.add('ivory', G.torus(220, 22, 10, 64), { pos: [ax, ay, az], rot: [1.15, 0.5, 0], color: C.ivory });
-  b.add('gold', G.torus(220, 24, 4, 64), { pos: [ax, ay, az], rot: [1.15, 0.5, 0], scale: [1, 1, 0.3], color: C.gold });
+  b.add('ivory', G.torus(220, 22, 8, 40), { pos: [ax, ay, az], rot: [1.15, 0.5, 0], color: C.ivory });
+  b.add('gold', G.torus(220, 24, 4, 40), { pos: [ax, ay, az], rot: [1.15, 0.5, 0], scale: [1, 1, 0.3], color: C.gold });
   b.add('ivory', G.cyl(26, 26, 520, 12).translate(0, -260, 0), { pos: [ax, ay, az], rot: [1.15 - Math.PI / 2, 0.5, 0], color: C.ivory2 });
   for (let k = 0; k < 4; k++) { const sp = G.cyl(7, 7, 440, 6).translate(0, -220, 0).rotateZ(Math.PI / 2).rotateY(k * Math.PI / 4); b.add('gold', sp, { pos: [ax, ay, az], rot: [1.15, 0.5, 0], color: C.goldD }); }
-  b.add('glow', G.torus(220, 6, 4, 64), { pos: [ax, ay, az], rot: [1.15, 0.5, 0], scale: [1.08, 1.08, 1], color: C.win, intensity: 2.5 });
-  const mats = {
-    ivory: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, fog: false }),
-    gold: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.8, fog: false }),
-    glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false }),
-  };
+  b.add('glow', G.torus(220, 6, 3, 40), { pos: [ax, ay, az], rot: [1.15, 0.5, 0], scale: [1.08, 1.08, 1], color: C.win, intensity: 2.5 });
+  const hm = hullMat.clone(); hm.fog = false; const mats = { hull: hm };
   const built = b.build(mats, g); for (const k in built) { built[k].castShadow = built[k].receiveShadow = false; built[k].frustumCulled = false; }
   scene.add(g);
   return { group: g, mats };
