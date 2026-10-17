@@ -99,7 +99,7 @@ export function heightAt(x, z) {
 
 // Terrain mesh: polar rings around the hub. NEAR disc (r < ~260 m, 128 segments, ~2.5-3 m facets near the base)
 // split into 6 angular sectors + FAR ring (64 segments) split into 4 quadrants, so the GPU only draws what is in view.
-export const GRID = { Mn: 128, Mf: 64, inner: 20, step: 2.5, grow: 1.05, R1: 260, growFar: 1.1, maxR: 1450 };
+export const GRID = { Mn: 128, Mf: 64, inner: 20, step: 2.5, grow: 1.05, R1: 260, growFar: 1.1, maxR: 1450, si: 6, sn: 8, sf: 4 }; // si/sn/sf: angular sector counts per band (fewer = fewer draw calls; phones use fewer)
 let H = null, PX = null, PZ = null, TRI = null, BUCKET = null;
 const AB = 256;
 const rbOf = r => r < 20 ? Math.floor(r / 2.5) : 8 + Math.floor(Math.log(r / 20) / Math.log(1.05));
@@ -232,7 +232,7 @@ export function buildTerrain() {
   for (let t = 0; t < TRI.length; t += 3) {
     const a = TRI[t], b = TRI[t + 1], cc = TRI[t + 2]; const cx = (PX[a] + PX[b] + PX[cc]) / 3, cz = (PZ[a] + PZ[b] + PZ[cc]) / 3;
     const r = Math.hypot(cx, cz); let ang = Math.atan2(cz, cx); if (ang < 0) ang += Math.PI * 2;
-    const key = r < 75 ? 'i' + Math.floor(ang / (Math.PI * 2) * 6) : r < nearR ? 'n' + Math.floor(ang / (Math.PI * 2) * 8) : 'f' + Math.floor(ang / (Math.PI * 2) * 4);
+    const key = r < 75 ? 'i' + Math.floor(ang / (Math.PI * 2) * GRID.si) : r < nearR ? 'n' + Math.floor(ang / (Math.PI * 2) * GRID.sn) : 'f' + Math.floor(ang / (Math.PI * 2) * GRID.sf);
     let l = sectors.get(key); if (!l) sectors.set(key, l = []); l.push(a, b, cc);
   }
   const group = new THREE.Group(); group.name = 'terrain'; const mat = terrainMaterial();
