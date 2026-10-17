@@ -15,6 +15,7 @@ import { buildRocks, buildCrystals, beamMaterial, addBeams, InstanceCuller, buil
 import { makeAtlas, EMISSIVE_INTENSITY } from './atlas.js';
 import { buildSky, buildSpace } from './sky.js';
 import { Controller } from './controller.js';
+import { buildSolids } from './collide.js';
 import { createGame } from './game/index.js';
 import { LEDGE } from './terrain.js';
 
@@ -89,6 +90,10 @@ const cullFarRegions = () => { const c = camera.position; { const away = Math.hy
 const culler = new InstanceCuller();
 const rocks = buildRocks(scene, culler, LOW ? 0.6 : MOBILE ? 0.8 : 1);
 const crystals = buildCrystals(scene, env, LOW);
+// cat collision: rasterise every rock instance + region/hub structures into solid columns (stand on top / blocked by anything taller than a step)
+const solids = (() => { const meshes = []; scene.traverse(o => { if (!o.isMesh || !o.geometry) return; if (o.isInstancedMesh) { if (/^crystals(_canyon|_echo)?$/.test(o.name)) { const T = []; for (let i = 0; i < o.count; i++) { const m = new THREE.Matrix4(); o.getMatrixAt(i, m); T.push(m); } meshes.push({ mesh: o, matrices: T }); } return; }
+  if (/^merged_(hull|lattice)/.test(o.name) && !/_(reactorFar|beams)$/.test(o.name)) meshes.push({ mesh: o }); });
+  return buildSolids({ rocks, meshes, colliders }); })();
 { // terrain contact-shadow / crevice map (1024², +-75 m): dark soft pools under every rock -> rugged lit-top / dark-crevice contrast
   const N = 1024, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, N, N);
   for (const [x, z, s, w] of rocks.contacts) { const u = (x / (2 * LAMPMAP_R) + 0.5) * N, v = (z / (2 * LAMPMAP_R) + 0.5) * N; const r = Math.max(1.5, s * 1.35 / (2 * LAMPMAP_R) * N); const a = 0.5 * w;
@@ -104,7 +109,7 @@ const sky = buildSky(sunDir, earthDir, LOW); scene.add(sky.group); sky.starMat.u
 const space = buildSpace(scene, mats.hull, MOBILE || LOW);
 
 // ---------- cat ----------
-const ctrl = new Controller(camera, renderer.domElement, colliders);
+const ctrl = new Controller(camera, renderer.domElement, colliders); ctrl.solids = solids;
 const catRoot = new THREE.Group(); scene.add(catRoot);
 let mixer = null, actions = {}, current = null, headBone = null, headYaw = 0;
 const _hq = new THREE.Quaternion(), _hp = new THREE.Quaternion(), _hr = new THREE.Quaternion(), _up = new THREE.Vector3(0, 1, 0), _hw = new THREE.Vector3();
@@ -197,15 +202,17 @@ renderer.domElement.addEventListener('pointerdown', () => { if (!ctrl.camFree &&
 // ---------- game layer (stage 1: progression + Chapter 1 quests). Off in ?shot renders unless &game=1 ----------
 const game = (!SHOT || Q.has('game')) ? (() => { const cs0 = canyonS(REGIONS.canyon.x, REGIONS.canyon.z); const L = REGIONS.launch, hl = Math.hypot(L.x, L.z);
   const pad = sd(-9.5, -16), dsh = sd(-14, 12), st = PLAY_START; const dd = Math.hypot(st.x - dsh.x, st.z - dsh.z);
-  return createGame({ scene, camera, ctrl, groundAt, Q,
-    places: { canyonPad: canyonPoint(cs0 - 18, -1), reactorConsole: sd(0, -10.6), dish: { x: dsh.x + (st.x - dsh.x) / dd * 7.2, z: dsh.z + (st.z - dsh.z) / dd * 7.2 }, launchPad: { x: L.x - L.x / hl * 34, z: L.z - L.z / hl * 34 }, ledge: { x: LEDGE.x, z: LEDGE.z }, homePad: pad },
-    crystalSpots: [...[[-46, 4], [-36, -5], [-27, 4], [6, -4.5], [15, 4.5], [25, -3]].map(([ds, o]) => canyonPoint(cs0 - 18 + ds, o)), sd(-8, -31), sd(7, -27), sd(-20, -6), sd(17, -15)] }); })() : null;
+  const free = (p) => { const f = solids.nearestFree(p.x, p.z); return { x: f.x, z: f.z }; }; // markers / pickups never sit inside a rock or prop
+  const places = Object.fromEntries(Object.entries({ canyonPad: canyonPoint(cs0 - 18, -1), reactorConsole: sd(0, -10.6), dish: { x: dsh.x + (st.x - dsh.x) / dd * 7.2, z: dsh.z + (st.z - dsh.z) / dd * 7.2 }, launchPad: { x: L.x - L.x / hl * 34, z: L.z - L.z / hl * 34 }, ledge: { x: LEDGE.x, z: LEDGE.z }, homePad: pad }).map(([k, p]) => [k, free(p)]));
+  window.__gamePlaces = places;
+  return createGame({ scene, camera, ctrl, groundAt: solids.standAt, Q, places,
+    crystalSpots: [...[[-46, 4], [-36, -5], [-27, 4], [6, -4.5], [15, 4.5], [25, -3]].map(([ds, o]) => canyonPoint(cs0 - 18 + ds, o)), sd(-8, -31), sd(7, -27), sd(-20, -6), sd(17, -15)].map(free) }); })() : null;
 const prints = makeFootprints(scene, groundAt); // boot-print ring buffer (1 call, hidden until walking)
 // ---------- loop ----------
 const clock = new THREE.Clock(); let t = 0; const ftimes = [];
 function frame(dt) {
   t += dt;
-  if (!SHOT) ctrl.update(dt); else { ctrl.pos.y = groundAt(ctrl.pos.x, ctrl.pos.z); if (ctrl.camFree) { ctrl.camTarget.copy(ctrl.pos).add(new THREE.Vector3(0, 1.3, 0)); ctrl.updateCamera(1); } }
+  if (!SHOT) ctrl.update(dt); else { ctrl.pos.y = ctrl.floorAt(ctrl.pos.x, ctrl.pos.z); if (ctrl.camFree) { ctrl.camTarget.copy(ctrl.pos).add(new THREE.Vector3(0, 1.3, 0)); ctrl.updateCamera(1); } }
   if (game) game.update(dt);
   catRoot.position.copy(ctrl.pos); catRoot.rotation.y = ctrl.yaw;
   prints.update(ctrl.pos, ctrl.yaw, ctrl.onGround, ctrl.speed);
@@ -228,7 +235,7 @@ function frame(dt) {
 function loop() { const dt = Math.min(clock.getDelta(), 0.05); const t0 = performance.now(); frame(dt); ftimes.push(performance.now() - t0); if (ftimes.length > 240) ftimes.shift(); requestAnimationFrame(loop); }
 
 // test / screenshot API
-window.MK = { THREE, camera, scene, sky, renderer, head: () => headBone && [headBone.name, headBone.type, +headYaw.toFixed(2)],
+window.MK = { THREE, camera, scene, sky, renderer, solids, ctrl, rocks, colliders, VIEWS: Object.keys(VIEWS), head: () => headBone && [headBone.name, headBone.type, +headYaw.toFixed(2)],
   ready: false, game: game && game.api,
   anim: () => ({ mixer, actions, STRIDES, locomotion, current: current && current.getClip().name }), // test hook (walk/run blending)
   setView(v) { VIEWS[v](); camera.updateProjectionMatrix(); },

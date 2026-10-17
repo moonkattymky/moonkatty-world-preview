@@ -334,7 +334,7 @@ export function buildHub(b, beams) {
   for (let i = 0; i < 6; i++) { const p = P(14 + rnd() * 6, -12 - rnd() * 8); crate(b, p.x, p.z, 0.7 + rnd() * 0.4, rnd() * 3); }
   for (let i = 0; i < 8; i++) { const p = P(-30 + (i % 4) * 3.8, 22 + Math.floor(i / 4) * 3); solar(b, p.x, p.z, faceCam + PI); }
   // gameplay start area: landing pad, crates, lamps, a signpost so the behind-the-cat view is rich
-  { const lp = P(-9.5, -16); const ly = groundAt(lp.x, lp.z); const S = 0.66; colliders.push({ x: lp.x, z: lp.z, r: 2.6 * S }); // compact, flush landing pad
+  { const lp = P(-9.5, -16); const ly = groundAt(lp.x, lp.z); const S = 0.66; colliders.push({ x: lp.x, z: lp.z, r: 2.6 * S, walk: true }); // compact, flush landing pad (walk: the cat stands on it via the solid map; still keeps rocks off)
     b.add('dark', G.cyl(2.5 * S, 2.7 * S, 0.24, 16), { pos: [lp.x, ly - 0.14, lp.z], color: '#555b64' });
     b.add('gold', G.torus(2.36 * S, 0.045, 3, 24), { pos: [lp.x, ly + 0.11, lp.z], rot: [PI / 2, 0, 0], color: C.gold });
     b.add('ivory', G.ring(1.45 * S, 1.6 * S, 24), { pos: [lp.x, ly + 0.115, lp.z], color: C.ivory2 });
