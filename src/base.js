@@ -23,7 +23,7 @@ function windowsRing(b, x, y, z, R, count, w, h, opts = {}) {
 function door(b, x, y, z, a, R, w = 1.4, h = 1.9, color = C.winHot) {
   const px = x + Math.sin(a) * R, pz = z + Math.cos(a) * R;
   b.add('gold', G.box(w + 0.5, h + 0.3, 0.7), { pos: [px, y + (h + 0.3) / 2, pz], rot: [0, a, 0], color: C.gold });
-  b.add('glow', G.box(w, h, 0.2), { pos: [px + Math.sin(a) * 0.3, y + h / 2, pz + Math.cos(a) * 0.3], rot: [0, a, 0], color, intensity: 2.6 });
+  b.add('glow', G.box(w, h, 0.2), { pos: [px + Math.sin(a) * 0.3, y + h / 2, pz + Math.cos(a) * 0.3], rot: [0, a, 0], color, intensity: 1.5 });
 }
 function antenna(b, x, y, z, h, light = C.win) {
   b.add('gold', G.cyl(0.08, 0.14, h, 6), { pos: [x, y, z], color: C.gold });
@@ -37,12 +37,12 @@ export function dome(b, s, d, r, o = {}) {
   b.add('dark', G.cyl(r * 1.13, r * 1.2, 0.55, seg), { pos: [x, y - 0.25, z], color: '#3a4250' });
   b.add('gold', G.torus(r * 1.12, 0.12, 3, seg), { pos: [x, y + 0.3, z], rot: [PI / 2, 0, 0], color: C.gold });
   const wallH = r * 0.45, yw = y + 0.3;
-  b.add('tex', G.cyl(r, r * 1.05, wallH, seg, true), { region: 'domeWall', pos: [x, yw, z], rot: [0, o.rotA || 0.2, 0], color: '#ffffff', ao: [yw - 0.4, yw + wallH * 1.4] });
+  b.add('tex', G.cyl(r, r * 1.05, wallH, seg, true), { region: 'domeWall', pos: [x, yw, z], rot: [0, o.rotA || 0.2, 0], color: '#e0d6c6', ao: [yw - 0.4, yw + wallH * 1.4] });
   const dA = o.doorA ?? faceCam;
   door(b, x, yw, z, dA, r * 0.97, 1.3, Math.min(1.9, wallH * 0.8));
   b.add('gold', G.torus(r * 1.01, 0.12, 3, seg), { pos: [x, yw + wallH, z], rot: [PI / 2, 0, 0], color: C.gold });
   const sy = 0.8, yd = yw + wallH;
-  b.add('tex', G.cap(r, seg, 5), { region: 'domeCap', pos: [x, yd, z], rot: [0, (o.rotA || 0.2) + 0.1, 0], scale: [1, sy, 1], color: '#ffffff' });
+  b.add('tex', G.cap(r, seg, 5), { region: 'domeCap', pos: [x, yd, z], rot: [0, (o.rotA || 0.2) + 0.1, 0], scale: [1, sy, 1], color: '#d6ccbb' });
   const top = yd + r * sy;
   b.add('ivory', G.cyl(r * 0.18, r * 0.24, 0.5, 16), { pos: [x, top - 0.15, z], color: C.ivory2 });
   b.add('gold', G.torus(r * 0.2, 0.06, 3, 16), { pos: [x, top + 0.33, z], rot: [PI / 2, 0, 0], color: C.gold });
@@ -61,15 +61,18 @@ function reactor(b, s, d) {
   const yt = y + 0.3 + H;
   b.add('ivory', G.ring(Ri, R, 36), { pos: [x, yt, z], color: C.ivory2 });
   b.add('gold', G.torus(R, 0.3, 4, 32), { pos: [x, yt, z], rot: [PI / 2, 0, 0], color: C.gold });
-  b.add('gold', G.torus(Ri, 0.32, 4, 36), { pos: [x, yt + 0.05, z], rot: [PI / 2, 0, 0], color: C.gold });
-  b.add('gold', G.torus((R + Ri) / 2, 0.1, 4, 36), { pos: [x, yt + 0.02, z], rot: [PI / 2, 0, 0], color: C.gold2 });
-  b.add('ivory', G.cyl(Ri, Ri, 1.4, 32, true), { pos: [x, yt - 1.4, z], color: C.ivory2, flip: true });
-  // molten core
-  b.add('glow', G.disc(Ri, 32), { pos: [x, yt - 0.25, z], color: (px, py, pz) => { const t = Math.hypot(px - x, pz - z) / Ri; return [5.5 - 2.2 * t, 2.6 - 1.4 * t, 0.6 - 0.4 * t]; } });
-  for (const rr of [Ri * 0.35, Ri * 0.62, Ri * 0.85]) b.add('gold', G.torus(rr, 0.08, 3, 32), { pos: [x, yt - 0.2, z], rot: [PI / 2, 0, 0], color: C.goldD });
-  b.add('beam', G.cyl(Ri * 0.98, Ri * 0.7, 3.2, 32, true), { pos: [x, yt - 0.25, z], color: '#ffae50', intensity: 0.5 }); // heat shimmer above the core
+  // raised inner lip around the molten pit (concept: thick rounded rim with gold top line)
+  b.add('ivory', G.cyl(Ri + 0.1, Ri + 0.75, 0.55, 36, true), { pos: [x, yt, z], color: C.ivory, ao: [yt - 0.3, yt + 1.2] });
+  b.add('ivory', G.ring(Ri, Ri + 0.15, 36), { pos: [x, yt + 0.55, z], color: C.ivory2 });
+  b.add('gold', G.torus(Ri + 0.08, 0.13, 4, 36), { pos: [x, yt + 0.57, z], rot: [PI / 2, 0, 0], color: C.gold });
+  b.add('gold', G.torus(Ri + 0.72, 0.08, 3, 36), { pos: [x, yt + 0.05, z], rot: [PI / 2, 0, 0], color: C.goldD });
+  // deep glowing pit: walls glow hotter toward the molten floor, with dark vertical ribs
+  const pitD = 2.6;
+  b.add('glow', G.cyl(Ri, Ri * 0.92, pitD + 0.55, 36, true), { pos: [x, yt - pitD, z], flip: true, color: (px, py, pz) => { const hh = pitD + 0.55; const ly = py > yt - pitD - 1 ? py - (yt - pitD) : py; const t = THREE.MathUtils.clamp(ly / hh, 0, 1); const k = 3.4 * (1 - t) * (1 - t) + 0.1; return [k, k * 0.09, k * 0.03]; } });
+  for (let i = 0; i < 20; i++) { const a = i / 20 * PI * 2; b.add('dark', G.box(0.16, pitD + 0.8, 0.1), { pos: [x + Math.sin(a) * (Ri * 0.96 - 0.06), yt - pitD / 2 + 0.4, z + Math.cos(a) * (Ri * 0.96 - 0.06)], rot: [0, a, 0], color: '#5a3a20' }); }
+  b.add('glow', G.disc(Ri * 0.93, 32), { pos: [x, yt - pitD, z], color: (px, py, pz) => { const t = Math.hypot(px - x, pz - z) / Ri; const k = 4.2 - 1.4 * t; return [k, k * 0.4, k * 0.07]; } });
   // small rooftop units
-  for (let i = 0; i < 6; i++) { const a = i / 6 * PI * 2 + 0.5; const rr = (R + Ri) / 2; b.add('ivory', G.cyl(0.35, 0.45, 0.6, 10), { pos: [x + Math.sin(a) * rr, yt, z + Math.cos(a) * rr], color: C.ivory }); b.add('glow', G.octa(0.14), { pos: [x + Math.sin(a) * rr, yt + 0.7, z + Math.cos(a) * rr], color: C.win, intensity: 4 }); }
+  for (let i = 0; i < 6; i++) { const a = i / 6 * PI * 2 + 0.5; const rr = (R + Ri + 0.75) / 2; b.add('ivory', G.cyl(0.35, 0.45, 0.6, 10), { pos: [x + Math.sin(a) * rr, yt, z + Math.cos(a) * rr], color: C.ivory }); b.add('glow', G.octa(0.14), { pos: [x + Math.sin(a) * rr, yt + 0.7, z + Math.cos(a) * rr], color: C.win, intensity: 4 }); }
   return { x, y: yt, z };
 }
 
@@ -97,10 +100,11 @@ function dishModule(b, s, d) {
   b.add('gold', G.torus(4.3, 0.16, 3, 32), { pos: [x, y + 2.9, z], rot: [PI / 2, 0, 0], color: C.gold });
   b.add('ivory', G.cyl(3.2, 4.1, 1.2, 32), { pos: [x, y + 2.9, z], color: C.ivory2 });
   b.add('gold', G.torus(3.2, 0.12, 3, 28), { pos: [x, y + 4.1, z], rot: [PI / 2, 0, 0], color: C.gold });
-  b.add('gold', G.cyl(0.7, 1.1, 2.6, 12), { pos: [x, y + 4.1, z], color: C.gold });
-  b.add('gold', G.box(2.4, 0.8, 0.8), { pos: [x, y + 6.8, z], color: C.goldD });
+  b.add('ivory', G.cyl(2.0, 2.4, 0.8, 24), { pos: [x, y + 4.1, z], color: C.ivory, ao: [y + 3.9, y + 5.2] }); b.add('gold', G.torus(2.05, 0.09, 3, 24), { pos: [x, y + 4.9, z], rot: [PI / 2, 0, 0], color: C.gold });
+  b.add('gold', G.cyl(0.9, 1.3, 1.0, 12), { pos: [x, y + 4.9, z], color: C.gold }); b.add('gold', G.cyl(0.55, 0.7, 1.4, 10), { pos: [x, y + 5.9, z], color: C.goldD });
+  for (const sx of [-1, 1]) b.add('gold', G.box(0.35, 1.8, 0.9), { pos: [x + Math.cos(faceCam + PI - 0.9) * sx * 1.1, y + 6.6, z - Math.sin(faceCam + PI - 0.9) * sx * 1.1], rot: [0, faceCam + PI - 0.9, 0], color: C.gold });
   // dish
-  const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.75, faceCam - 0.9, 0, 'YXZ'));
+  const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.8, faceCam + PI - 0.9, 0, 'YXZ'));
   const center = new THREE.Vector3(x, y + 7.6, z);
   const M = (g, off, col, grp = 'ivory', extra = {}) => { const m = new THREE.Matrix4().compose(center, tilt, new THREE.Vector3(1, 1, 1)); m.multiply(new THREE.Matrix4().makeTranslation(...off)); b.add(grp, g, { matrix: m, color: col, ...extra }); };
   const Rd = 4.6, th = 0.62; const sr = Rd / Math.sin(th);
@@ -202,32 +206,32 @@ function portalCave(b, beams) {
   const P0 = PORTAL; const yaw = Math.atan2(P0.x - CAVE.x, P0.z - CAVE.z); // faces out of the wall, toward the hub
   // mouth: walk from the flat pad into the wall until the slope is tall enough
   let mx = P0.x, mz = P0.z; const fx = Math.sin(yaw), fz = Math.cos(yaw); const y0 = groundAt(P0.x, P0.z);
-  for (let t = 0; t < 30; t += 0.5) { mx = P0.x - fx * t; mz = P0.z - fz * t; if (groundAt(mx, mz) - y0 > 1.2) break; }
-  const y = y0; const R = 6.4;
+  for (let t = 0; t < 30; t += 0.5) { mx = P0.x - fx * t; mz = P0.z - fz * t; if (groundAt(mx, mz) - y0 > 2.2) break; }
+  const y = y0; const R = 8.2;
   colliders.push({ x: mx, z: mz, r: 3 });
   const at = (dx, dz, dy = 0) => [mx + Math.cos(yaw) * dx + fx * dz, y + dy, mz - Math.sin(yaw) * dx + fz * dz];
-  b.add('dark', rockyArch(R + 1.4, 1.7, 3), { pos: at(0, 0.2), rot: [0, yaw, 0], color: '#77736e', ao: [y - 1, y + 10] });
-  b.add('dark', rockyArch(R + 3.6, 2.4, 7), { pos: at(0, -1.8), rot: [0, yaw, 0], color: '#6a6762' });
+  b.add('dark', rockyArch(R + 1.6, 2.1, 3), { pos: at(0, 0.2), rot: [0, yaw, 0], color: '#77736e', ao: [y - 1, y + 10] });
+  b.add('dark', rockyArch(R + 4.2, 2.9, 7), { pos: at(0, -1.8), rot: [0, yaw, 0], color: '#6a6762' });
   // tunnel (inside visible) + glowing back
-  b.add('dark', new THREE.CylinderGeometry(R, R, 9, 16, 1, true, -PI / 2, PI).rotateX(PI / 2).rotateZ(0).translate(0, 0, -4.5), { pos: at(0, 0.4), rot: [0, yaw, 0], color: '#1a2230', flip: true });
+  b.add('dark', new THREE.CylinderGeometry(R, R * 0.7, 14, 16, 1, true, -PI / 2, PI).rotateX(PI / 2).rotateZ(0).translate(0, 0, -7), { pos: at(0, 0.4), rot: [0, yaw, 0], color: '#1a2230', flip: true });
   b.add('glow', new THREE.CircleGeometry(R - 0.6, 20, 0, PI), { pos: at(0, -0.9), rot: [0, yaw, 0], color: (px, py, pz) => { const h = Math.min(1, (py - y) / R); const t = Math.min(1, Math.hypot(px - mx, pz - mz, py - y) / (R - 0.6)); const k = 0.08 + 1.5 * Math.pow(t, 4) + 1.2 * Math.pow(1 - h, 6); return [0.15 * k, 1.9 * k, 2.3 * k]; } });
   b.add('dark', new THREE.PlaneGeometry(2 * R + 0.2, 0.4).rotateX(-PI / 2), { pos: at(0, -4, 0.05), rot: [0, yaw, 0], color: '#2a3442' });
-  // gold gate ring with cyan inner glow
-  b.add('gold', G.torus(R - 0.5, 0.42, 6, 32, PI), { pos: at(0, -0.6, 0.0), rot: [0, yaw, 0], color: C.gold });
-  b.add('glow', G.torus(R - 1.1, 0.14, 4, 32, PI), { pos: at(0, -0.4, 0.0), rot: [0, yaw, 0], color: C.cyan, intensity: 5 });
-  for (let k = 0; k < 7; k++) { const a = (k + 0.5) / 7 * PI; b.add('glow', G.octa(0.28), { pos: at(Math.cos(a) * (R - 0.5), -0.1, Math.sin(a) * (R - 0.5)), rot: [0, yaw, 0], color: C.cyan, intensity: 5 }); }
+  for (let k = 0; k < 5; k++) { const a = (k + 0.5) / 5 * PI; b.add('glow', G.octa(0.22), { pos: at(Math.cos(a) * (R - 0.9), -0.6, Math.sin(a) * (R - 0.9)), rot: [0, yaw, 0], color: C.cyan, intensity: 2.5 }); }
   b.add('beam', new THREE.CircleGeometry(R - 1.2, 28, 0, PI), { pos: at(0, -1.2), rot: [0, yaw, 0], color: '#3fd8c8', intensity: 0.7, uvY: 0.3 });
   // pad + 4 beam pylons in front
   b.add('dark', G.cyl(7.5, 8.2, 0.6, 32), { pos: [P0.x, y0 - 0.35, P0.z], color: '#2c3644' });
   b.add('ivory', G.cyl(7.0, 7.4, 0.4, 32), { pos: [P0.x, y0 + 0.1, P0.z], color: C.ivory2 });
   b.add('gold', G.torus(7.1, 0.12, 3, 32), { pos: [P0.x, y0 + 0.5, P0.z], rot: [PI / 2, 0, 0], color: C.gold });
   b.add('glow', G.ring(4.6, 5.0, 36), { pos: [P0.x, y0 + 0.52, P0.z], color: C.mint, intensity: 2.4 });
-  for (let k = 0; k < 4; k++) {
-    const a = yaw + (k - 1.5) * 0.8; const rr = 6.0; const px = P0.x + Math.sin(a) * rr - fx * 1.0, pz = P0.z + Math.cos(a) * rr - fz * 1.0; const py = groundAt(px, pz);
-    b.add('ivory', G.cyl(0.8, 1.0, 0.9, 16), { pos: [px, py + 0.2, pz], color: C.ivory });
-    b.add('gold', G.torus(0.8, 0.08, 3, 16), { pos: [px, py + 1.1, pz], rot: [PI / 2, 0, 0], color: C.gold });
-    b.add('glow', G.disc(0.6, 16), { pos: [px, py + 1.12, pz], color: C.cyan, intensity: 4 });
-    beams.push({ x: px, y: py + 1.1, z: pz, r: 0.5, h: 22 + k % 2 * 7, color: '#53e0d0', I: 1.3 });
+  // three beam pylons (concept: central larger ringed pad flanked by two smaller ones)
+  for (let k = 0; k < 3; k++) {
+    const a = yaw + (k - 1) * 0.75; const rr = k === 1 ? 3.2 : 5.2; const px = P0.x + Math.sin(a) * rr - fx * 1.5, pz = P0.z + Math.cos(a) * rr - fz * 1.5; const py = groundAt(px, pz); const big = k === 1 ? 1.5 : 1;
+    b.add('dark', G.cyl(1.25 * big, 1.45 * big, 0.5, 20), { pos: [px, py, pz], color: '#3a4250' });
+    b.add('ivory', G.cyl(0.9 * big, 1.1 * big, 0.6, 20), { pos: [px, py + 0.4, pz], color: C.ivory });
+    b.add('gold', G.torus(0.95 * big, 0.08, 3, 20), { pos: [px, py + 1.0, pz], rot: [PI / 2, 0, 0], color: C.gold });
+    if (big > 1) { b.add('ivory', G.torus(1.6, 0.18, 4, 24), { pos: [px, py + 1.5, pz], rot: [PI / 2, 0, 0], color: C.ivory2 }); for (let q = 0; q < 4; q++) { const aa = q * PI / 2; b.add('ivory', G.box(0.2, 1.2, 0.2), { pos: [px + Math.sin(aa) * 1.6, py + 0.9, pz + Math.cos(aa) * 1.6], color: C.ivory2 }); } }
+    b.add('glow', G.disc(0.7 * big, 16), { pos: [px, py + 1.02, pz], color: C.cyan, intensity: 4 });
+    beams.push({ x: px, y: py + 1.0, z: pz, r: 0.45 * big, h: 24 + (k === 1 ? 8 : 0), color: '#53e0d0', I: 1.3 });
   }
   return { x: mx, y, z: mz, yaw };
 }
@@ -268,13 +272,16 @@ export function buildHub(b, beams) {
   for (let i = 0; i < 6; i++) { const p = P(14 + rnd() * 6, -12 - rnd() * 8); crate(b, p.x, p.z, 0.7 + rnd() * 0.4, rnd() * 3); }
   for (let i = 0; i < 8; i++) { const p = P(-30 + (i % 4) * 3.8, 22 + Math.floor(i / 4) * 3); solar(b, p.x, p.z, faceCam + PI); }
   // gameplay start area: landing pad, crates, lamps, a signpost so the behind-the-cat view is rich
-  { const lp = P(-9.5, -16); const ly = groundAt(lp.x, lp.z); colliders.push({ x: lp.x, z: lp.z, r: 3.6 });
-    b.add('dark', G.cyl(3.6, 3.9, 0.35, 8), { pos: [lp.x, ly - 0.15, lp.z], color: '#39414e' }); b.add('ivory', G.cyl(3.3, 3.4, 0.25, 8), { pos: [lp.x, ly + 0.1, lp.z], color: C.ivory2 });
-    b.add('glow', G.ring(2.3, 2.5, 8), { pos: [lp.x, ly + 0.37, lp.z], rot: [0, PI / 8, 0], color: C.win, intensity: 2.6 });
-    for (let k = 0; k < 8; k++) { const a = k / 8 * PI * 2 + PI / 8; b.add('glow', G.box(0.25, 0.12, 0.25), { pos: [lp.x + Math.sin(a) * 3.15, ly + 0.38, lp.z + Math.cos(a) * 3.15], color: C.gold2, intensity: 3.5 }); } }
+  { const lp = P(-9.5, -16); const ly = groundAt(lp.x, lp.z); colliders.push({ x: lp.x, z: lp.z, r: 2.6 });
+    b.add('dark', G.cyl(2.5, 2.75, 0.3, 12), { pos: [lp.x, ly - 0.12, lp.z], color: '#39414e' }); b.add('dark', G.cyl(2.3, 2.38, 0.22, 24), { pos: [lp.x, ly + 0.08, lp.z], color: '#5b6270' });
+    b.add('gold', G.torus(2.34, 0.06, 3, 24), { pos: [lp.x, ly + 0.3, lp.z], rot: [PI / 2, 0, 0], color: C.gold });
+    b.add('ivory', G.ring(1.45, 1.65, 24), { pos: [lp.x, ly + 0.31, lp.z], color: C.ivory });
+    for (const [w, d, ox] of [[0.22, 1.4, -0.5], [0.22, 1.4, 0.5], [0.8, 0.22, 0]]) b.add('ivory', G.box(w, 0.02, d), { pos: [lp.x + Math.cos(faceCam) * ox, ly + 0.31, lp.z - Math.sin(faceCam) * ox], rot: [0, faceCam, 0], color: C.ivory });
+    for (let k = 0; k < 4; k++) { const a = k / 4 * PI * 2 + PI / 4; b.add('gold', G.box(0.7, 0.03, 0.12), { pos: [lp.x + Math.sin(a) * 1.95, ly + 0.31, lp.z + Math.cos(a) * 1.95], rot: [0, a + PI / 2, 0], color: C.gold }); }
+    for (let k = 0; k < 8; k++) { const a = k / 8 * PI * 2 + PI / 8; b.add('glow', G.box(0.14, 0.08, 0.14), { pos: [lp.x + Math.sin(a) * 2.42, ly + 0.32, lp.z + Math.cos(a) * 2.42], color: C.gold2, intensity: 3.5 }); } }
   for (const [s, d, sc, yw] of [[4, -18, 0.9, 0.3], [5.3, -17.2, 0.7, 1.1], [4.6, -16.4, 0.6, 2], [-15, -9, 0.9, 0.4], [-14, -7.8, 0.7, 1.3]]) { const p = P(s, d); crate(b, p.x, p.z, sc, yw); }
-  for (const [s, d] of [[-1, -14], [3, -10.5], [-6.5, -11], [7, -13.5], [-4, -27], [2.5, -26], [-8, -33], [6, -36]]) { const p = P(s, d); lamp(b, p.x, p.z, C.gold2); }
-  { const p = P(1.5, -23); const y = groundAt(p.x, p.z); b.add('dark', G.cyl(0.07, 0.09, 2.2, 6), { pos: [p.x, y, p.z], color: '#59616d' });
+  for (const [s, d] of [[-1, -14], [3, -10.5], [-6.5, -11], [7, -13.5], [-5.5, -17.5], [2, -18], [-8, -33], [6, -36]]) { const p = P(s, d); lamp(b, p.x, p.z, C.gold2); }
+  { const p = P(5.5, -14.5); const y = groundAt(p.x, p.z); b.add('dark', G.cyl(0.07, 0.09, 2.2, 6), { pos: [p.x, y, p.z], color: '#59616d' });
     b.add('tex', new THREE.BoxGeometry(1.4, 0.7, 0.06), { region: 'panel', pos: [p.x, y + 2.0, p.z], rot: [0, faceCam, 0], color: '#ffffff' }); b.add('gold', G.box(1.5, 0.08, 0.08), { pos: [p.x, y + 2.38, p.z], rot: [0, faceCam, 0], color: C.gold }); }
   // extra small props: solar arrays, mast antennas, path lamps
   for (const [s0, d0, n, yw] of [[30, -6, 4, 0.4], [-28, -8, 3, -0.3], [8, 44, 4, 0.1]]) for (let i = 0; i < n; i++) { const p = P(s0 + i * 3.6 * Math.cos(yw), d0 + i * 3.6 * Math.sin(yw)); solar(b, p.x, p.z, faceCam + PI + yw); }

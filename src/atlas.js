@@ -32,9 +32,9 @@ export function makeAtlas() {
   const orm = (r, mt) => `rgb(0,${Math.round(r * 255)},${Math.round(mt * 255)})`;
   // paint helper: albedo, emissive, rough, metal
   const P = (x, y, w, h, alb, emi = null, rough = 0.5, metal = 0.02) => { a.fillStyle = alb; a.fillRect(x, y, w, h); e.fillStyle = emi || '#000'; e.fillRect(x, y, w, h); m.fillStyle = orm(rough, metal); m.fillRect(x, y, w, h); };
-  const GOLD = '#e9bd58', GOLD2 = '#f3d58e', GOLDD = '#b8873c', IV = '#dccaa8', IVL = '#bba582', IVD = '#a38d6c';
+  const GOLD = '#e9bd58', GOLD2 = '#f3d58e', GOLDD = '#b8873c', IV = '#d2c8b4', IVL = '#b3a892', IVD = '#9b907c';
   const gold = (x, y, w, h, c = GOLD) => P(x, y, w, h, c, null, 0.28, 0.95);
-  const win = (x, y, w, h, frame = 2) => { gold(x - frame, y - frame, w + frame * 2, h + frame * 2); const g = a.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#ffcf7a'); g.addColorStop(1, '#d0782a'); a.fillStyle = g; a.fillRect(x, y, w, h); const ge = e.createLinearGradient(0, y, 0, y + h); ge.addColorStop(0, '#ffd9a0'); ge.addColorStop(1, '#ff9a3a'); e.fillStyle = ge; e.fillRect(x, y, w, h); m.fillStyle = orm(0.2, 0.0); m.fillRect(x, y, w, h); };
+  const win = (x, y, w, h, frame = 2) => { gold(x - frame, y - frame, w + frame * 2, h + frame * 2); const g = a.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#ffcf7a'); g.addColorStop(1, '#d0782a'); a.fillStyle = g; a.fillRect(x, y, w, h); const ge = e.createLinearGradient(0, y, 0, y + h); ge.addColorStop(0, '#b07a40'); ge.addColorStop(1, '#94501e'); e.fillStyle = ge; e.fillRect(x, y, w, h); m.fillStyle = orm(0.2, 0.0); m.fillRect(x, y, w, h); };
   const lines = (x, y, w, h, stepX, stepY, col = IVL, lw = 2, stagger = false) => { a.fillStyle = col; if (stepY) for (let yy = y; yy < y + h; yy += stepY) a.fillRect(x, yy, w, lw); if (stepX) for (let yy = y, row = 0; yy < y + h; yy += (stepY || h), row++) for (let xx = x + (stagger && row % 2 ? stepX / 2 : 0); xx < x + w; xx += stepX) a.fillRect(xx, yy, lw, Math.min(stepY || h, y + h - yy)); };
   // solids
   P(...R.ivory, '#ffffff', null, 0.48, 0.02); P(...R.gold, '#ffffff', null, 0.28, 0.93); P(...R.dark, '#ffffff', null, 0.75, 0.15); P(...R.glass, '#ffffff', null, 0.1, 0.3);
@@ -42,18 +42,17 @@ export function makeAtlas() {
   { const [x, y, w, h] = R.glow; const cw = w / GLOW_HUES.length, rh = h / GLOW_ROWS;
     GLOW_HUES.forEach(([hex], i) => { for (let r = 0; r < GLOW_ROWS; r++) { const lin = (r + 0.5) / GLOW_ROWS; const c = new THREE.Color(hex); const k = Math.max(0.0001, lin); const ce = new THREE.Color(c.r * k, c.g * k, c.b * k); // linear
       P(Math.floor(x + cw * i), y + rh * r, Math.ceil(cw), rh, '#' + new THREE.Color(c.r * 0.25, c.g * 0.25, c.b * 0.25).getHexString(), '#' + ce.getHexString(), 0.3, 0); } }); }
-  // dome cap: pole at top, equator at bottom
-  { const [x, y, w, h] = R.domeCap; P(x, y, w, h, IV, null, 0.45, 0.02);
-    const g = a.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(255,255,255,0.25)'); g.addColorStop(1, 'rgba(120,110,95,0.10)'); a.fillStyle = g; a.fillRect(x, y, w, h);
-    for (let b = 0; b < 8; b++) { const y0 = y + 20 + b * 29; a.fillStyle = IVL; a.fillRect(x, y0, w, 2); for (let xx = (b % 2) * 32; xx < w; xx += 64) a.fillRect(x + xx, y0, 2, 29); }
-    for (let k = 0; k < 8; k++) { gold(x + k * 128 - 4, y, 8, h); a.fillStyle = GOLD2; a.fillRect(x + k * 128 - 1, y, 2, h); }
-    gold(x, y, w, 14); gold(x, y + 150, w, 7, GOLD2); gold(x, y + h - 9, w, 9);
-    for (let k = 0; k < 16; k++) win(x + k * 64 + 22, y + 196, 22, 22, 2);
-    for (let k = 0; k < 16; k++) { a.fillStyle = IVD; a.fillRect(x + k * 64 + 48, y + 168, 6, 6); } }
-  // dome wall: gold bands top/bottom, windows row
-  { const [x, y, w, h] = R.domeWall; P(x, y, w, h, IV, null, 0.45, 0.02); lines(x, y, w, h, 64, 0, IVL, 2);
-    a.fillStyle = IVL; a.fillRect(x, y + 100, w, 2); gold(x, y, w, 10); gold(x, y + h - 12, w, 12, GOLDD); a.fillStyle = '#5b5f68'; a.fillRect(x, y + h - 22, w, 10);
-    for (let k = 0; k < 16; k++) win(x + k * 64 + 16, y + 34, 32, 44, 3); }
+  // dome cap (concept: soft grey-beige shell, subtle segmented panels, thin gold band near the base, no vertical gold ribs)
+  { const [x, y, w, h] = R.domeCap; P(x, y, w, h, IV, null, 0.5, 0.02);
+    const g = a.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(255,250,240,0.18)'); g.addColorStop(1, 'rgba(90,82,70,0.12)'); a.fillStyle = g; a.fillRect(x, y, w, h);
+    for (let b = 0; b < 7; b++) { const y0 = y + 26 + b * 30; a.fillStyle = IVL; a.fillRect(x, y0, w, 2); for (let xx = (b % 2) * 42; xx < w; xx += 85) a.fillRect(x + xx, y0, 2, 30); }
+    for (let k = 0; k < 12; k++) { a.fillStyle = IVD; a.fillRect(x + k * 85 + 20, y + 16, 3, h - 16); } // main segment seams
+    gold(x, y, w, 12, GOLDD); gold(x, y + h - 30, w, 8, GOLD); gold(x, y + h - 10, w, 10, GOLDD);
+    for (let k = 0; k < 24; k++) { a.fillStyle = '#8f8676'; a.fillRect(x + k * 42.6 + 14, y + h - 46, 10, 6); } }
+  // dome wall (short base ring with small warm windows + darker plinth)
+  { const [x, y, w, h] = R.domeWall; P(x, y, w, h, IV, null, 0.5, 0.02); lines(x, y, w, h, 85, 0, IVL, 2);
+    gold(x, y, w, 8, GOLD); a.fillStyle = '#6b6658'; a.fillRect(x, y + h - 26, w, 26); gold(x, y + h - 30, w, 5, GOLDD);
+    for (let k = 0; k < 24; k++) win(x + k * 42.6 + 14, y + 40, 15, 22, 2); }
   // reactor wall
   { const [x, y, w, h] = R.reactorWall; P(x, y, w, h, IV, null, 0.45, 0.02); a.fillStyle = IVL; a.fillRect(x, y + 24, w, 2); a.fillRect(x, y + 98, w, 2);
     gold(x, y, w, 8); gold(x, y + h - 10, w, 10, GOLDD);
@@ -67,9 +66,10 @@ export function makeAtlas() {
     const Y = v => y + (1 - v) * h; // v 0..1 bottom->top
     for (let k = 0; k < 8; k++) { a.fillStyle = IVL; a.fillRect(x + k * 128, y, 2, h); }
     for (let i = 1; i < 16; i++) { a.fillStyle = IVL; a.fillRect(x, Y(i / 16), w, 1); }
-    for (const [v, t] of [[0.2, 6], [0.55, 6], [0.72, 5], [0.04, 8]]) gold(x, Y(v) - t / 2, w, t);
+    for (const [v, t] of [[0.2, 5], [0.86, 7], [0.04, 8]]) gold(x, Y(v) - t / 2, w, t);
     gold(x, y, w, 10, GOLD2); // nose tip
-    for (const u of [0, 0.5]) for (const v of [0.63, 0.77]) { const cx = x + u * w + (u === 0 ? 40 : 0), cy = Y(v); a.fillStyle = GOLD; a.beginPath(); a.arc(cx, cy, 11, 0, 7); a.fill(); m.fillStyle = orm(0.28, 0.95); m.beginPath(); m.arc(cx, cy, 11, 0, 7); m.fill(); a.fillStyle = '#ffcf7a'; a.beginPath(); a.arc(cx, cy, 7.5, 0, 7); a.fill(); e.fillStyle = '#ffc070'; e.beginPath(); e.arc(cx, cy, 7.5, 0, 7); e.fill(); }
+    for (const u of [0.125, 0.375, 0.625, 0.875]) { const cx = x + u * w, cy = Y(0.7); const el = (c, rx, ry, ctx) => { ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 7); ctx.fill(); };
+      el(GOLD, 84, 12, a); el(orm(0.28, 0.95), 84, 12, m); el('#ffcf7a', 62, 8.5, a); el('#c08848', 62, 8.5, e); el('#fff0c8', 22, 3, a); }
     a.save(); a.fillStyle = GOLDD; a.font = 'bold 20px sans-serif'; a.translate(x + w * 0.25, Y(0.5)); a.rotate(-Math.PI / 2); a.fillText('MK-01 ALPHA', -60, 7); a.restore(); }
   // tower segment (8 sides around)
   { const [x, y, w, h] = R.tower; P(x, y, w, h, IV, null, 0.45, 0.02); for (let k = 0; k < 8; k++) { a.fillStyle = IVL; a.fillRect(x + k * w / 8, y, 2, h); win(x + k * w / 8 + 22, y + 36, 20, 50, 2); } gold(x, y, w, 10); gold(x, y + h - 8, w, 8, GOLDD); }
