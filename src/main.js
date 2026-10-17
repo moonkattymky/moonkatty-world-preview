@@ -15,6 +15,8 @@ import { buildRocks, buildCrystals, beamMaterial, addBeams, InstanceCuller, buil
 import { makeAtlas, EMISSIVE_INTENSITY } from './atlas.js';
 import { buildSky, buildSpace } from './sky.js';
 import { Controller } from './controller.js';
+import { createGame } from './game/index.js';
+import { LEDGE } from './terrain.js';
 
 const Q = new URLSearchParams(location.search);
 const SHOT = Q.has('shot'); const VIEW = Q.get('view') || 'play';
@@ -192,12 +194,19 @@ document.getElementById('views').addEventListener('click', e => { const v = e.ta
 addEventListener('keydown', e => { if (e.code === 'KeyC') { VIEWS.concept(); camera.updateProjectionMatrix(); } if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && !ctrl.camFree) { ctrl.camFree = true; ctrl.camYaw = ctrl.yaw + Math.PI; camera.fov = 55; camera.updateProjectionMatrix(); } });
 renderer.domElement.addEventListener('pointerdown', () => { if (!ctrl.camFree && !SHOT) { ctrl.camFree = true; ctrl.camYaw = Math.atan2(camera.position.x - ctrl.pos.x, camera.position.z - ctrl.pos.z); } });
 
+// ---------- game layer (stage 1: progression + Chapter 1 quests). Off in ?shot renders unless &game=1 ----------
+const game = (!SHOT || Q.has('game')) ? (() => { const cs0 = canyonS(REGIONS.canyon.x, REGIONS.canyon.z); const L = REGIONS.launch, hl = Math.hypot(L.x, L.z);
+  const pad = sd(-9.5, -16), dsh = sd(-14, 12), st = PLAY_START; const dd = Math.hypot(st.x - dsh.x, st.z - dsh.z);
+  return createGame({ scene, camera, ctrl, groundAt, Q,
+    places: { canyonPad: canyonPoint(cs0 - 18, -1), reactorConsole: sd(0, -10.6), dish: { x: dsh.x + (st.x - dsh.x) / dd * 7.2, z: dsh.z + (st.z - dsh.z) / dd * 7.2 }, launchPad: { x: L.x - L.x / hl * 34, z: L.z - L.z / hl * 34 }, ledge: { x: LEDGE.x, z: LEDGE.z }, homePad: pad },
+    crystalSpots: [...[[-46, 4], [-36, -5], [-27, 4], [6, -4.5], [15, 4.5], [25, -3]].map(([ds, o]) => canyonPoint(cs0 - 18 + ds, o)), sd(-8, -31), sd(7, -27), sd(-20, -6), sd(17, -15)] }); })() : null;
 const prints = makeFootprints(scene, groundAt); // boot-print ring buffer (1 call, hidden until walking)
 // ---------- loop ----------
 const clock = new THREE.Clock(); let t = 0; const ftimes = [];
 function frame(dt) {
   t += dt;
   if (!SHOT) ctrl.update(dt); else { ctrl.pos.y = groundAt(ctrl.pos.x, ctrl.pos.z); if (ctrl.camFree) { ctrl.camTarget.copy(ctrl.pos).add(new THREE.Vector3(0, 1.3, 0)); ctrl.updateCamera(1); } }
+  if (game) game.update(dt);
   catRoot.position.copy(ctrl.pos); catRoot.rotation.y = ctrl.yaw;
   prints.update(ctrl.pos, ctrl.yaw, ctrl.onGround, ctrl.speed);
   if (headBone && headBone.userData.pre) headBone.quaternion.copy(headBone.userData.pre);
@@ -220,7 +229,7 @@ function loop() { const dt = Math.min(clock.getDelta(), 0.05); const t0 = perfor
 
 // test / screenshot API
 window.MK = { THREE, camera, scene, sky, renderer, head: () => headBone && [headBone.name, headBone.type, +headYaw.toFixed(2)],
-  ready: false,
+  ready: false, game: game && game.api,
   anim: () => ({ mixer, actions, STRIDES, locomotion, current: current && current.getClip().name }), // test hook (walk/run blending)
   setView(v) { VIEWS[v](); camera.updateProjectionMatrix(); },
   renderOnce(dt = 1 / 60) { frame(dt); },

@@ -7,7 +7,7 @@ export class Controller {
     this.cam = camera; this.dom = dom; this.colliders = colliders;
     this.pos = new THREE.Vector3(); this.vel = new THREE.Vector3(); this.yaw = 0; this.onGround = true;
     this.fuel = 1; this.thrusting = false; this.keys = new Set(); this.joy = new THREE.Vector2(); this.jumpHeld = false; this._jumpPrev = false;
-    this.camYaw = 0; this.camPitch = 0.28; this.camDist = 7.5; this.camTarget = new THREE.Vector3(); this.enabled = true; this.camFree = true;
+    this.speedMul = 1; /* game ?fast=1 test aid; 1 = normal controls */ this.camYaw = 0; this.camPitch = 0.28; this.camDist = 7.5; this.camTarget = new THREE.Vector3(); this.enabled = true; this.camFree = true;
     addEventListener('keydown', e => { this.keys.add(e.code); if (e.code === 'Space') e.preventDefault(); });
     addEventListener('keyup', e => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
@@ -36,7 +36,7 @@ export class Controller {
     const il = Math.hypot(ix, iy); if (il > 1) { ix /= il; iy /= il; }
     const run = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(this.joy.x, this.joy.y) > 0.95;
     const fx = -Math.sin(this.camYaw), fz = -Math.cos(this.camYaw), rx = Math.cos(this.camYaw), rz = -Math.sin(this.camYaw);
-    const mx = rx * ix + fx * iy, mz = rz * ix + fz * iy; const speed = (run ? 9 : 5) * Math.min(1, Math.hypot(ix, iy) * 1.2);
+    const mx = rx * ix + fx * iy, mz = rz * ix + fz * iy; const speed = (run ? 9 : 5) * this.speedMul * Math.min(1, Math.hypot(ix, iy) * 1.2);
     const ml = Math.hypot(mx, mz) || 1; const tx = mx / ml * speed, tz = mz / ml * speed;
     const acc = this.onGround ? 10 : 3; this.vel.x += (tx - this.vel.x) * Math.min(1, acc * dt); this.vel.z += (tz - this.vel.z) * Math.min(1, acc * dt);
     const jump = this.jumpHeld || k.has('Space');
