@@ -106,7 +106,7 @@ function corridor(b, A, B, r = 1.05, h = r + 0.3) {
     const p = a.clone().addScaledVector(dir, (i + 0.5) * sl);
     b.add('tex', G.cyl(r, r, sl, 16, true).translate(0, -sl / 2, 0).rotateY(PI / 4), { region: 'corridor', pos: p.toArray(), quat: q, color: '#ffffff' });
     if (i > 0) { const pc = a.clone().addScaledVector(dir, i * sl); b.add('ivory', G.cyl(r * 1.13, r * 1.13, 0.42, 16, true), { pos: pc.toArray(), quat: q, color: C.ivory2 }); } // raised segment collars (concept: chunky ribbed tubes)
-    if (i > 0) b.add('gold', G.torus(r * 1.15, 0.12, 3, 14), { pos: a.clone().addScaledVector(dir, i * sl).toArray(), quat: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir), color: i % 3 === 0 ? C.gold : C.gold2 });
+    if (i > 0) b.add('gold', G.torus(r * 1.17, 0.2, 3, 14), { pos: a.clone().addScaledVector(dir, i * sl).toArray(), quat: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir), color: C.gold }); /* pass 26: thicker, uniformly bright gold rings (concept) */
     for (const sg of [-1, 1]) b.add('glow', new THREE.PlaneGeometry(sl * 0.62, 0.2), { pos: [p.x + side.x * sg * r * 1.0, p.y + 0.12, p.z + side.z * sg * r * 1.0], rot: [0, yaw + (sg < 0 ? PI : 0), 0], color: C.win, intensity: 1.8 });
     if (i % 2 === 1) b.add('dark', G.box(0.5, h, 0.8), { pos: [p.x, p.y - r - h / 2 + 0.6, p.z], rot: [0, yaw, 0], color: '#4a5260' });
   }

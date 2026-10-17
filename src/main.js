@@ -96,7 +96,8 @@ const crystals = buildCrystals(scene, env, LOW);
   const loop = []; for (let i = 0; i <= 64; i++) { const a = i / 64 * Math.PI * 2; loop.push({ x: Math.cos(a) * 31, z: Math.sin(a) * 31 }); }
   const spur = []; for (let i = 0; i <= 20; i++) { const t = i / 20; spur.push(sd(-1.5 - t * 3 + Math.sin(t * 3) * 1.5, -11 - t * 20)); }
   const toPortal = []; for (let i = 0; i <= 20; i++) { const t = i / 20; toPortal.push(sd(22 + t * 9, 18 + t * 13 + Math.sin(t * 3) * 2)); }
-  buildTracks(scene, [pts, loop, spur, toPortal]); }
+  const side = []; for (let i = 0; i <= 36; i++) { const t = i / 36; side.push(sd(8 - t * 4.5 + Math.sin(t * 2.6) * 1.6, -42 + t * 30)); } /* pass 26: second rover trail curving into the base (concept foreground) */
+  buildTracks(scene, [pts, loop, spur, toPortal, side]); }
 const sky = buildSky(sunDir, earthDir, LOW); scene.add(sky.group); sky.starMat.uniforms.uPR.value = PR;
 const space = buildSpace(scene, mats.hull, MOBILE || LOW);
 
