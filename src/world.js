@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { G, quatFromDir } from './builder.js';
-import { groundAt, REGIONS, sd } from './terrain.js';
+import { groundAt, REGIONS, sd, canyonPoint, canyonS } from './terrain.js';
 import { C, rocket, dome } from './base.js';
 import { fbm } from './noise.js';
 const PI = Math.PI;
@@ -69,18 +69,18 @@ function launchComplex(b, beams, bn) {
   for (let i = 0; i < 3; i++) { const p = { x: x - 40 + i * 14, z: z + 40 }; const yy = groundAt(p.x, p.z); KEEP.push({ x: p.x, z: p.z, r: 9 });
     const ty = yy + 5.7; b.add('ivory', G.cyl(5, 5, 14, 16).translate(0, -7, 0).rotateX(PI / 2), { pos: [p.x, ty, p.z], color: C.ivory }); /* axis along z: three tanks side by side */
     for (const dz of [-4.5, 0, 4.5]) bn.add('gold', G.cyl(5.12, 5.12, 0.5, 16, true).translate(0, -0.25, 0).rotateX(PI / 2), { pos: [p.x, ty, p.z + dz], color: C.gold });
-    for (const sg of [-1, 1]) { bn.add('gold', G.cap(5, 16, 4, 0.5).rotateX(sg * PI / 2), { pos: [p.x, ty, p.z + sg * 7], color: C.goldD }); bn.add('dark', G.box(8, 2.0, 1.4), { pos: [p.x, yy + 0.5, p.z + sg * 4.5], color: '#3a4250' }); } }
+    for (const sg of [-1, 1]) { b.add('ivory', G.cap(5, 16, 5).rotateX(sg * PI / 2), { pos: [p.x, ty, p.z + sg * 7], scale: [1, 1, 0.55], color: C.ivory }); /* pass 21: closed domed end caps (the open cylinder ends read as dark holes) */ bn.add('gold', G.torus(5.02, 0.22, 3, 16), { pos: [p.x, ty, p.z + sg * 6.95], color: C.gold }); bn.add('gold', G.cyl(0.9, 0.9, 0.5, 8).rotateX(sg * PI / 2), { pos: [p.x, ty, p.z + sg * 9.6], color: C.goldD }); bn.add('dark', G.box(8, 2.0, 1.4), { pos: [p.x, yy + 0.5, p.z + sg * 4.5], color: '#3a4250' }); } }
   { const path = []; for (let k = 0; k <= 16; k++) { const t = k / 16; path.push({ x: x - 26 + t * 8, z: z + 33 - t * 14 }); } pipeRun(bn, path, { r: 0.7, every: 8, lights: false }); }
   // control bunker: bermed block with a glowing window band, antenna mast + small dish
   { const c = at(167 * D, 54); const gy = groundAt(c.x, c.z); const a = Math.atan2(z - c.z, x - c.x); KEEP.push({ x: c.x, z: c.z, r: 16 });
     bn.add('tex', G.box(18, 4.6, 10), { region: 'panel', pos: [c.x, gy + 2.0, c.z], rot: [0, -a + PI / 2, 0], color: '#ffffff' });
     bn.add('glow', G.box(15, 1.0, 10.15), { pos: [c.x, gy + 3.0, c.z], rot: [0, -a + PI / 2, 0], color: C.win, intensity: 2.6 }); bn.add('gold', G.box(18.4, 0.4, 10.4), { pos: [c.x, gy + 4.5, c.z], rot: [0, -a + PI / 2, 0], color: C.gold });
-    const bx = c.x - Math.cos(a) * 8, bz = c.z - Math.sin(a) * 8; const sh = new THREE.Shape(); sh.moveTo(-6, 0); sh.lineTo(6, 0); sh.lineTo(0, 5.2); sh.lineTo(-6, 0); bn.add('dark', new THREE.ExtrudeGeometry(sh, { depth: 20, bevelEnabled: false }).translate(0, 0, -10), { pos: [bx, gy - 0.6, bz], rot: [0, -a + PI / 2, 0], color: '#6e6c68' });
+    const bx = c.x - Math.cos(a) * 8, bz = c.z - Math.sin(a) * 8; const sh = new THREE.Shape(); sh.moveTo(-6, 0); sh.lineTo(6, 0); sh.lineTo(0, 5.2); sh.lineTo(-6, 0); bn.add('ivory', G.sphere(1, 14, 7), { pos: [bx, gy - 1.4, bz], rot: [0, -a + PI / 2, 0], scale: [12, 3.4, 7.5], color: '#86837c' }); /* regolith berm (was a dark wedge) */
     bn.add('gold', G.cyl(0.3, 0.4, 8, 6), { pos: [c.x + 5, gy + 4.6, c.z], color: C.goldD }); bn.add('glow', G.octa(0.25), { pos: [c.x + 5, gy + 13.4, c.z], color: '#ff5030', intensity: 5 }); }
   // landing strip toward the hub: dark runway, gold edge lights on posts, white centre dashes, threshold bars
   { const a = 135 * D, va = 45 * D; const c = at(a, 74); const P = []; for (let k = 0; k <= 16; k++) { const t = k / 16 - 0.5; P.push({ x: c.x + Math.cos(va) * t * 150, z: c.z + Math.sin(va) * t * 150 }); }
     strip(bn, P, 0, 14, 0.1, 'dark', '#2a2e35', 1); strip(bn, P, -6.6, 0.3, 0.16, 'glow', C.gold2, 1.8); strip(bn, P, 6.6, 0.3, 0.16, 'glow', C.gold2, 1.8);
-    for (let k = 0; k <= 30; k++) { const t = k / 30 - 0.5; const px = c.x + Math.cos(va) * t * 150, pz = c.z + Math.sin(va) * t * 150; for (const sg of [-1, 1]) { const qx = px + Math.cos(a) * 7.6 * sg, qz = pz + Math.sin(a) * 7.6 * sg; const gy = groundAt(qx, qz); bn.add('ivory', G.cyl(0.08, 0.1, 0.8, 5), { pos: [qx, gy, qz], color: C.ivory2 }); bn.add('glow', G.octa(0.2), { pos: [qx, gy + 0.95, qz], color: k === 0 || k === 30 ? '#ff6040' : C.win, intensity: 5 }); }
+    for (let k = 0; k <= 30; k++) { const t = k / 30 - 0.5; const px = c.x + Math.cos(va) * t * 150, pz = c.z + Math.sin(va) * t * 150; if (k % 3 === 0) for (const sg of [-1, 1]) { /* pass 21: 11 posts per edge in two neat rows (was 31) */ const qx = px + Math.cos(a) * 7.6 * sg, qz = pz + Math.sin(a) * 7.6 * sg; const gy = groundAt(qx, qz); bn.add('ivory', G.cyl(0.08, 0.1, 0.8, 5), { pos: [qx, gy, qz], color: C.ivory2 }); bn.add('glow', G.octa(0.2), { pos: [qx, gy + 0.95, qz], color: k === 0 || k === 30 ? '#ff6040' : C.win, intensity: 4 }); }
       if (k % 2 === 1 && k > 2 && k < 28) bn.add('ivory', G.box(0.7, 0.06, 6), { pos: [px, groundAt(px, pz) + 0.18, pz], rot: [0, -va + PI / 2, 0], color: '#e8e2d6' }); }
     for (const t of [-0.46, 0.46]) for (let m = -2; m <= 2; m++) { const px = c.x + Math.cos(va) * t * 150 + Math.cos(a) * m * 2.4, pz = c.z + Math.sin(va) * t * 150 + Math.sin(a) * m * 2.4; bn.add('ivory', G.box(1.4, 0.06, 5), { pos: [px, groundAt(px, pz) + 0.18, pz], rot: [0, -va, 0], color: '#e8e2d6' }); }
     for (let k = 0; k <= 16; k++) KEEP.push({ ...P[k], r: 11 }); }
@@ -139,16 +139,34 @@ function reactorCrater(b, beams, bn, bf) { // pass 19: a real reactor complex on
   }
 }
 
-function canyon(b, beams, bn) {
-  const pts = [[-420, -250], [-470, -120], [-520, 0], [-560, 120], [-610, 260]];
-  for (const [px, pz] of pts) { const yy = groundAt(px, pz); beams.push({ x: px, y: yy, z: pz, r: 1.2, h: 12, color: '#3fe0d0', I: 0.18 }); b.add('glow', G.disc(3, 12), { pos: [px, yy + 0.3, pz], color: C.cyan, intensity: 3 }); }
-  // pass 20: floor marker lamps between the beacons + crash debris
-  for (let k = 0; k < pts.length - 1; k++) for (let m = 1; m < 5; m++) { const t = m / 5; const px = pts[k][0] + (pts[k + 1][0] - pts[k][0]) * t, pz = pts[k][1] + (pts[k + 1][1] - pts[k][1]) * t; const yy = groundAt(px, pz); bn.add('ivory', G.cyl(0.1, 0.14, 1.2, 5), { pos: [px, yy, pz], color: C.ivory2 }); bn.add('glow', G.octa(0.25), { pos: [px, yy + 1.4, pz], color: C.cyan, intensity: 4 }); }
-  // crashed lander on the rim
-  const L = { x: -455, z: 160 }; const yy = groundAt(L.x, L.z);
-  b.add('ivory', G.cyl(4, 5.5, 5, 8), { pos: [L.x, yy, L.z], rot: [0.25, 0.4, 0.15], color: C.ivory });
-  b.add('gold', G.cap(4, 12, 4), { pos: [L.x + 1.2, yy + 4.8, L.z + 1], rot: [0.25, 0.4, 0.15], color: C.gold });
-  for (let k = 0; k < 4; k++) { const a = k * PI / 2 + 0.4; b.add('gold', G.box(0.5, 6, 0.5), { pos: [L.x + Math.cos(a) * 5, yy + 1.5, L.z + Math.sin(a) * 5], rot: [0.5 * Math.sin(a), 0, 0.5 * Math.cos(a)], color: C.goldD }); }
+function canyon(b, beams, bn) { // pass 21: winding canyon floor - beacons follow the meander, landing-site camp around the region centre
+  const s0 = canyonS(REGIONS.canyon.x, REGIONS.canyon.z); const P = (s, o = 0) => { const p = canyonPoint(s, o); return { ...p, y: groundAt(p.x, p.z) }; };
+  const dirAt = (s) => { const a = canyonPoint(s - 2), c = canyonPoint(s + 2); return Math.atan2(c.z - a.z, c.x - a.x); };
+  for (const s of [120, 250, s0 - 135, s0 + 110, 640]) { const p = P(s); beams.push({ x: p.x, y: p.y, z: p.z, r: 1.2, h: 12, color: '#3fe0d0', I: 0.18 }); b.add('glow', G.disc(3, 12), { pos: [p.x, p.y + 0.3, p.z], color: C.cyan, intensity: 3 }); KEEP.push({ x: p.x, z: p.z, r: 4 }); }
+  // floor marker lamps: two neat rows along the winding floor
+  for (let s = s0 - 190; s <= s0 + 190; s += 16) for (const sg of [-1, 1]) { const p = P(s, sg * 6.5); bn.add('ivory', G.cyl(0.1, 0.14, 1.0, 5), { pos: [p.x, p.y, p.z], color: C.ivory2 }); bn.add('glow', G.octa(0.22), { pos: [p.x, p.y + 1.15, p.z], color: C.cyan, intensity: 4 }); }
+  // landing pad: ring of lights on a dark disc, MK flag ring
+  { const p = P(s0 - 18, -1); KEEP.push({ x: p.x, z: p.z, r: 12 }); bn.add('dark', G.cyl(9, 9.6, 0.5, 24), { pos: [p.x, p.y - 0.3, p.z], color: '#3a4250' }); bn.add('ivory', G.ring(7.4, 8.2, 24), { pos: [p.x, p.y + 0.24, p.z], color: C.ivory2 });
+    for (let k = 0; k < 12; k++) { const a = k / 12 * PI * 2; bn.add('glow', G.box(0.4, 0.2, 0.4), { pos: [p.x + Math.cos(a) * 8.8, p.y + 0.3, p.z + Math.sin(a) * 8.8], color: k % 3 ? C.win : C.cyan, intensity: 4 }); }
+    bn.add('gold', G.ring(2.2, 2.8, 16), { pos: [p.x, p.y + 0.26, p.z], color: C.gold }); }
+  // crashed lander on the floor: tilted drum, cracked dome, one leg snapped, scattered hull panels, smoke-dark scorch
+  { const p = P(s0 + 34, 3); const a = dirAt(s0 + 34); KEEP.push({ x: p.x, z: p.z, r: 11 }); const R = [0.32, a, -0.22];
+    bn.add('ivory', G.cyl(4, 5.2, 4.6, 12), { pos: [p.x, p.y - 0.8, p.z], rot: R, color: C.ivory }); bn.add('gold', G.torus(4.9, 0.25, 3, 12), { pos: [p.x, p.y + 0.4, p.z], rot: [R[0] + PI / 2, R[1], R[2]], color: C.gold });
+    bn.add('dark', G.cap(3.6, 12, 4), { pos: [p.x - 1.2, p.y + 3.4, p.z + 0.6], rot: R, color: '#6f8fa8' }); bn.add('dark', G.cyl(1.6, 1.0, 1.6, 8), { pos: [p.x + 2.5, p.y - 1.0, p.z - 0.8], rot: [PI / 2 + 0.3, a, 0], color: '#2b2f36' });
+    for (let k = 0; k < 4; k++) { const la = a + k * PI / 2 + 0.4; const broken = k === 2; bn.add('gold', G.box(0.45, broken ? 2.6 : 6, 0.45), { pos: [p.x + Math.cos(la) * 5, p.y + (broken ? 0.4 : 1.2), p.z + Math.sin(la) * 5], rot: [0.55 * Math.sin(la) + (broken ? 1.2 : 0), 0, 0.55 * Math.cos(la)], color: C.goldD }); bn.add('dark', G.cyl(0.9, 1.1, 0.3, 8), { pos: [p.x + Math.cos(la) * 6.6, p.y - 0.1, p.z + Math.sin(la) * 6.6], color: '#3a4250' }); }
+    for (let k = 0; k < 7; k++) { const pa = a + 1.3 + k * 0.9, pr = 8 + (k * 37 % 9); const q = { x: p.x + Math.cos(pa) * pr, z: p.z + Math.sin(pa) * pr }; bn.add('ivory', G.box(1.6 + k % 3 * 0.6, 0.12, 1.1 + k % 2), { pos: [q.x, groundAt(q.x, q.z) + 0.15, q.z], rot: [0.3 * Math.sin(k * 2.1), pa * 1.7, 0.25 * Math.cos(k * 1.3)], color: k % 3 ? C.ivory2 : C.gold }); }
+    bn.add('glow', G.octa(0.35), { pos: [p.x - 2.6, p.y + 2.2, p.z + 2.4], color: '#ff5030', intensity: 6 }); }
+  // camp: supply crates (stacked, gold straps), flags, tripod floodlights, a cable to the pad
+  { const p = P(s0 - 44, 2); const a = dirAt(s0 - 44); KEEP.push({ x: p.x, z: p.z, r: 10 }); const ca = Math.cos(a), sa = Math.sin(a);
+    const crate = (u, v, lvl, sz, rot) => { const x = p.x + ca * u - sa * v, z = p.z + sa * u + ca * v; const gy = groundAt(p.x + ca * u - sa * v, p.z + sa * u + ca * v); bn.add('ivory', G.box(sz, sz * 0.8, sz), { pos: [x, gy + sz * 0.4 + lvl * sz * 0.8, z], rot: [0, -a + rot, 0], color: lvl ? C.ivory : C.ivory2 }); bn.add('gold', G.box(sz * 1.02, sz * 0.82, 0.22), { pos: [x, gy + sz * 0.4 + lvl * sz * 0.8, z], rot: [0, -a + rot, 0], color: C.goldD }); };
+    crate(0, 0, 0, 2.0, 0.1); crate(2.3, 0.4, 0, 2.0, -0.15); crate(1.1, 0.2, 1, 1.8, 0.3); crate(-2.0, 2.6, 0, 1.4, 0.6); crate(-0.4, 3.4, 0, 1.2, -0.4); crate(4.4, -1.8, 0, 1.6, 0.2); crate(-3.2, -1.2, 0, 1.0, 0.9);
+    bn.add('dark', G.box(4.2, 0.12, 3.0), { pos: [p.x - sa * -5.5, groundAt(p.x + sa * 5.5, p.z - ca * 5.5) + 0.07, p.z + ca * -5.5], rot: [0, -a, 0], color: '#2a3442' }); }
+  for (const [ds, o, col] of [[-30, -6, C.gold], [-27, 7, '#e8e2d6'], [-8, -7, C.gold], [48, -6, C.cyan]]) { const p = P(s0 + ds, o); KEEP.push({ x: p.x, z: p.z, r: 2 }); bn.add('ivory', G.cyl(0.07, 0.08, 4.2, 5), { pos: [p.x, p.y, p.z], color: C.ivory2 }); bn.add(col === C.cyan ? 'glow' : 'gold', G.box(1.8, 1.1, 0.06), { pos: [p.x + 0.9, p.y + 3.5, p.z], rot: [0, 0.4, 0.04], color: col, intensity: 1.4 }); bn.add('glow', G.octa(0.12), { pos: [p.x, p.y + 4.3, p.z], color: C.win, intensity: 5 }); }
+  for (const [ds, o] of [[-60, 8], [10, -8], [70, 8], [-120, -8], [130, -8]]) { const p = P(s0 + ds, o); const t = canyonPoint(s0 + ds); const a = Math.atan2(t.z - p.z, t.x - p.x); KEEP.push({ x: p.x, z: p.z, r: 2.5 });
+    for (let k = 0; k < 3; k++) { const la = k / 3 * PI * 2; bn.add('dark', G.box(0.14, 5.4, 0.14), { pos: [p.x + Math.cos(la) * 0.9, p.y + 2.5, p.z + Math.sin(la) * 0.9], rot: [0.17 * Math.sin(la), 0, -0.17 * Math.cos(la)], color: '#555c66' }); }
+    bn.add('dark', G.box(2.2, 1.0, 0.5), { pos: [p.x, p.y + 5.4, p.z], rot: [0, -a + PI / 2, 0], color: '#3a4250' }); bn.add('glow', G.box(2.0, 0.8, 0.12), { pos: [p.x + Math.cos(a) * 0.3, p.y + 5.4, p.z + Math.sin(a) * 0.3], rot: [0, -a + PI / 2, 0], color: '#fff2d0', intensity: 3.5 }); }
+  // glowing survey markers bolted to the wall benches (gives the layered walls scale)
+  for (let s = s0 - 170; s <= s0 + 170; s += 34) for (const sg of [-1, 1]) { const p = P(s + sg * 9, sg * 28); bn.add('glow', G.box(0.5, 0.5, 0.5), { pos: [p.x, p.y + 0.6, p.z], color: C.cyan, intensity: 3 }); }
 }
 
 function echo(b, beams, bn) {

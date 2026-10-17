@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { groundAt, groundMesh, LEDGE, slopeAt, F, Rt, LOOKOUT, REGIONS, sd, CONCEPT, CAVE, PORTAL } from './terrain.js';
+import { groundAt, groundMesh, LEDGE, slopeAt, F, Rt, LOOKOUT, REGIONS, sd, CONCEPT, CAVE, PORTAL, canyonPoint } from './terrain.js';
 import { noise2, seeded } from './noise.js';
 import { colliders, LAMPS } from './base.js';
 import { KEEP } from './world.js';
@@ -427,7 +427,7 @@ export function buildCrystals(scene, envMap, lite = false) {
   // cyan clusters at the portal cave mouth
   for (let i = 0; i < 9; i++) { const a = (i / 9 - 0.5) * 2.2 + Math.atan2(PORTAL.z - CAVE.z, PORTAL.x - CAVE.x); const cx = CAVE.x + Math.cos(a) * 8.5, cz = CAVE.z + Math.sin(a) * 8.5;
     for (let k = 0; k < 3; k++) { const x = cx + (rnd() - 0.5) * 1.6, z = cz + (rnd() - 0.5) * 1.6; items.push({ x, y: groundAt(x, z) + 0.3, z, s: 0.6 + rnd() * 1.0, c: cyan, tilt: (rnd() - 0.5) * 0.9, ph: rnd() * 6 }); } }
-  for (let i = 0; i < 40; i++) { const t = rnd(); const x = -420 + (-610 + 420) * t + (rnd() - 0.5) * 30, z = -250 + (260 + 250) * t + (rnd() - 0.5) * 30; items.push({ x, y: groundAt(x, z) + 1, z, s: 2 + rnd() * 5, c: cyan, tilt: (rnd() - 0.5) * 0.8, ph: rnd() * 6 }); }
+  for (let i = 0; i < 40; i++) { const t = rnd(); const j1 = rnd(), j2 = rnd(); const cp = canyonPoint(110 + t * 540, (j1 < 0.5 ? -1 : 1) * (20 + j2 * 6)); const x = cp.x, z = cp.z; /* pass 21: clusters at the foot of the winding walls */ items.push({ x, y: groundAt(x, z) + 0.6, z, s: 1.2 + rnd() * 3, c: cyan, tilt: (rnd() - 0.5) * 0.8, ph: rnd() * 6 }); }
   for (let i = 0; i < 12; i++) { const a = rnd() * 6.28; const R = REGIONS.echo; const x = R.x + Math.cos(a) * (45 + rnd() * 20), z = R.z + Math.sin(a) * (45 + rnd() * 20); items.push({ x, y: groundAt(x, z) + 1, z, s: 1.5 + rnd() * 3, c: cyan, tilt: (rnd() - 0.5) * 0.6, ph: 0 }); }
   for (let i = items.length - 1; i >= 0; i--) { const it = items[i]; if (!it.bob && Math.hypot(it.x - CONCEPT.cam.x, it.z - CONCEPT.cam.z) < 12) items.splice(i, 1); }
   // concept composition: floating diamonds at the concept's screen spots/sizes; drop procedural ones that would read big in that shot

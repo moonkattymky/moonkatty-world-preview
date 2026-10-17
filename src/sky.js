@@ -88,15 +88,21 @@ export function buildSpace(scene, hullMat) {
   const belt = new THREE.InstancedMesh(ag, rockMat, N); const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
   for (let i = 0; i < N; i++) { const a = -0.3 + r() * 2.6; const rr = 2600 + r() * 500; const y = 700 + Math.sin(a * 2) * 250 + (r() - 0.5) * 300; const s = 6 + r() ** 3 * 45; q.setFromEuler(e.set(r() * 6, r() * 6, r() * 6)); m.compose(new THREE.Vector3(-Math.cos(a) * rr * 0.7 - 1400, y + 300, Math.sin(a) * rr + 600), q, new THREE.Vector3(s, s * 0.8, s)); belt.setMatrixAt(i, m); }
   belt.frustumCulled = false; g.add(belt);
-  const b = new Builder();
-  const ax = 2300, ay = 1500, az = -2500;
-  b.add('ivory', G.torus(220, 22, 8, 40), { pos: [ax, ay, az], rot: [1.15, 0.5, 0], color: C.ivory });
-  b.add('gold', G.torus(220, 24, 4, 40), { pos: [ax, ay, az], rot: [1.15, 0.5, 0], scale: [1, 1, 0.3], color: C.gold });
-  b.add('ivory', G.cyl(26, 26, 520, 12).translate(0, -260, 0), { pos: [ax, ay, az], rot: [1.15 - Math.PI / 2, 0.5, 0], color: C.ivory2 });
-  for (let k = 0; k < 4; k++) { const sp = G.cyl(7, 7, 440, 6).translate(0, -220, 0).rotateZ(Math.PI / 2).rotateY(k * Math.PI / 4); b.add('gold', sp, { pos: [ax, ay, az], rot: [1.15, 0.5, 0], color: C.goldD }); }
-  b.add('glow', G.torus(220, 6, 3, 40), { pos: [ax, ay, az], rot: [1.15, 0.5, 0], scale: [1.08, 1.08, 1], color: C.win, intensity: 2.5 });
+  // pass 21: Ark station rebuilt in its own local frame (ring in XY, spin axis Z): detailed, lit, frustum-culled
+  const b = new Builder(); const st = new THREE.Group(); st.name = 'ark'; st.position.set(2300, 2050, -2500); st.rotation.set(1.15, 0.5, 0); st.scale.setScalar(1.3); g.add(st);
+  b.add('ivory', G.torus(220, 18, 10, 64), { color: C.ivory });
+  b.add('gold', G.torus(220, 19.5, 4, 64), { scale: [1, 1, 0.22], color: C.gold });
+  for (let k = 0; k < 12; k++) { const a = (k + 0.5) / 12 * Math.PI * 2; b.add('ivory', G.box(30, 46, 44), { pos: [Math.cos(a) * 224, Math.sin(a) * 224, 0], rot: [0, 0, a], color: C.ivory2 }); b.add('gold', G.box(31, 47, 3), { pos: [Math.cos(a) * 224, Math.sin(a) * 224, 23], rot: [0, 0, a], color: C.goldD }); }
+  for (let k = 0; k < 36; k++) { const a = k / 36 * Math.PI * 2; if (k % 3 === 1) continue; b.add('glow', G.box(3, 9, 26), { pos: [Math.cos(a) * 238.5, Math.sin(a) * 238.5, 0], rot: [0, 0, a], color: C.win, intensity: 2.6 }); }
+  for (let k = 0; k < 6; k++) b.add('gold', G.cyl(6, 6, 404, 6).translate(0, -202, 0).rotateZ(k * Math.PI / 3 + 0.26), { color: C.goldD });
+  b.add('ivory', G.sphere(44, 16, 10), { color: C.ivory }); b.add('gold', G.torus(45, 4, 4, 24), { color: C.gold });
+  b.add('ivory', G.cyl(20, 20, 540, 12).translate(0, -270, 0).rotateX(Math.PI / 2), { color: C.ivory2 });
+  for (const zz of [-210, 190]) { b.add('gold', G.torus(32, 6, 4, 20), { pos: [0, 0, zz], color: C.gold }); for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; b.add('glow', G.octa(5), { pos: [Math.cos(a) * 38, Math.sin(a) * 38, zz], color: k % 2 ? '#ff5030' : '#fff2d0', intensity: 6 }); } }
+  for (const sg of [-1, 1]) for (const zz of [-262, -232]) { b.add('dark', G.box(150, 2, 26), { pos: [sg * 100, 0, zz], color: '#2b3d63' }); b.add('gold', G.box(152, 2.6, 2.5), { pos: [sg * 100, 0, zz + 13], color: C.goldD }); }
+  b.add('glow', G.octa(8), { pos: [0, 0, 280], color: '#ff5030', intensity: 7 });
+  for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; b.add('glow', G.octa(4.5), { pos: [Math.cos(a) * 220, Math.sin(a) * 220, 20], color: k % 2 ? '#ff5030' : '#fff2d0', intensity: 6 }); }
   const hm = hullMat.clone(); hm.fog = false; const mats = { hull: hm };
-  const built = b.build(mats, g); for (const k in built) { built[k].castShadow = built[k].receiveShadow = false; built[k].frustumCulled = false; }
+  const built = b.build(mats, st); for (const k in built) { built[k].castShadow = built[k].receiveShadow = false; built[k].frustumCulled = true; }
   scene.add(g);
   return { group: g, mats };
 }
