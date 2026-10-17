@@ -15,7 +15,7 @@ export const LOOKOUT = { ...sd(-2, -54), r: 19, h: 10 };
 // The concept-art camera: cat on the lip of a ridge, base below at ~60 m
 export const CONCEPT = { cat: sd(-2.53, -51.23), cam: sd(-0.59, -54.45), target: sd(-5.5, 0), eye: 1.1, drop: 3.5, fov: 47, catYaw: -0.15 };
 // walkable rock ledge under the concept cat (the rock mesh itself lives in props.js); raises groundAt so the cat really stands on it
-const _lc = sd(-3.0, -51.85); export const LEDGE = { x: _lc.x, z: _lc.z, h: 0.55, r0: 1.35, r1: 1.75 };
+const _lc = sd(-3.0, -51.85); export const LEDGE = { x: _lc.x, z: _lc.z, h: 1.0, r0: 1.4, r1: 1.85 };
 export function ledgeAt(x, z) { const d = Math.hypot(x - LEDGE.x, z - LEDGE.z); if (d >= LEDGE.r1) return 0; const t = Math.min(1, Math.max(0, (d - LEDGE.r0) / (LEDGE.r1 - LEDGE.r0))); return LEDGE.h * (1 - t * t * (3 - 2 * t)); }
 const LIP = sd(-2, -56);
 export const PLAY_START = sd(-3, -21);
@@ -24,7 +24,7 @@ const PORTAL_WALL = sd(50, 57), LEFT_HILL = sd(-40, -19);
 export const CAVE = { ...sd(43.5, 47), yawOff: 0.35 };
 const CANYON_A = { x: -400, z: -300 }, CANYON_B = { x: -660, z: 380 };
 const SMALL_CRATERS = [
-  [-58, -8, 9], [30, 40, 7], [-20, 62, 6], [60, 18, 8], [-70, 40, 10], [8, -66, 7], [70, -60, 11], [-40, -60, 9], [95,70,14], [-110,-20,16]
+  [-58, -8, 9], [30, 40, 7], [-34.0, 20.9, 4.5], [-37.7, 10.8, 3.2], [-32.7, 29.3, 2.6], [-20, 62, 6], [60, 18, 8], [-70, 40, 10], [8, -66, 7], [70, -60, 11], [-40, -60, 9], [95,70,14], [-110,-20,16]
 ];
 
 function segDist(px, pz, a, b) {
@@ -67,6 +67,12 @@ export function heightAt(x, z) {
     let f = u > 0 ? clamp(1 - u / 37, 0, 1) : 1; f = f * f * (1.6 - 0.6 * f) ; // gentle convex ramp toward the base
     f *= 1 - smoothstep(12, 30, -u); f *= 1 - smoothstep(12 + Math.max(0, -v) * 0.0, 34, Math.abs(v) * (v < 0 ? 0.7 : 1));
     h += LOOKOUT.h * f * (1 + 0.12 * noise2(x * 0.25, z * 0.25)) + f * fbm(x * 0.35, z * 0.35, 2) * 0.5; }
+  // concept mid-ground left of the track (between the cat's lookout and the base): broken, stepped, uneven ground instead of a flat plane
+  { const cs = x * Rt.x + z * Rt.z, cd = x * F.x + z * F.z;
+    const m = smoothstep(-34, -24, cs) * (1 - smoothstep(-6, -1.5, cs)) * smoothstep(-50, -44, cd) * (1 - smoothstep(-24, -18, cd)) * smoothstep(29, 34, r) * smoothstep(4.5, 8, Math.hypot(cs + 9.5, cd + 16)) * smoothstep(4, 7.5, Math.hypot(cs + 3, cd + 21));
+    if (m > 0) { const u = fbm(x * 0.07 + 2.3, z * 0.07 - 5.1, 3) * 2.6 + ridged(x * 0.13, z * 0.13, 2) * 1.4; const st = 0.85; const k = Math.floor(u / st), fr = u / st - k;
+      const terr = (k + smoothstep(0.55, 0.95, fr)) * st; // terraces with short steep risers -> low ledges
+      h += m * (terr * 0.9 + 0.5); } }
   // portal crater wall (cyan gate) behind the base on the right
   const dp = Math.hypot(x - PORTAL_WALL.x, z - PORTAL_WALL.z);
   h += 15 * (1 - smoothstep(7, 21, dp)) * (0.82 + 0.36 * rid) + 6 * (1 - smoothstep(14, 34, dp));
@@ -162,13 +168,15 @@ export function terrainMaterial() {
       uniform sampler2D uLampMap; uniform sampler2D uAOMap;
       float rg(vec2 p){ return vn(p * 0.55) * 0.45 + vn(p * 1.7) * 0.33 + vn(p * 5.3) * 0.22; }
       // small impact craters: returns (albedo factor, dh/dx, dh/dz)
-      vec3 craters(vec2 p, float cs){
+      vec3 craters(vec2 p0, float cs){
+        float ang = cs * 2.39; mat2 R = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)); vec2 p = R * p0 + vec2(cs * 13.1, cs * 7.7);
+        float dens = smoothstep(0.2, 0.75, vn(p0 / (cs * 7.0) + cs)) * 0.85 + 0.1;
         vec2 cell = floor(p / cs); vec3 acc = vec3(1.0, 0.0, 0.0);
         for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-          vec2 c = cell + vec2(float(i), float(j)); if (hh(c + 9.7) < 0.2) continue;
-          vec2 ctr = (c + 0.2 + 0.6 * vec2(hh(c), hh(c + 17.3))) * cs; float rad = cs * (0.12 + 0.3 * hh(c + 5.1) * hh(c + 5.1));
+          vec2 c = cell + vec2(float(i), float(j)); if (hh(c + 9.7) > dens) continue;
+          vec2 ctr = (c + vec2(hh(c), hh(c + 17.3))) * cs; float hr = hh(c + 5.1); float rad = cs * (0.1 + 0.5 * hr * hr * hr);
           vec2 dv = p - ctr; float dl = length(dv); float d = dl / rad; if (d > 1.7) continue;
-          float e1 = exp(-2.5 * d * d), q = (d - 1.0) / 0.28, e2 = exp(-q * q); float dh = 3.0 * d * e1 - 0.25 * 2.0 * q / 0.28 * e2; vec2 g = dh * 0.32 * dv / max(dl, 1e-3);
+          float e1 = exp(-2.5 * d * d), q = (d - 1.0) / 0.28, e2 = exp(-q * q); float dh = 3.0 * d * e1 - 0.25 * 2.0 * q / 0.28 * e2; vec2 g = dh * 0.32 * (dv * R) / max(dl, 1e-3);
           acc.yz += g; acc.x *= (1.0 - 0.12 * e1) * (1.0 + 0.16 * e2);
         }
         return acc; }`)

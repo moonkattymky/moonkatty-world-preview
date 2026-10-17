@@ -82,7 +82,7 @@ mats.ivory = mats.hull; // placeholder fallback
 const built = b.build(mats, scene); for (const [n, B] of [...Object.entries(WB), ['beams', wb]]) { const bw = B.build(mats, scene, '_' + n); for (const k in bw) bw[k].castShadow = false; }
 // far chapter-region hulls sit behind the crater rim: skip them while the camera is low inside the hub basin (cheap occlusion cull)
 const farRegion = []; scene.traverse(o => { if (o.isMesh && /_(launch|echo|canyon|reactor)$/.test(o.name)) { o.geometry.computeBoundingSphere(); farRegion.push([o, o.geometry.boundingSphere.center.clone()]); } });
-const cullFarRegions = () => { const c = camera.position; const inHub = Math.hypot(c.x, c.z) < 125 && c.y < 45; for (const [o, ctr] of farRegion) o.visible = !inHub || ctr.distanceTo(c) < 380; };
+const cullFarRegions = () => { const c = camera.position; const inHub = Math.hypot(c.x, c.z) < 125 && c.y < 45; for (const [o, ctr] of farRegion) o.visible = !inHub || ctr.distanceTo(c) < 380; { const farRidgeMesh = (cullFarRegions.fr ??= scene.getObjectByName('farRidge')); if (farRidgeMesh) farRidgeMesh.visible = Math.hypot(c.x, c.z) < 140 && c.y < 60; } }; // far ridge is a backdrop layer for in-hub views only (no ring band from world/aerial)
 const culler = new InstanceCuller();
 const rocks = buildRocks(scene, culler, LOW ? 0.6 : MOBILE ? 0.8 : 1);
 const crystals = buildCrystals(scene, env);
@@ -228,4 +228,4 @@ window.MK = { THREE, camera, scene, sky, renderer, head: () => headBone && [head
   frameTimes() { const a = [...ftimes].sort((x, y) => x - y); return { n: a.length, avg: a.reduce((s, x) => s + x, 0) / a.length, p50: a[Math.floor(a.length / 2)], p95: a[Math.floor(a.length * 0.95)] }; },
   async measure(n = 30) { const out = []; for (let i = 0; i < n; i++) { const t0 = performance.now(); frame(1 / 60); { const gl = renderer.getContext(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4)); } out.push(performance.now() - t0); await new Promise(r => setTimeout(r, 0)); } out.sort((a, b) => a - b); return { n, p50: out[n >> 1], avg: out.reduce((s, x) => s + x, 0) / n, min: out[0], max: out[n - 1] }; },
 };
-catPromise.finally(() => { if (SHOT) { for (let i = 0; i < 3; i++) frame(1 / 60); MK.ready = true; } else { MK.ready = true; loop(); } document.getElementById('loading').style.display = 'none'; });
+catPromise.finally(() => { if (SHOT) { for (let i = 0; i < 3; i++) frame(1 / 60); MK.ready = true; } else { try { renderer.compile(scene, camera); } catch (e) { } MK.ready = true; loop(); } /* precompile all materials: no multi-second shader hitch on the first played frames */ document.getElementById('loading').style.display = 'none'; });
