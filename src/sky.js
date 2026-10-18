@@ -101,7 +101,8 @@ export function buildSpace(scene, hullMat, lite = false) {
   const gauss = () => (r() + r() + r() - 1.5) / 1.5; const R0 = 5600, OFF = 1100;
   const place = (ph, spread) => { const R = R0 + gauss() * 520 * spread; const off = OFF + gauss() * 380 * spread; return p.copy(Rh).multiplyScalar(Math.cos(ph) * R).addScaledVector(Ap, Math.sin(ph) * R).addScaledVector(Nb, off); };
   const geos = [rockGeom(0, 11, [1.2, 0.9, 1], 0.45), rockGeom(0, 23, [1, 0.8, 1.3], 0.5), rockGeom(1, 37, [1.1, 0.85, 1], 0.35)];
-  const chunks = lite ? [[0, 1, geos[0], 110, 14]] : [0, 1, 2, 3, 4, 5].map(k => [k / 6, (k + 1) / 6, geos[k % 2], 150, 0]).concat([[0, 0.5, geos[2], 10, 10], [0.5, 1, geos[2], 10, 10]]);
+  const far8 = [rockGeom(-1, 11, [1.2, 0.9, 1], 0.45), rockGeom(-1, 23, [1, 0.8, 1.3], 0.5)]; /* small belt rocks are 1-6 px at 5.6 km: 8-tri chunks look identical to 20-tri ones (Chapter-1 budget) */
+  const chunks = lite ? [[0, 1, geos[0], 110, 14]] : [0, 1, 2, 3, 4, 5].map(k => [k / 6, (k + 1) / 6, far8[k % 2], 150, 0]).concat([[0, 0.5, geos[2], 10, 10], [0.5, 1, geos[2], 10, 10]]);
   chunks.forEach(([u0, u1, geo, n, nBig], cI) => { const belt = new THREE.InstancedMesh(geo, rockMat, n + (lite ? nBig : 0));
     for (let i = 0; i < belt.count; i++) { const big = geo === geos[2] || i >= n; const ph = Math.PI * (0.12 + 0.76 * (u0 + (u1 - u0) * r())); place(ph, big ? 0.7 : 1);
       const s0 = big ? 80 + r() ** 2 * 110 : 6 + r() ** 4 * 30; sc.set(s0 * (0.8 + r() * 0.5), s0 * (0.6 + r() * 0.4), s0 * (0.8 + r() * 0.5));

@@ -17,7 +17,7 @@ import { buildSky, buildSpace } from './sky.js';
 import { Controller } from './controller.js';
 import { buildSolids } from './collide.js';
 import { createGame } from './game/index.js';
-import { LEDGE } from './terrain.js';
+import { LEDGE, LAMPK } from './terrain.js';
 
 const Q = new URLSearchParams(location.search);
 const SHOT = Q.has('shot'); const VIEW = Q.get('view') || 'play';
@@ -86,7 +86,7 @@ mats.ivory = mats.hull; // placeholder fallback
 const built = b.build(mats, scene); for (const [n, B] of [...Object.entries(WB), ['beams', wb]]) { const bw = B.build(mats, scene, '_' + n); for (const k in bw) bw[k].castShadow = false; }
 // far chapter-region hulls sit behind the crater rim: skip them while the camera is low inside the hub basin (cheap occlusion cull)
 const farRegion = []; scene.traverse(o => { if (o.isMesh && /_(launch|echo|canyon|reactor)$/.test(o.name)) { o.geometry.computeBoundingSphere(); farRegion.push([o, o.geometry.boundingSphere.center.clone()]); } });
-const cullFarRegions = () => { const c = camera.position; { const away = Math.hypot(c.x, c.z) > 280 && c.y < 70; for (const o of (cullFarRegions.hub ??= (() => { const l = []; scene.traverse(o => { if (o.isMesh && ((o.name === 'merged_hull' && o.parent === scene) || /^terrain_i\d/.test(o.name))) l.push(o); }); return l; })())) o.visible = !away; } /* pass 21: hub base + inner terrain hidden behind the crater rim when the camera is out in a chapter region */ { const pm3 = (cullFarRegions.pm3 ??= scene.getObjectByName('terrain_patch3')); if (pm3) { const on3 = Math.hypot(c.x - PATCH3.x, c.z - PATCH3.z) < 360 && c.y < 260; pm3.visible = on3; PATCH3.on.value = on3 ? 1 : 0; } } const inHub = Math.hypot(c.x, c.z) < 125 && c.y < 45; for (const [o, ctr] of farRegion) o.visible = !inHub || ctr.distanceTo(c) < 380; { const pm2 = (cullFarRegions.pm2 ??= scene.getObjectByName('terrain_patch2')); if (pm2) { const on2 = Math.hypot(c.x - PATCH2.x, c.z - PATCH2.z) < 340 && c.y < 260; pm2.visible = on2; PATCH2.on.value = on2 ? 1 : 0; } } { const pm = (cullFarRegions.pm ??= scene.getObjectByName('terrain_patch')); if (pm) { const on = Math.hypot(c.x - PATCH.x, c.z - PATCH.z) < 330 && c.y < 200; pm.visible = on; PATCH.on.value = on ? 1 : 0; for (const o of (cullFarRegions.rl ??= scene.children.filter(o => /_reactor(Near|Far)$/.test(o.name)))) o.visible = /Near$/.test(o.name) ? on : !on && !(Math.hypot(c.x, c.z) < 125 && c.y < 45); } for (const [o, R] of (cullFarRegions.nl ??= scene.children.filter(o => /_(launch|canyon|echo)Near$/.test(o.name)).map(o => [o, REGIONS[o.name.match(/_(launch|canyon|echo)Near$/)[1]]]))) o.visible = Math.hypot(c.x - R.x, c.z - R.z) < 340 && c.y < 260; /* region near-detail LOD */ } /* reactor high-res patch only up close; base terrain fills the hole otherwise */ { const farRidgeMesh = (cullFarRegions.fr ??= scene.getObjectByName('farRidge')); if (farRidgeMesh) farRidgeMesh.visible = !LOW && Math.hypot(c.x, c.z) < 140 && c.y < 60; } }; // far ridge is a backdrop layer for in-hub views only (no ring band from world/aerial)
+const cullFarRegions = () => { const c = camera.position; for (const [o, R] of (cullFarRegions.cr ??= ['crystals_canyon', 'crystals_echo'].map(n => scene.getObjectByName(n)).filter(Boolean).map(o => { o.computeBoundingSphere(); return [o, o.boundingSphere]; }))) o.visible = Math.hypot(c.x - R.center.x, c.z - R.center.z) < R.radius + 260 && !(Math.hypot(c.x, c.z) < 125 && c.y < 45); /* hidden behind the crater rim from inside the hub basin. Chapter-1 budget: far crystal fields are invisible specks from the hub */ { const away = Math.hypot(c.x, c.z) > 280 && c.y < 70; for (const o of (cullFarRegions.hub ??= (() => { const l = []; scene.traverse(o => { if (o.isMesh && ((o.name === 'merged_hull' && o.parent === scene) || /^terrain_i\d/.test(o.name))) l.push(o); }); return l; })())) o.visible = !away; } /* pass 21: hub base + inner terrain hidden behind the crater rim when the camera is out in a chapter region */ { const pm3 = (cullFarRegions.pm3 ??= scene.getObjectByName('terrain_patch3')); if (pm3) { const on3 = Math.hypot(c.x - PATCH3.x, c.z - PATCH3.z) < 360 && c.y < 260; pm3.visible = on3; PATCH3.on.value = on3 ? 1 : 0; } } const inHub = Math.hypot(c.x, c.z) < 125 && c.y < 45; for (const [o, ctr] of farRegion) o.visible = !inHub || ctr.distanceTo(c) < 380; { const pm2 = (cullFarRegions.pm2 ??= scene.getObjectByName('terrain_patch2')); if (pm2) { const on2 = Math.hypot(c.x - PATCH2.x, c.z - PATCH2.z) < 340 && c.y < 260; pm2.visible = on2; PATCH2.on.value = on2 ? 1 : 0; } } { const pm = (cullFarRegions.pm ??= scene.getObjectByName('terrain_patch')); if (pm) { const on = Math.hypot(c.x - PATCH.x, c.z - PATCH.z) < 330 && c.y < 200; pm.visible = on; PATCH.on.value = on ? 1 : 0; for (const o of (cullFarRegions.rl ??= scene.children.filter(o => /_reactor(Near|Far)$/.test(o.name)))) o.visible = /Near$/.test(o.name) ? on : !on && !(Math.hypot(c.x, c.z) < 125 && c.y < 45); } for (const [o, R] of (cullFarRegions.nl ??= scene.children.filter(o => /_(launch|canyon|echo)Near$/.test(o.name)).map(o => [o, REGIONS[o.name.match(/_(launch|canyon|echo)Near$/)[1]]]))) o.visible = Math.hypot(c.x - R.x, c.z - R.z) < 340 && c.y < 260; /* region near-detail LOD */ } /* reactor high-res patch only up close; base terrain fills the hole otherwise */ { const farRidgeMesh = (cullFarRegions.fr ??= scene.getObjectByName('farRidge')); if (farRidgeMesh) farRidgeMesh.visible = !LOW && Math.hypot(c.x, c.z) < 140 && c.y < 60; } }; // far ridge is a backdrop layer for in-hub views only (no ring band from world/aerial)
 const culler = new InstanceCuller();
 const rocks = buildRocks(scene, culler, LOW ? 0.6 : MOBILE ? 0.8 : 1);
 const crystals = buildCrystals(scene, env, LOW);
@@ -200,13 +200,53 @@ addEventListener('keydown', e => { if (e.code === 'KeyC') { VIEWS.concept(); cam
 renderer.domElement.addEventListener('pointerdown', () => { if (!ctrl.camFree && !SHOT) { ctrl.camFree = true; ctrl.camYaw = Math.atan2(camera.position.x - ctrl.pos.x, camera.position.z - ctrl.pos.z); } });
 
 // ---------- game layer (stage 1: progression + Chapter 1 quests). Off in ?shot renders unless &game=1 ----------
-const game = (!SHOT || Q.has('game')) ? (() => { const cs0 = canyonS(REGIONS.canyon.x, REGIONS.canyon.z); const L = REGIONS.launch, hl = Math.hypot(L.x, L.z);
+// base power (game hook: in a new game the reactor flickers out; restoring it lights the base back up). 1 = normal look.
+const POW = { level: 1, red: 0, flick: 1 };
+const setPower = (lv, red = 0) => { POW.level = lv; POW.red = red; };
+const applyPower = (t) => { const fl = POW.level < 1 ? (Math.random() < 0.06 ? 0.25 : 1) * (0.85 + 0.15 * Math.sin(t * 23)) : 1; const red = POW.level < 1 ? POW.red : 0; const k = POW.level >= 1 ? 1 : (red ? 0.05 + 0.2 * Math.pow(Math.abs(Math.sin(t * 2.2)), 6) : (0.03 + 0.82 * POW.level) * fl); /* power out: windows dark, slow red emergency pulse */
+  for (const m of [mats.hull, mats.lattice]) { m.emissive.setRGB(1, 1 - 0.8 * red, 1 - 0.85 * red); m.emissiveIntensity = EMISSIVE_INTENSITY * k * (red ? 2.2 : 1); } LAMPK.value = red ? 0.02 : k; mats.beam.uniforms.uPow.value = k;
+  coreLight.color.setRGB(1, 0.6 - 0.45 * POW.red, 0.25 - 0.2 * POW.red); coreLight.intensity = (55 + Math.sin(t * 2.3) * 8) * (POW.level >= 1 ? 1 : (0.35 + 0.65 * POW.level) * (POW.red ? 0.6 + 0.4 * Math.abs(Math.sin(t * 5.5)) : 1)); };
+const game = (!SHOT || Q.has('game')) ? (() => { const cs0 = canyonS(REGIONS.canyon.x, REGIONS.canyon.z); const L = REGIONS.launch, hl = Math.hypot(L.x, L.z); const lu = { x: L.x / hl, z: L.z / hl };
   const pad = sd(-9.5, -16), dsh = sd(-14, 12), st = PLAY_START; const dd = Math.hypot(st.x - dsh.x, st.z - dsh.z);
-  const free = (p) => { const f = solids.nearestFree(p.x, p.z); return { x: f.x, z: f.z }; }; // markers / pickups never sit inside a rock or prop
-  const places = Object.fromEntries(Object.entries({ canyonPad: canyonPoint(cs0 - 18, -1), reactorConsole: sd(0, -10.6), dish: { x: dsh.x + (st.x - dsh.x) / dd * 7.2, z: dsh.z + (st.z - dsh.z) / dd * 7.2 }, launchPad: { x: L.x - L.x / hl * 34, z: L.z - L.z / hl * 34 }, ledge: { x: LEDGE.x, z: LEDGE.z }, homePad: pad }).map(([k, p]) => [k, free(p)]));
-  window.__gamePlaces = places;
-  return createGame({ scene, camera, ctrl, groundAt: solids.standAt, Q, places,
-    crystalSpots: [...[[-46, 4], [-36, -5], [-27, 4], [6, -4.5], [15, 4.5], [25, -3]].map(([ds, o]) => canyonPoint(cs0 - 18 + ds, o)), sd(-8, -31), sd(7, -27), sd(-20, -6), sd(17, -15)].map(free) }); })() : null;
+  const free = (p, r) => { const f = solids.nearestFree(p.x, p.z, r); return { x: f.x, z: f.z }; }; // markers / pickups never sit inside a rock or prop
+  const cp = (ds, o = 0) => canyonPoint(cs0 + ds, o); const ctan = (ds) => { const a = cp(ds - 1), b = cp(ds + 1), l = Math.hypot(b.x - a.x, b.z - a.z); return { x: (b.x - a.x) / l, z: (b.z - a.z) / l }; };
+  // canyon floor half-width at s: walk sideways until the ground climbs > 2.6 m above the centre line
+  const floorHalf = (ds) => { const c = cp(ds), t = ctan(ds), g0 = groundAt(c.x, c.z); let lo = 0, hi = 0; for (let o = 0; o < 40; o += 0.5) { if (groundAt(c.x - t.z * o, c.z + t.x * o) - g0 > 2.6) break; hi = o; } for (let o = 0; o < 40; o += 0.5) { if (groundAt(c.x + t.z * o, c.z - t.x * o) - g0 > 2.6) break; lo = o; } return { lo, hi }; };
+  const crackBest = (d0, d1, w) => { let best = null; for (let ds = d0; ds <= d1; ds += 1) { const c = crackAt(ds, w); let ob = 0; for (let u = -w / 2 - 4; u <= w / 2 + 4; u += 1) for (let vv = -c.len / 2 + 2; vv <= c.len / 2 - 2; vv += 1.5) { const x = c.x + c.tx * u - c.tz * vv, z = c.z + c.tz * u + c.tx * vv; const g = groundAt(x, z); if (solids.top(x, z, 0.45) > g + 0.35 || solids.over(x, z, 0.45) < g + 7) ob++; }
+      const sl = Math.abs(groundAt(c.x + c.tx * 6, c.z + c.tz * 6) - groundAt(c.x - c.tx * 6, c.z - c.tz * 6)); const sc = ob * 1.5 + sl * 2; if (!best || sc < best.sc) best = { ...c, sc, ob, sl }; } return best; }; // flat, rock-free stretch of floor
+  const crackAt = (ds, w) => { const h = floorHalf(ds), c = cp(ds), t = ctan(ds); const mid = (h.hi - h.lo) / 2; return { x: c.x - t.z * mid, z: c.z + t.x * mid, tx: t.x, tz: t.z, w, len: (h.hi + h.lo) + 3, region: 'canyon' }; };
+  // launch complex: boost-sprint course on an arc around the pad (ring spots pushed to free ground)
+  const lg = free({ x: L.x - lu.x * 78, z: L.z - lu.z * 78 }); const a0 = Math.atan2(lg.z - L.z, lg.x - L.x); const RR = 66;
+  const sprintStart = free({ x: L.x + Math.cos(a0 + 0.16) * RR, z: L.z + Math.sin(a0 + 0.16) * RR });
+  const rings = []; for (let i = 0; i < 8; i++) { const a = a0 + 0.36 + i * 0.3; const p = free({ x: L.x + Math.cos(a) * (RR + Math.sin(i * 1.7) * 6), z: L.z + Math.sin(a) * (RR + Math.sin(i * 1.7) * 6) }, 20); rings.push(p); }
+  rings.forEach((r, i) => { const n = rings[Math.min(i + 1, rings.length - 1)], pv = rings[Math.max(i - 1, 0)]; r.yaw = Math.atan2(n.x - pv.x, n.z - pv.z); });
+  const sc = { x: (rings[3].x + rings[4].x) / 2, z: (rings[3].z + rings[4].z) / 2 }; const sl = Math.hypot(rings[4].x - rings[3].x, rings[4].z - rings[3].z);
+  const sprintCrack = { x: sc.x, z: sc.z, tx: (rings[4].x - rings[3].x) / sl, tz: (rings[4].z - rings[3].z) / sl, w: 5.5, len: 16, region: 'launch' };
+  // secret caches (off the main route): behind a hub boulder, lookout ledge (JET), portal cave mouth, canyon rock terrace (JET), launch complex, echo field
+  const hubRock = (() => { let b = null; for (const it of rocks.kinds.rockA.items) { const d = Math.hypot(it.x, it.z); if (d > 38 && d < 95 && it.r > 1.6 && it.r < 5 && (!b || it.r > b.r)) b = it; } return b; })();
+  const behind = hubRock ? free({ x: hubRock.x + hubRock.x / Math.hypot(hubRock.x, hubRock.z) * (hubRock.r + 1.1), z: hubRock.z + hubRock.z / Math.hypot(hubRock.x, hubRock.z) * (hubRock.r + 1.1) }) : free(sd(-30, 20));
+  const terrace = (() => { const c = cp(-18); let b = null; for (const it of rocks.kinds.rockA.items) { if (Math.hypot(it.x - c.x, it.z - c.z) > 75) continue; const h = solids.top(it.x, it.z, 0.6) - groundAt(it.x, it.z); if (h > 2.4 && h < 7 && Math.abs(solids.top(it.x, it.z, 0.9) - solids.top(it.x, it.z, 0.3)) < 0.6 && (!b || Math.abs(h - 4) < Math.abs(b.h - 4))) b = { x: it.x, z: it.z, h }; } return b ? { x: b.x, z: b.z, y: solids.top(b.x, b.z, 0.5) } : { ...free(cp(-30, 12)) }; })();
+  const cave = hub.cave; const caveP = free({ x: cave.x + Math.sin(cave.yaw) * 4.2 + Math.cos(cave.yaw) * 4.0, z: cave.z + Math.cos(cave.yaw) * 4.2 - Math.sin(cave.yaw) * 4.0 });
+  const E = REGIONS.echo;
+  const ledgeY = solids.standAt(LEDGE.x, LEDGE.z);
+  const depot = free(sd(-19, -22), 12);
+  const cy0 = Math.atan2(-F.x, -F.z) - 0.30, fwd = { x: -Math.sin(cy0), z: -Math.cos(cy0) }; // play-view camera forward at spawn
+  const layout = {
+    power: [free({ x: st.x + fwd.x * 6.5, z: st.z + fwd.z * 6.5 }), free(sd(9, -12.5)), free(sd(-12.5, -5))], // hook: first crystal ~6.5 m straight ahead of the spawn camera
+    gates: { hub: free(sd(5, -25)), canyon: free(cp(-74, 0)), launch: lg },
+    regions: { hub: { x: 0, z: 0 }, canyon: cp(-10), launch: { x: L.x, z: L.z } },
+    cracks: [crackBest(-41, -32, 6.5), crackBest(11, 18, 6.5), sprintCrack],
+    ore: [cp(-25, 8), cp(-11, -9), cp(-5, 7)].map(p => free(p)),
+    parts: [free(cp(36, 3)), free(cp(-62, -9)), free(cp(28, -10))],
+    meteor: { ...cp(36, 0), r: 15 },
+    rings, sprintStart,
+    secrets: [{ id: 'ledge', x: LEDGE.x, z: LEDGE.z, y: ledgeY }, { id: 'hub', ...behind }, { id: 'cave', ...caveP, yaw: cave.yaw }, { id: 'canyon', ...terrace }, { id: 'launch', ...free({ x: L.x + lu.z * 46, z: L.z - lu.x * 46 }) }, { id: 'echo', ...free({ x: E.x + 18, z: E.z - 14 }) }],
+    depot: { ...depot, yaw: Math.atan2(pad.x - depot.x, pad.z - depot.z) }, robotSpawn: free({ x: pad.x + (depot.x - pad.x) * 0.25, z: pad.z + (depot.z - pad.z) * 0.25 }),
+  };
+  const places = Object.fromEntries(Object.entries({ canyonPad: cp(-18, -1), reactorConsole: sd(0, -10.6), dish: { x: dsh.x + (st.x - dsh.x) / dd * 7.2, z: dsh.z + (st.z - dsh.z) / dd * 7.2 }, launchPad: { x: L.x - L.x / hl * 34, z: L.z - L.z / hl * 34 }, ledge: { x: LEDGE.x, z: LEDGE.z }, homePad: pad, sprintStart }).map(([k, p]) => [k, free(p)]));
+  window.__gamePlaces = places; window.__gameLayout = layout;
+  return createGame({ scene, camera, ctrl, renderer, env, solids, setPower, groundAt: solids.standAt, Q, places, layout,
+    crystalSpots: [...[[-46, 4], [-36, -5], [-27, 4], [6, -4.5], [15, 4.5], [25, -3]].map(([ds, o]) => canyonPoint(cs0 - 18 + ds, o)), sd(-8, -31), sd(7, -27), sd(-20, -6), sd(17, -15)].map(p => free(p)) }); })() : null;
 const prints = makeFootprints(scene, groundAt); // boot-print ring buffer (1 call, hidden until walking)
 // ---------- loop ----------
 const clock = new THREE.Clock(); let t = 0; const ftimes = [];
@@ -227,7 +267,7 @@ function frame(dt) {
   // shadow frustum follows the focus point
   const focus = ctrl.camFree ? ctrl.pos : (VIEW === 'aerial' || VIEW === 'world' ? new THREE.Vector3(sd(0, 5).x, 0, sd(0, 5).z) : new THREE.Vector3(sd(0, -20).x, 0, sd(0, -20).z));
   sun.target.position.set(Math.round(focus.x), 0, Math.round(focus.z)); sun.position.copy(sun.target.position).addScaledVector(sunDir, 200);
-  coreLight.intensity = 55 + Math.sin(t * 2.3) * 8;
+  applyPower(t);
   fuelEl.style.width = (ctrl.fuel * 100).toFixed(0) + '%';
   culler.update(camera);
   composer.render(dt);
@@ -235,7 +275,7 @@ function frame(dt) {
 function loop() { const dt = Math.min(clock.getDelta(), 0.05); const t0 = performance.now(); frame(dt); ftimes.push(performance.now() - t0); if (ftimes.length > 240) ftimes.shift(); requestAnimationFrame(loop); }
 
 // test / screenshot API
-window.MK = { THREE, camera, scene, sky, renderer, solids, ctrl, rocks, colliders, VIEWS: Object.keys(VIEWS), head: () => headBone && [headBone.name, headBone.type, +headYaw.toFixed(2)],
+window.MK = { setPower, POW, THREE, camera, scene, sky, renderer, env, solids, ctrl, rocks, colliders, VIEWS: Object.keys(VIEWS), head: () => headBone && [headBone.name, headBone.type, +headYaw.toFixed(2)],
   ready: false, game: game && game.api,
   anim: () => ({ mixer, actions, STRIDES, locomotion, current: current && current.getClip().name }), // test hook (walk/run blending)
   setView(v) { VIEWS[v](); camera.updateProjectionMatrix(); },

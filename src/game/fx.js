@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
+import { makeCrystalField } from './crystal.js';
 // In-world game visuals, kept to 2 always-on draw calls: one quest beacon (beam + ground ring in one mesh) and one crystal InstancedMesh.
 // The pickup burst (1 Points object) is only visible for ~0.8 s.
 
@@ -25,22 +26,14 @@ export function makeBeacon(scene) {
   };
 }
 
-export function makeCrystals(scene, spots) {
-  const geo = new THREE.OctahedronGeometry(0.42, 0).scale(1, 1.65, 1);
-  const mat = new THREE.MeshStandardMaterial({ color: '#f2c45a', emissive: '#ffb347', emissiveIntensity: 2.6, metalness: 0.35, roughness: 0.3, flatShading: true });
-  // cluster spots (60 m) -> one frustum-culled InstancedMesh per cluster, so off-screen clusters cost no draw call
-  const groups = []; spots.forEach((c, i) => { let g = groups.find(g => Math.hypot(g.x - c.x, g.z - c.z) < 60); if (!g) groups.push(g = { x: c.x, z: c.z, ids: [] }); g.ids.push(i); });
-  const alive = spots.map(() => true); const M = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3();
-  for (const g of groups) { const im = new THREE.InstancedMesh(geo, mat, g.ids.length); im.name = 'game_crystals'; im.castShadow = false; im.receiveShadow = false; g.im = im; scene.add(im); }
-  const update = (t) => { for (const g of groups) { g.ids.forEach((i, k) => { const c = spots[i]; e.set(0, t * 1.4 + i, 0); q.setFromEuler(e); p.set(c.x, c.y + 1.0 + Math.sin(t * 2 + i) * 0.15, c.z); s.setScalar(alive[i] ? 1 : 0); M.compose(p, q, s); g.im.setMatrixAt(k, M); }); g.im.instanceMatrix.needsUpdate = true; g.im.visible = g.ids.some(i => alive[i]); } };
-  update(0); for (const g of groups) { g.im.computeBoundingSphere(); g.im.boundingSphere.radius += 1.5; }
-  return { meshes: groups.map(g => g.im), alive, spots, update, setAlive(i, v) { alive[i] = v; } };
-}
+// daily pickups: blue energy-crystal clusters (see crystal.js), grounded, glow + halo; hidden instance = scale 0
+export function makeCrystals(scene, spots) { return makeCrystalField(scene, spots, { scale: 0.95, name: 'game_crystals' }); }
 
 export function makeBurst(scene) {
   const N = 28; const pos = new Float32Array(N * 3), vel = new Float32Array(N * 3);
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const mat = new THREE.PointsMaterial({ color: new THREE.Color(3.0, 2.1, 0.8), size: 0.32, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
+  const dot = (() => { const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d'); const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.7)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c); })();
+  const mat = new THREE.PointsMaterial({ map: dot, color: new THREE.Color(0.35, 1.1, 2.6), size: 0.22, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
   const pts = new THREE.Points(g, mat); pts.name = 'game_burst'; pts.visible = false; pts.frustumCulled = false; scene.add(pts); let age = 9;
   return {
     fire(x, y, z) { for (let i = 0; i < N; i++) { pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z; const a = Math.random() * Math.PI * 2, u = Math.random() * 2 - 1, sp = 2.5 + Math.random() * 3; const r = Math.sqrt(1 - u * u); vel[i * 3] = Math.cos(a) * r * sp; vel[i * 3 + 1] = Math.abs(u) * sp + 1.5; vel[i * 3 + 2] = Math.sin(a) * r * sp; } age = 0; pts.visible = true; },

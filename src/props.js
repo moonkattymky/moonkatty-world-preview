@@ -461,12 +461,12 @@ export function buildCrystals(scene, envMap, lite = false) {
 
 export function beamMaterial() {
   return new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false,
+    uniforms: { uTime: { value: 0 }, uPow: { value: 1 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false,
     vertexShader: `attribute vec3 color; varying vec3 vC; varying vec2 vUv; varying float vF; varying float vY;
       void main(){ vC=color; vUv=uv; vec4 mv=modelViewMatrix*vec4(position,1.); vec3 n=normalize(normalMatrix*normal); vF=abs(dot(n,normalize(-mv.xyz))); vY=position.y; gl_Position=projectionMatrix*mv; }`,
-    fragmentShader: `uniform float uTime; varying vec3 vC; varying vec2 vUv; varying float vF; varying float vY;
+    fragmentShader: `uniform float uTime; uniform float uPow; varying vec3 vC; varying vec2 vUv; varying float vF; varying float vY;
       void main(){ float fade=pow(1.-vUv.y,2.6)*smoothstep(0.,0.03,vUv.y+0.02); float core=pow(vF,2.0); float fl=0.85+0.15*sin(uTime*3.+vY*0.4);
-        gl_FragColor=vec4(vC*fade*core*fl,1.); }`,
+        gl_FragColor=vec4(vC*fade*core*fl*uPow,1.); }`,
   });
 }
 export function addBeams(b, beams) {

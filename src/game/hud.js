@@ -71,6 +71,26 @@ body.game #fuelwrap{top:max(66px,calc(env(safe-area-inset-top) + 56px));left:12p
 .mk-soon{padding:22px 12px;text-align:center;color:rgba(247,242,231,.75);font-size:13px;line-height:1.5}
 .mk-soon b{display:block;font-size:30px;margin-bottom:6px}
 @media (hover:hover) and (pointer:fine){#mk-act{bottom:150px}}
+#mk-lives{font-size:12px;font-weight:800;color:#f7f2e7;white-space:nowrap;padding:0 2px}
+#mk-lives.hit{animation:mkhit .6s}@keyframes mkhit{30%{transform:scale(1.35);color:#ff8a7a}}
+#mk-act2{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(266px,calc(env(safe-area-inset-bottom) + 262px));display:none;min-width:150px;padding:10px 14px;border-radius:22px;border:1.5px solid #a98bff;background:linear-gradient(180deg,rgba(40,26,74,.92),rgba(12,8,30,.92));color:#f7f2e7;font-weight:800;font-size:13px;box-shadow:0 0 14px rgba(169,139,255,.45)}
+#mk-act.hold{transform:scale(.96);border-color:#ffd77a}
+#mk-comp{position:absolute;right:10px;top:max(116px,calc(env(safe-area-inset-top) + 106px));display:none;align-items:center;gap:8px;padding:5px 12px 5px 6px;border-radius:22px}
+#mk-comp .c{width:34px;height:34px;border-radius:50%;border:1.5px solid #ffd77a;position:relative;background:radial-gradient(circle,rgba(16,32,58,.9),rgba(6,10,22,.8))}
+#mk-comp .c svg{position:absolute;inset:0;width:100%;height:100%}
+#mk-comp .l{font-size:11px;font-weight:800;color:#ffd77a;white-space:nowrap;line-height:1.2}#mk-comp .l small{display:block;color:rgba(247,242,231,.7);font-weight:700}
+#mk-comp.hot .c{border-color:#67d7f0;box-shadow:0 0 12px #67d7f0}#mk-comp.hot .l{color:#a8f0ff}
+#mk-sprint{position:absolute;right:10px;top:max(116px,calc(env(safe-area-inset-top) + 106px));display:none;padding:6px 14px;border-radius:18px;text-align:center}
+#mk-sprint .tm{font-size:22px;font-weight:900;color:#ffd77a;font-variant-numeric:tabular-nums}#mk-sprint .rg{font-size:11px;color:#a8f0ff;font-weight:800}#mk-sprint .stars{font-size:13px;letter-spacing:2px}
+#mk-big{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);font-size:64px;font-weight:900;color:#ffd77a;text-shadow:0 0 18px rgba(255,180,60,.8);display:none}
+#mk-build{position:absolute;left:50%;bottom:max(300px,calc(env(safe-area-inset-bottom) + 296px));transform:translateX(-50%);width:min(280px,76vw);border-radius:16px;padding:9px 12px 10px;display:none}
+#mk-build .h{font-size:12px;font-weight:800;color:#efd295;display:flex;justify-content:space-between}#mk-build .bar{height:8px;border-radius:5px;background:rgba(255,255,255,.1);margin-top:7px;overflow:hidden}#mk-build .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#67d7f0,#ffd77a)}
+#mk-fade{position:absolute;inset:0;background:radial-gradient(circle,rgba(169,139,255,.55),rgba(4,4,12,.97) 60%);opacity:0;transition:opacity .3s;pointer-events:none}
+#mk-fade.on{opacity:1}
+#mk-auto{position:absolute;right:10px;top:max(70px,calc(env(safe-area-inset-top) + 60px));display:none;border:1px solid rgba(103,215,240,.7);background:rgba(6,14,30,.85);color:#a8f0ff;border-radius:16px;padding:7px 10px;font-weight:800;font-size:12px}
+.mk-sec{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:14px;background:rgba(255,215,122,.07);border:1px dashed rgba(255,215,122,.45);font-size:12.5px;font-weight:800;color:#ffd77a}
+.mk-sec small{font-weight:700;color:rgba(247,242,231,.65);font-size:10.5px;margin-left:6px}
+@media (hover:hover) and (pointer:fine){#mk-act2{bottom:204px}}
 `;
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -82,15 +102,23 @@ export function makeHUD(t) {
   <div id="mk-top" class="mk-glass pe">
     <div id="mk-ring"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="none" stroke="rgba(103,215,240,.18)" stroke-width="3.5"/><circle id="mk-ringp" cx="20" cy="20" r="17" fill="none" stroke="url(#mkg)" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="106.8" stroke-dashoffset="106.8"/><defs><linearGradient id="mkg"><stop offset="0" stop-color="#67d7f0"/><stop offset="1" stop-color="#ffd77a"/></linearGradient></defs></svg><b><small>${esc(t('level'))}</small><span id="mk-lv">1</span></b></div>
     <div id="mk-pts"><div class="v">⭐ <span id="mk-pv">0</span></div><div id="mk-cap"><div id="mk-capbar"><i></i></div><span id="mk-capt">0/300</span></div></div>
+    <div id="mk-lives" title="lives">🐾 <span>9</span></div>
     <button id="mk-qbtn">${esc(t('quests'))}<span class="dot"></span></button>
   </div>
   <div id="mk-track" class="mk-glass pe"></div>
   <div id="mk-chip" class="mk-glass"></div>
   <div id="mk-arrow"><div class="a"><svg viewBox="0 0 46 46"><path d="M23 7 L33 22 L26.5 22 L26.5 36 L19.5 36 L19.5 22 L13 22 Z" fill="#67d7f0"/></svg></div><span></span></div>
   <button id="mk-act" class="pe"><i></i><span></span></button>
+  <button id="mk-act2" class="pe"><span></span></button>
+  <div id="mk-comp" class="mk-glass"><div class="c"><svg viewBox="0 0 34 34"><path d="M17 4 L23 19 L17 16 L11 19 Z" fill="#ffd77a"/></svg></div><div class="l"></div></div>
+  <div id="mk-sprint" class="mk-glass"><div class="tm">0.0</div><div class="rg"></div><div class="stars"></div></div>
+  <div id="mk-big"></div>
+  <div id="mk-build" class="mk-glass"><div class="h"><span class="n"></span><span class="p"></span></div><div class="bar"><i></i></div></div>
+  <button id="mk-auto" class="pe">⏩ AUTO</button>
   <div id="mk-toasts"></div>
   <div id="mk-pop" class="mk-glass pe"></div>
   <div id="mk-scrim" class="pe"></div>
+  <div id="mk-fade"></div>
   <div id="mk-sheet" class="mk-glass pe"><div class="grab"></div><div class="hd"><div class="tabs"><button data-tab="ch" class="on">${esc(t('chapter'))}</button><button data-tab="daily">${esc(t('daily'))}</button></div><button class="x" aria-label="${esc(t('close'))}">×</button></div><div class="sub"></div><div class="list"></div></div>`;
   document.body.appendChild(root);
   const $ = (s) => root.querySelector(s);
@@ -108,6 +136,13 @@ export function makeHUD(t) {
       else if (mode === 'chip') { c.style.display = 'block'; c.style.left = x + 'px'; c.style.top = y + 'px'; c.textContent = label; a.style.display = 'none'; }
       else { a.style.display = 'none'; c.style.display = 'none'; }
     },
+    lives(n, hit) { const e = $('#mk-lives'); e.querySelector('span').textContent = n; if (hit) { e.classList.remove('hit'); void e.offsetWidth; e.classList.add('hit'); } },
+    action2(label) { const b = $('#mk-act2'); if (label == null) { b.style.display = 'none'; return; } b.style.display = 'block'; b.querySelector('span').textContent = label; },
+    compass(on, rot, label, sub, hot) { const c = $('#mk-comp'); if (!on) { c.style.display = 'none'; return; } c.style.display = 'flex'; c.classList.toggle('hot', !!hot); c.querySelector('svg').style.transform = `rotate(${rot}rad)`; const h = `${label}<small>${sub || ''}</small>`; const l = c.querySelector('.l'); if (l._h !== h) { l.innerHTML = h; l._h = h; } },
+    sprint(on, time, ring, stars) { const e = $('#mk-sprint'); if (!on) { e.style.display = 'none'; return; } e.style.display = 'block'; e.querySelector('.tm').textContent = time.toFixed(1); e.querySelector('.rg').textContent = ring; e.querySelector('.stars').textContent = stars; },
+    big(text) { const e = $('#mk-big'); if (!text) { e.style.display = 'none'; return; } e.style.display = 'block'; e.textContent = text; },
+    build(on, name, frac) { const e = $('#mk-build'); if (!on) { e.style.display = 'none'; return; } e.style.display = 'block'; e.querySelector('.n').textContent = name; e.querySelector('.p').textContent = Math.round(frac * 100) + '%'; e.querySelector('.bar i').style.width = (frac * 100).toFixed(1) + '%'; },
+    fade(on) { $('#mk-fade').classList.toggle('on', on); },
     action(label, frac) { const b = $('#mk-act'); if (label == null) { b.style.display = 'none'; return; } b.style.display = 'block'; b.querySelector('span').textContent = label; b.querySelector('i').style.width = (frac * 100).toFixed(1) + '%'; },
     toast(text) { const d = document.createElement('div'); d.className = 'mk-toast mk-glass'; d.textContent = text; $('#mk-toasts').appendChild(d); setTimeout(() => d.remove(), 1900); },
     popup({ icon, head, title, pts, xp, note, level }, ms = 2800) {

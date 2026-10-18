@@ -177,18 +177,18 @@ export function groundMesh(x, z) { // exact height of the rendered terrain mesh
 
 // warm light pools under the path lamps: a small world-space light map painted in main.js (one texture fetch, no extra lights)
 const TFILL = (() => { const x = Rt.x * 0.6 - F.x * 0.3, z = Rt.z * 0.6 - F.z * 0.3, y = 0.6, l = Math.hypot(x, y, z); return `vec3(${(x / l).toFixed(3)}, ${(y / l).toFixed(3)}, ${(z / l).toFixed(3)})`; })();
-export const LAMPMAP = { value: null }; export const LAMPMAP_R = 75; export const AOMAP = { value: new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1) }; AOMAP.value.needsUpdate = true;
+export const LAMPMAP = { value: null }; export const LAMPK = { value: 1 }; /* base power (game: reactor out -> lamp pools off) */ export const LAMPMAP_R = 75; export const AOMAP = { value: new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1) }; AOMAP.value.needsUpdate = true;
 const SUNXZ = (() => { const x = -Rt.x * 0.75 - F.x * 0.45, z = -Rt.z * 0.75 - F.z * 0.45, l = Math.hypot(x, z); return `${(x / l).toFixed(3)}, ${(z / l).toFixed(3)}`; })(); // sun direction on the ground plane (for painted rubble highlights/shadows)
 export function terrainMaterial(patch = false, canyon = false) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.customProgramCacheKey = () => 'terrain' + patch + canyon; m.color.setRGB(0.74, 0.72, 0.69); // regolith: slightly brighter, less warm (pass 17)
   // procedural regolith: mottled albedo, dark pits, pebble speckle and a bump-mapped normal (fades with distance)
-  m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP; sh.uniforms.uAOMap = AOMAP; sh.uniforms.uPatchOn = PATCH.on; sh.uniforms.uPatch2On = PATCH2.on; sh.uniforms.uPatch3On = PATCH3.on;
+  m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP; sh.uniforms.uLampK = LAMPK; sh.uniforms.uAOMap = AOMAP; sh.uniforms.uPatchOn = PATCH.on; sh.uniforms.uPatch2On = PATCH2.on; sh.uniforms.uPatch3On = PATCH3.on;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;').replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
       varying vec3 vWP; varying vec3 vWN;
       float hh(vec2 p){ p = fract(p * vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(hh(i), hh(i + vec2(1, 0)), f.x), mix(hh(i + vec2(0, 1)), hh(i + vec2(1, 1)), f.x), f.y); }
-      uniform sampler2D uLampMap; uniform sampler2D uAOMap; uniform float uPatchOn; uniform float uPatch2On; uniform float uPatch3On;
+      uniform sampler2D uLampMap; uniform float uLampK; uniform sampler2D uAOMap; uniform float uPatchOn; uniform float uPatch2On; uniform float uPatch3On;
       ${patch ? `float vor(vec2 p){ vec2 i = floor(p), f = fract(p); float m1 = 8., m2 = 8.; for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 o = vec2(x, y); vec2 r = o + vec2(hh(i + o), hh(i + o + 17.3)) - f; float dd = dot(r, r); if (dd < m1) { m2 = m1; m1 = dd; } else if (dd < m2) m2 = dd; } return sqrt(m2) - sqrt(m1); }
       /* pass 21: low-frequency soft strata + sparse wide cracks, both faded by the pixel footprint fw (world m/px) so they never alias into dashes */
       float clP(vec2 p, float fw, out float cv, out float sh){ vec2 wq = p * 0.025; p += vec2(vn(wq) - 0.5, vn(wq + 5.2) - 0.5) * 8.0;
@@ -216,7 +216,7 @@ export function terrainMaterial(patch = false, canyon = false) {
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
       reflectedLight.directDiffuse *= 1.28; reflectedLight.indirectDiffuse *= 0.92;`)
       .replace('#include <opaque_fragment>', `{ vec3 kd = normalize((viewMatrix * vec4(${TFILL}, 0.0)).xyz); outgoingLight += diffuseColor.rgb * vec3(0.98, 0.96, 0.92) * 0.55 * max(dot(normal, kd), 0.0);
-        vec2 lu = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (lu.x > 0.0 && lu.x < 1.0 && lu.y > 0.0 && lu.y < 1.0) outgoingLight += diffuseColor.rgb * texture2D(uLampMap, lu).rgb * 9.0; }
+        vec2 lu = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (lu.x > 0.0 && lu.x < 1.0 && lu.y > 0.0 && lu.y < 1.0) outgoingLight += diffuseColor.rgb * texture2D(uLampMap, lu).rgb * 9.0 * uLampK; }
       #include <opaque_fragment>`)
       .replace('#include <color_fragment>', `#include <color_fragment>
       ${patch ? '' : `if (uPatchOn > 0.5 && length(vWP.xz - vec2(${PATCH.x.toFixed(1)}, ${PATCH.z.toFixed(1)})) < ${PATCH.cut.toFixed(1)}) discard; if (uPatch2On > 0.5 && length(vWP.xz - vec2(${PATCH2.x.toFixed(1)}, ${PATCH2.z.toFixed(1)})) < ${PATCH2.cut.toFixed(1)}) discard; if (uPatch3On > 0.5) { vec2 d3 = vWP.xz - vec2(${PATCH3.x.toFixed(2)}, ${PATCH3.z.toFixed(2)}); vec2 u3 = vec2(${PATCH3.rect.ux.toFixed(5)}, ${PATCH3.rect.uz.toFixed(5)}); if (abs(dot(d3, u3)) < ${(PATCH3.rect.hl-PATCH3.cut).toFixed(1)} && abs(dot(d3, vec2(-u3.y, u3.x))) < ${(PATCH3.rect.hw-PATCH3.cut).toFixed(1)}) discard; } /* covered by the high-res region patches */`}
