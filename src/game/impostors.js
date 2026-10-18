@@ -19,7 +19,7 @@ export function makeImpostors(scene, renderer, env) {
   const g = new THREE.InstancedBufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3)); g.setIndex([0, 1, 2, 0, 2, 3]);
   const iP = new THREE.InstancedBufferAttribute(new Float32Array(MAXN * 4), 4), iT = new THREE.InstancedBufferAttribute(new Float32Array(MAXN * 2), 2); iP.setUsage(THREE.DynamicDrawUsage); iT.setUsage(THREE.DynamicDrawUsage); g.setAttribute('iP', iP); g.setAttribute('iT', iT); g.instanceCount = 0;
   const U = { uMap: { value: rt.texture }, uDim: { value: 1 }, uSize: { value: new THREE.Vector2(W, H) }, uAtlas: { value: new THREE.Vector2(TYPES.length, VIEWS) } };
-  const m = new THREE.ShaderMaterial({ uniforms: U, transparent: false, alphaTest: 0.5,
+  const m = new THREE.ShaderMaterial({ uniforms: U, transparent: false, side: THREE.DoubleSide,
     vertexShader: `attribute vec4 iP; attribute vec2 iT; uniform vec2 uSize, uAtlas; varying vec2 vUv; void main(){ vec3 c = iP.xyz; vec3 toC = cameraPosition - c; toC.y = 0.0; toC = normalize(toC); vec3 side = vec3(toC.z, 0.0, -toC.x);
       // pick the front or 3/4 view from the angle between the robot's facing (iP.w) and the camera
       float rel = atan(toC.x, toC.z) - iP.w; rel = atan(sin(rel), cos(rel)); float view = abs(rel) > 0.45 ? 1.0 : 0.0; float flip = (view > 0.5 && rel < 0.0) ? -1.0 : 1.0;
@@ -28,7 +28,7 @@ export function makeImpostors(scene, renderer, env) {
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }` });
-  const mesh = new THREE.Mesh(g, m); mesh.name = 'crew_impostors'; mesh.frustumCulled = false; mesh.visible = false; scene.add(mesh);
+  const mesh = new THREE.Mesh(g, m); mesh.name = 'crew_impostors'; mesh.userData.rt = rt; mesh.frustumCulled = false; mesh.visible = false; scene.add(mesh);
   let n = 0;
   return { TYPES, mesh, begin() { n = 0; }, push(pos, type, yaw) { if (n >= MAXN) return false; iP.setXYZW(n, pos.x, pos.y, pos.z, yaw); iT.setXY(n, Math.max(0, TYPES.indexOf(type)), 0); n++; return true; },
     end() { g.instanceCount = n; mesh.visible = n > 0; if (n) { iP.needsUpdate = true; iT.needsUpdate = true; } }, set dim(v) { U.uDim.value = v; } };

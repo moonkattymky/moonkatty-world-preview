@@ -149,6 +149,28 @@ body.game #jump b{position:absolute;left:0;right:0;top:27px;text-align:center;te
 body.game #jump .fl{position:absolute;left:50%;bottom:-16px;width:26px;height:30px;margin-left:-13px;border-radius:50% 50% 50% 50%/30% 30% 70% 70%;background:radial-gradient(ellipse at 50% 20%,#fff,#a8f0ff 30%,rgba(103,215,240,.6) 55%,transparent 72%);filter:blur(1px);animation:mkfl .18s infinite alternate;pointer-events:none}
 @keyframes mkfl{to{transform:scaleY(1.2) scaleX(.9);opacity:.8}}
 @media (hover:hover) and (pointer:fine){body.game #joy,body.game #jump{opacity:.55}}
+/* v44 quest panel 1:1 with concept 1eb41bee (right panel): compact holo tablet top-left, perspective tilt, chamfered frame, cyan glow, MOONKATTY 9 header, QUEST: + title */
+#mk-track{top:max(78px,calc(env(safe-area-inset-top) + 68px));left:12px;width:min(40vw,176px);padding:9px 11px 9px 12px;border-radius:0;border:none;background:none;box-shadow:none;transform:perspective(520px) rotateY(16deg) rotateZ(-0.6deg);transform-origin:0 50%;filter:drop-shadow(0 0 7px rgba(80,200,255,.75));color:#dff8ff;text-shadow:0 0 5px rgba(110,220,255,.55);font-family:"Segoe UI",Roboto,system-ui,sans-serif}
+#mk-track::before{content:'';position:absolute;inset:0;left:0;top:0;width:auto;height:auto;border:none;border-radius:0;filter:none;z-index:-1;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);background:linear-gradient(90deg,rgba(130,230,255,.95),rgba(80,190,255,.85))}
+#mk-track::after{content:'';position:absolute;inset:1.6px;right:1.6px;bottom:1.6px;width:auto;height:auto;border:none;border-radius:0;filter:none;z-index:-1;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);background:repeating-linear-gradient(0deg,rgba(110,220,255,.07) 0 1px,transparent 1px 3px),linear-gradient(160deg,rgba(14,52,96,.86),rgba(5,18,44,.9) 60%,rgba(12,48,90,.86))}
+#mk-track .ch{font-size:8px;letter-spacing:.08em;color:#bfefff;font-weight:600;opacity:.95}
+#mk-track .ch span:first-child::before{content:'MOONKATTY 9 · ';font-weight:700;color:#e6fbff}
+#mk-track .qh{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#e6fbff;margin-top:5px}
+#mk-track .t{font-size:12.5px;font-weight:500;margin:1px 0 2px;color:#e6fbff;line-height:1.2}
+#mk-track .d{display:none}
+#mk-track .row{font-size:9.5px;margin-top:4px}
+#mk-track .row:has(.dist){display:none}
+#mk-track .bar{height:3px;background:rgba(110,220,255,.18)}
+#mk-track .hint{font-size:9px;margin-top:3px;color:#9fe6ff;line-height:1.25}
+#mk-track{top:max(104px,calc(env(safe-area-inset-top) + 94px));width:min(47vw,196px);padding:11px 13px 12px 14px}
+#mk-track .ch{display:block;font-size:7.5px;letter-spacing:.06em;color:#8fd8f0;font-weight:500;text-transform:none}
+#mk-track .ch span:first-child::before{content:'MOONKATTY 9';display:block;font-size:12.5px;letter-spacing:.02em;font-weight:500;color:#e6fbff;margin-bottom:1px;text-transform:uppercase}
+#mk-track .ch span:last-child{display:none}
+#mk-track .qh{font-size:15px;font-weight:500;letter-spacing:.02em;margin-top:9px}
+#mk-track .t{font-size:13.5px;font-weight:400}
+#mk-pts .v,#mk-cry .v{font-size:18px}#mk-pts .v .st{font-size:20px}#mk-cry svg{width:18px;height:22px}
+
+
 `;
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -189,7 +211,7 @@ export function makeHUD(t) {
       $('#mk-lv').textContent = level; $('#mk-ringp').setAttribute('stroke-dashoffset', (106.8 * (1 - Math.min(1, xp / need))).toFixed(1));
       $('#mk-pv').textContent = points.toLocaleString('ru-RU'); $('#mk-cv').textContent = (cry | 0).toLocaleString('ru-RU'); $('#mk-capt').textContent = `${earned}/${cap} ${t('today')}`; $('#mk-capbar i').style.width = Math.min(100, earned / cap * 100) + '%';
     },
-    setTrack(html) { const el = $('#mk-track'); if (el._h !== html) { el.innerHTML = html; el._h = html; } },
+    setTrack(html) { const el = $('#mk-track'); if (el._h !== html) { el.innerHTML = html.replace(/(<div class="t">)/, `<div class="qh">${esc(t('mapQuest'))}:</div>$1`); el._h = html; } },
     marker(mode, x, y, rot, label) {
       const a = $('#mk-arrow'), c = $('#mk-chip');
       if (mode === 'arrow') { a.style.display = 'block'; a.style.transform = `translate(${x}px,${y}px)`; a.querySelector('.a').style.transform = `rotate(${rot}rad)`; a.querySelector('span').textContent = label; c.style.display = 'none'; }

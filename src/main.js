@@ -286,6 +286,7 @@ const contact = (() => { const cv = document.createElement('canvas'); cv.width =
 // ---------- loop ----------
 const clock = new THREE.Clock(); let t = 0; const ftimes = [];
 function frame(dt) {
+  if (game && game.map && game.map.open) { game.map.frame(dt); return; }
   t += dt;
   if (!SHOT) ctrl.update(dt); else { ctrl.pos.y = ctrl.floorAt(ctrl.pos.x, ctrl.pos.z); if (ctrl.camFree) { ctrl.camTarget.copy(ctrl.pos).add(new THREE.Vector3(0, 1.3, 0)); ctrl.updateCamera(1); } }
   if (game) game.update(dt);

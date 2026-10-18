@@ -17,7 +17,7 @@ import { makeHome } from './home.js';
 //   - sheet tabs: Chapter (ch2 quests), Crew (robot panel), Daily (login reward, streak, 3 tasks)
 // ============================================================================================
 // staged rollout switches (v40 base/storage/robots, v41 + home, v42 + storm finale)
-export const FEAT = { home: true, storm: false };
+export const FEAT = { home: true, storm: true, life: false };
 const CH2_ALL = [
   { id: 'c2_collect', icon: '📦', kind: 'collect', pts: 20, xp: 20 },
   { id: 'c2_home', icon: '🏠', kind: 'home', pts: 20, xp: 20 },
@@ -103,8 +103,8 @@ export function createChapter2(ctx) {
     return null; }
   const storm = { spots: [], t: 0, on: false, emberT: 0, replay: false };
   // damaged shield-emitter panels sit just outside the dome rim on the console side (concept: robots weld in front of the dome)
-  const SPOTS = (() => { const ux = consoleP.x - shieldC.x, uz = consoleP.z - shieldC.z, ul = Math.hypot(ux, uz) || 1, dx = ux / ul, dz = uz / ul, px = -dz, pz = dx; const dC = Math.min(ul - 7, 46);
-    return [[-6.5, 0.0], [0.0, -1.5], [6.0, 0.5]].map(([l, f]) => free({ x: shieldC.x + dx * (dC + f) + px * l, z: shieldC.z + dz * (dC + f) + pz * l }, 2)); })();
+  const SPOTS = (() => { const ux = consoleP.x - shieldC.x, uz = consoleP.z - shieldC.z, ul = Math.hypot(ux, uz) || 1, dx = ux / ul, dz = uz / ul, px = -dz, pz = dx; const dC = Math.min(ul - 4.5, 50);
+    return [[-3.5, 0.5], [2.5, -1.5], [-8.5, 0.0]].map(([l, f]) => free({ x: shieldC.x + dx * (dC + f) + px * l, z: shieldC.z + dz * (dC + f) + pz * l }, 2)); })();
   function startStorm() { if (!shield.start()) return; storm.on = true; storm.t = 0; storm.spots = []; storm.replay = isDone('c2_storm'); shield.configure({ dur: FAST ? 8 : 32, fast: FAST, onHit: () => { } }); hud.toast('🐾 ' + t('stormStart')); }
   function updateStorm(dt) { const st = shield.state; if (st === 'off' && !storm.on) { shield.console.visible = FEAT.storm && S().on && isDone('c2_l3'); return; } shield.console.visible = true;
     ctx.setNight(shield.night); if (!storm.on) return; storm.t += dt; const D0 = FAST ? 8 : 32;
@@ -129,7 +129,7 @@ export function createChapter2(ctx) {
   const SPD = FAST ? 4.5 : 1.6;
   // state machine: home -> (job) walkout -> site (work) -> (done) return -> home. Upgrades / engineer jobs are local (walk straight to the site).
   function updateCrew(dt) {
-    const camR = regionOf(camera.position); const camP = camera.position; if (imp) { imp.begin(); imp.dim = 1 - 0.55 * shield.night; }
+    const camR = regionOf(camera.position); const camP = camera.position; if (imp) { imp.begin(); imp.dim = 1 + 0.25 * shield.night; }
     const showBot = (c, vis, mode, d) => { const far = imp && vis && d > IMP_D && imp.push(c.pos, c.r.type, c.yaw); c.rob.root.visible = vis && !far; if (vis && !far) c.rob.update(dt, mode, camP); };
     for (const c of crew.values()) {
       const j = econ.jobOf(c.r.id); const local = j && (j.kind === 'upgrade' || j.kind === 'eng');
@@ -326,5 +326,6 @@ export function createChapter2(ctx) {
     storm: () => ({ state: shield.state, on: storm.on, night: shield.night, spots: storm.spots.map(s => ({ x: s.x, z: s.z, hp: s.hp, rid: s.rid })), console: consoleP, center: shieldC }), startStorm, shield, poseStorm() { for (const c of crew.values()) if (c.storm) { const sp = c.storm; c.pos.set(sp.x + 0.85 * Math.sign((c.home.x - sp.x) || 1), groundAt(sp.x, sp.z), sp.z); c.rob.root.position.copy(c.pos); } }, // screenshot helper: robots already at their panels
     stepStorm(sec) { const t0 = ctx.time(); for (let k = 0, n = Math.ceil(sec / 0.05); k < n; k++) { updateStorm(0.05); updateCrew(0.05); if (imp) imp.end(); shield.update(0.05, t0 + k * 0.05, camera.position); } },
     base: () => ({ level: S().level, value: base.mesh.visible, pieces: base.pieces, museum: base.museumW, homes: HOMES, work: WORK, sites: { canyonSite, meteorSite, engSite } }), baseMesh: base, tick: () => { econ.tick(); flush(); checkQuest(); flush(); }, track };
-  return { get inside() { return inside; }, begin, boot, update, action, actDown, actUp, target, trackHTML, renderChapter, renderCrew, renderDaily, track, api, get on() { return S().on; }, cur };
+  const mapCrew = () => [...crew.values()].map(c => { const j = econ.jobOf(c.r.id); return { x: c.pos.x, z: c.pos.z, type: c.r.type, prog: j ? econ.progress(j) : -1 }; });
+  return { mapCrew, get inside() { return inside; }, begin, boot, update, action, actDown, actUp, target, trackHTML, renderChapter, renderCrew, renderDaily, track, api, get on() { return S().on; }, cur };
 }

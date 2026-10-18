@@ -10,8 +10,10 @@ import { makeRobot } from './robot.js';
 import { makeProgressLabel, makeRobotJob } from './jobs.js';
 import { DEPOT_STAGES } from './activities.js';
 import { groundAt as terrainAt } from '../terrain.js';
-import { createChapter2 } from './ch2.js';
+import { createChapter2, FEAT } from './ch2.js';
+import { makeWorldLife } from './worldlife.js';
 import { BASE } from './economy.js';
+import { makeHoloMap, fogGet, fogSet, fogReveal } from './holomap.js';
 
 // Game layer: progression + Chapter 1 activities on top of the 3D world. createGame() is called once from main.js.
 //   opts: { scene, camera, ctrl, renderer, env, solids, groundAt, Q, places, crystalSpots, layout }
@@ -281,9 +283,41 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
     return `<div class="ch"><span>${esc(t('chapter'))} · ${esc(t('chapterTitle'))}</span><span>${D().ch1.idx + 1}/${Qs.length}</span></div><div class="t">${q.icon} ${esc(t('q_' + q.id + '_t'))}</div>${q.kind === 'power' ? '' : `<div class="d">${esc(t('q_' + q.id + '_d'))}</div>`}${prog}<div class="row" style="margin-top:5px"><span style="color:rgba(247,242,231,.6)">+${q.pts} ⭐ · +${q.xp} XP</span><span class="dist">${dist != null ? Math.round(dist) + ' ' + t('m') : ''}</span></div>${hint ? `<div class="hint">${hint}</div>` : ''}`;
   }
 
+
+  // ---------- holographic world map (HUD map button / M key) ----------
+  const MAP_R = { hub: 150, canyon: 110, launch: 110 };
+  const mapRegion = () => { const k = regionOf(me()); const c = L.regions[k]; return { key: k, x: c.x, z: c.z, R: MAP_R[k] || 120, name: t('map_r_' + k) }; };
+  let holo = null, fogA = null, fogK = null, fogT = 0, goT = 0;
+  const fogFor = (rg) => { if (fogK !== rg.key) { fogK = rg.key; fogA = fogGet(store, rg.key); } return fogA; };
+  function mapData() {
+    const rg = mapRegion(); const inR = (p) => p && Math.hypot(p.x - rg.x, p.z - rg.z) < rg.R * 0.92; const pins = [];
+    const pin = (p, icon, key, kind) => { if (inR(p)) pins.push({ x: p.x, z: p.z, icon, label: key ? t(key) : '', kind: kind || 'place' }); };
+    const base = sd ? sd(-1, 5) : L.regions.hub; if (rg.key === 'hub') pin(base, '🏠', 'map_base');
+    const al = spots.filter((s, i) => crystals.alive[i] && inR(s)); if (al.length) { const c = al.reduce((a, s) => ({ x: a.x + s.x / al.length, z: a.z + s.z / al.length }), { x: 0, z: 0 }); pin(c, '💎', 'map_crystals'); }
+    pin(P.reactorConsole, '⚡', 'map_reactor'); pin(P.dish, '📡', 'map_antenna'); pin(P.ledge, '⛰️', 'map_ledge'); pin(P.launchPad, '🚀', 'map_launch'); pin(P.canyonPad, '🛬', 'map_canyon'); if (G[rg.key]) pin(G[rg.key], '🌀', 'map_cave');
+    for (const c of caches) if (!D().secrets.includes(c.id)) pin(c, '❔', '', 'hint');
+    const q = cur(); const tg = q ? targetOf(q) : ch2.target(); const cq = !q && ch2.on && ch2.cur ? ch2.cur() : null;
+    const quest = q ? { title: `${q.icon} ${t('q_' + q.id + '_t')}`, sub: t('q_' + q.id + '_d') } : cq ? { title: `${cq.icon || '⭐'} ${t('q_' + cq.id + '_t')}`, sub: t('q_' + cq.id + '_d') } : null;
+    const crew = ch2.on && ch2.mapCrew ? ch2.mapCrew().filter(inR) : [];
+    const ore_ = ore.state ? L.ore.filter((p, i) => ore.state[i] && ore.state[i].alive && inR(p)) : [];
+    return { region: rg, groundAt: terrainAt, me: { x: me().x, z: me().z, yaw: ctrl.yaw }, target: tg && inR(tg) ? tg : null, quest, pins, crystals: [...al, ...ore_], crew, base: rg.key === 'hub' ? base : null, fog: fogFor(rg) };
+  }
+  function ensureMap() { if (holo) return holo; holo = makeHoloMap({ renderer, t, onGo: () => { goT = 6; } }); holo.getData = mapData; return holo; }
+  const MAP_FEAT = false; if (MAP_FEAT) hud.onMap = () => { if (!ready) return; ensureMap().toggle(); };
+  if (MAP_FEAT) addEventListener('keydown', e => { if (e.code === 'KeyM' && ready && !(holo && holo.open)) ensureMap().show(); });
+  function updateFog(dt) { fogT -= dt; if (fogT > 0) return; fogT = 0.5; const rg = mapRegion(); const a = fogFor(rg); if (fogReveal(a, rg, me().x, me().z, 30)) { fogSet(store, rg.key, a); store.queueSave(); } }
+
+  // ---------- world life (chapter 2, FEAT.life, ?life=0 disables) ----------
+  let life = null; const LIFE_ON = FEAT.life && Q.get('life') !== '0';
+  function updateLife(dt) {
+    if (!LIFE_ON) return; const show = ch2.on && regionOf(me()) === 'hub' && !ch2.inside;
+    if (!life && show) { const base = sd ? sd(-1, 5) : L.regions.hub; const ra = Math.atan2(400 - base.z, 440 - base.x); const crater = { x: base.x + Math.cos(ra) * 170, z: base.z + Math.sin(ra) * 170 };
+      life = makeWorldLife({ scene, camera, env, groundAt: terrainAt, depotP, fields: spots.filter(s => Math.hypot(s.x - base.x, s.z - base.z) < 140), base, launch: L.regions.launch, crater, t, hud, low: Q.get('q') === 'low', mobile, ctrl }); }
+    if (!life) return; life.setVisible(show); if (show) life.update(dt, time, me(), ch2.mapCrew ? ch2.mapCrew() : []);
+  }
   // ---------- frame ----------
   function update(dt) {
-    if (!ready) return; time += dt;
+    if (!ready) return; time += dt; updateFog(dt); if (goT > 0) goT -= dt; updateLife(dt);
     if (ctrl.thrusting) lastThrust = time;
     crystals.update(time); burst.update(dt); ore.update(time, dt); pow.update(time, dt); updatePower(dt); for (const k in G) G[k].fx.update(time); for (const c of caches) if (c.fx.mesh.visible) c.fx.update(time);
     for (let i = 0; i < spots.length; i++) { if (!crystals.alive[i]) continue; const s = spots[i]; if (Math.hypot(s.x - ctrl.pos.x, s.z - ctrl.pos.z) < 1.7 && Math.abs(ctrl.pos.y - s.y) < 3.5) pickCrystal(i); }
@@ -293,7 +327,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
     // parts: hidden hunt (compass + glow when close, beacon only within 22 m)
     let showBeacon = !!tg; const nP = q && q.kind === 'parts' ? nearestPart() : null;
     if (nP) { parts.update(time, nP.d < 25 ? 1 : 0); if (!(q.region !== regionOf(p))) showBeacon = nP.d < 22; for (let i = 0; i < parts.spots.length; i++) { if (!parts.alive[i]) continue; const s = parts.spots[i]; if (dist2(p, s) < 1.9 && Math.abs(p.y - s.y) < 2.5) { parts.alive[i] = false; D().ch1.parts.push(i); burst.fire(s.x, s.y + 0.6, s.z); grant(5, 'part'); hud.toast(`📡 ${t('partFound')} ${D().ch1.parts.length}/3`); store.queueSave(); if (D().ch1.parts.length >= q.need) reward(q); } } }
-    if (nP && nP.i >= 0 && q.region === regionOf(p)) { const s = parts.spots[nP.i]; const cf = new THREE.Vector3(); camera.getWorldDirection(cf); const rot = Math.atan2(s.x - p.x, s.z - p.z) - Math.atan2(cf.x, cf.z); hud.compass(true, -rot, `📡 ${Math.round(nP.d)} ${t('m')}`, `${t('parts')} ${D().ch1.parts.length}/3`, nP.d < 25); } else hud.compass(false);
+    if (nP && nP.i >= 0 && q.region === regionOf(p)) { const s = parts.spots[nP.i]; const cf = new THREE.Vector3(); camera.getWorldDirection(cf); const rot = Math.atan2(s.x - p.x, s.z - p.z) - Math.atan2(cf.x, cf.z); hud.compass(true, -rot, `📡 ${Math.round(nP.d)} ${t('m')}`, `${t('parts')} ${D().ch1.parts.length}/3`, nP.d < 25); } else if (goT > 0 && tg) { const cf = new THREE.Vector3(); camera.getWorldDirection(cf); const rot = Math.atan2(tg.x - p.x, tg.z - p.z) - Math.atan2(cf.x, cf.z); hud.compass(true, -rot, `🎯 ${Math.round(Math.hypot(tg.x - p.x, tg.z - p.z))} ${t('m')}`, t('mapQuest'), true); } else hud.compass(false);
     beacon.set(showBeacon && tg ? { x: tg.x, y: gy(tg), z: tg.z } : null, q && (q.kind === 'mine' || q.kind === 'parts' || q.kind === 'power') ? '#7fd8ff' : (tg && tg.fx ? '#a98bff' : '#67d7f0')); beacon.update(time, camera.position);
     const dist = tg ? dist2(tg, p) : null;
     // ---- activity logic / context buttons ----
@@ -394,5 +428,6 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
     cacheAt: (id) => caches.find(c => c.id === id),
     async mineTry(needle) { if (!miner.open || mineTarget < 0) return null; if (!miner.holding) miner.press(); const r = miner.release(needle); await mineResult(r); return r; },
   };
-  return { update, api };
+  api.map = () => ensureMap(); api.life = () => life; api.mapData = () => mapData();
+  return { update, api, get map() { return holo; } };
 }
