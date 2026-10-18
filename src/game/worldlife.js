@@ -49,7 +49,7 @@ function makeBillboards(scene, N) {
       void main(){ vec2 u = vUv; vec3 c = vec3(0.0); float a = 0.0; if (vS <= 0.0) discard;
         if (vD.x < 0.5) { float ph = uT * 1.6 + vD.y; float pu = 0.5 + 0.5 * sin(ph); vec2 b = (u - vec2(0.5, 0.7)) / vec2(0.36 + 0.05 * pu, 0.22 - 0.03 * pu); float bell = smoothstep(1.0, 0.75, length(b)) * step(-0.25, b.y); float rim = smoothstep(0.8, 1.0, length(b)) * smoothstep(1.15, 1.0, length(b)) * step(-0.3, b.y);
           float ten = 0.0; for (int i = 0; i < 5; i++) { float x0 = 0.3 + float(i) * 0.1; float x = x0 + 0.03 * sin(u.y * 14.0 - uT * 3.0 + float(i)); ten += smoothstep(0.012, 0.0, abs(u.x - x)) * step(u.y, 0.58) * smoothstep(0.02, 0.5, u.y); }
-          vec3 jc = mix(vec3(0.35, 0.8, 1.6), vec3(1.2, 0.7, 1.8), 0.5 + 0.5 * sin(ph * 0.5)); c = jc * (bell * 0.55 + rim * 1.2 + ten * 0.8) * (0.7 + 0.5 * pu); a = (bell * 0.25 + rim * 0.3 + ten * 0.2); }
+          vec3 jc = mix(vec3(0.15, 1.15, 1.7), vec3(0.45, 1.6, 2.0), 0.5 + 0.5 * sin(ph * 0.5)); c = jc * (bell * 0.55 + rim * 1.2 + ten * 0.8) * (0.7 + 0.5 * pu); a = (bell * 0.25 + rim * 0.3 + ten * 0.2); }
         else if (vD.x < 1.5) { vec2 q = u - 0.5; float run = sin(uT * 18.0) * 0.06; float body = smoothstep(0.02, 0.0, length((q - vec2(0.0, -0.05)) / vec2(0.26, 0.15)) - 1.0); float head = smoothstep(0.02, 0.0, length((q - vec2(0.24, 0.08)) / vec2(0.11, 0.1)) - 1.0);
           float ear1 = smoothstep(0.02, 0.0, length((q - vec2(0.22, 0.27 + run * 0.3)) / vec2(0.03, 0.12)) - 1.0), ear2 = smoothstep(0.02, 0.0, length((q - vec2(0.28, 0.25)) / vec2(0.03, 0.11)) - 1.0); float leg = smoothstep(0.02, 0.0, length((q - vec2(-0.15 + run, -0.22)) / vec2(0.1, 0.05)) - 1.0) + smoothstep(0.02, 0.0, length((q - vec2(0.12 - run, -0.21)) / vec2(0.07, 0.04)) - 1.0);
           float s = clamp(body + head + ear1 + ear2 + leg, 0.0, 1.0); c = vec3(0.9, 0.9, 1.0) * s * 0.9; a = s * 0.9; }
@@ -75,7 +75,7 @@ function makeAudio() {
     step() { noise(0.06, 380, 1.2, 0.05); }, radio() { noise(0.35, 1800, 0.8, 0.04); setTimeout(() => blip(1200, 1200, 0.05, 0.03, 'sine'), 360); }, whoosh() { noise(1.4, 500, 0.6, 0.03); } };
 }
 
-export function makeWorldLife({ scene, camera, env, groundAt, depotP, fields, base, launch, crater, t, hud, low, mobile, ctrl, dish }) {
+export function makeWorldLife({ scene, camera, env, groundAt, depotP, fields, base, launch, crater, t, hud, low, mobile, ctrl, dish, makeCrew }) {
   const mat = vcMat(env); const root = new THREE.Group(); root.name = 'world_life'; scene.add(root);
   const parts = makeParticles(scene, low ? 140 : mobile ? 200 : 300); const bb = makeBillboards(scene, 12); const audio = makeAudio();
   // sky ships: 2 shuttles + 1 satellite, merged-geometry meshes moved along arcs high in the sky
@@ -91,13 +91,20 @@ export function makeWorldLife({ scene, camera, env, groundAt, depotP, fields, ba
   // beacons (instanced spheres, blinking) on the base
   const bN = 6; const beacons = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ toneMapped: false }), bN); beacons.name = 'life_beacons'; root.add(beacons);
   const bPos = Array.from({ length: bN }, (_, i) => { const a = i / bN * Math.PI * 2 + 0.3, r = 9 + (i % 2) * 6; const x = base.x + Math.cos(a) * r, z = base.z + Math.sin(a) * r; return { x, z, y: groundAt(x, z) + 3.2 + (i % 3) * 1.4, c: i % 2 ? new THREE.Color(2.6, 0.25, 0.15) : new THREE.Color(0.3, 1.2, 2.8), ph: i * 0.7 }; });
-  // rover loop: field centroid -> depot -> back, a closed Catmull-Rom loop on the ground
-  const F = fields.length ? fields.reduce((a, s) => ({ x: a.x + s.x / fields.length, z: a.z + s.z / fields.length }), { x: 0, z: 0 }) : { x: depotP.x + 30, z: depotP.z };
-  const mid = { x: (F.x + depotP.x) / 2, z: (F.z + depotP.z) / 2 }; const nx = -(F.z - depotP.z), nz = F.x - depotP.x, nl = Math.hypot(nx, nz) || 1;
-  const loopPts = [[depotP.x + 4, depotP.z + 4], [mid.x + nx / nl * 9, mid.z + nz / nl * 9], [F.x + 3, F.z + 3], [mid.x - nx / nl * 9, mid.z - nz / nl * 9]].map(([x, z]) => new THREE.Vector3(x, 0, z));
+  // drill site + rover loop on open, flat ground next to the depot (scored: flatness incl. rocks via solids, clearance from props, distance from the base core)
+  const sAt = ctrl && ctrl.solids ? (x, z) => ctrl.solids.standAt(x, z) : groundAt; const cols = (ctrl && ctrl.colliders) || [];
+  const flat = (x, z, r) => { let mn = 1e9, mx = -1e9; for (let dx = -r; dx <= r; dx += 2) for (let dz = -r; dz <= r; dz += 2) { const h = sAt(x + dx, z + dz); mn = Math.min(mn, h); mx = Math.max(mx, h); } return mx - mn; };
+  const clear = (x, z) => cols.reduce((m, c) => Math.min(m, Math.hypot(c.x - x, c.z - z) - (c.r || 1)), 1e9);
+  let D = null, bs = 1e9; for (let i = 0; i < 24; i++) for (const r of [10, 13, 16, 20]) { const a = i / 24 * Math.PI * 2; const x = depotP.x + Math.cos(a) * r, z = depotP.z + Math.sin(a) * r;
+    const sc = flat(x, z, 6) * 3 + Math.max(0, 6 - clear(x, z)) * 4 + Math.max(0, 24 - Math.hypot(x - base.x, z - base.z)) + r * 0.08; if (sc < bs) { bs = sc; D = { x, z }; } }
+  const dd = { x: D.x - depotP.x, z: D.z - depotP.z }, dl = Math.hypot(dd.x, dd.z) || 1, ux = dd.x / dl, uz = dd.z / dl, px = -uz, pz = ux;
+  drill.position.set(D.x, groundAt(D.x, D.z), D.z); drill.rotation.y = Math.atan2(depotP.x - D.x, depotP.z - D.z) + 0.5;
+  // rover: depot -> around the drill -> back (closed loop), all inside the open patch
+  const loopPts = [[depotP.x + ux * 4 + px * 2.5, depotP.z + uz * 4 + pz * 2.5], [D.x + px * 7 - ux * 3, D.z + pz * 7 - uz * 3], [D.x + ux * 8, D.z + uz * 8], [D.x - px * 7 - ux * 3, D.z - pz * 7 - uz * 3], [depotP.x + ux * 4 - px * 2.5, depotP.z + uz * 4 - pz * 2.5]].map(([x, z]) => new THREE.Vector3(x, 0, z));
   const loop = new THREE.CatmullRomCurve3(loopPts, true); const loopLen = loop.getLength();
-  // drill site: next to the field, facing it
-  const D = { x: F.x - 10, z: F.z + 7 }; drill.position.set(D.x, groundAt(D.x, D.z), D.z); drill.rotation.y = Math.atan2(F.x - D.x, F.z - D.z);
+  // porters: two crew robots shuttling crystals drill -> depot; they wave at the cat when it comes close
+  const porters = makeCrew ? [['builder', 0], ['geologist', 0.5]].map(([ty, o]) => { const r = makeCrew(scene, env, ty, 2); r.root.name = 'life_porter'; return { r, o, wave: 0 }; }) : [];
+  const pA = { x: D.x - ux * 3 + px * 2, z: D.z - uz * 3 + pz * 2 }, pB = { x: depotP.x + ux * 2.5 + px * 1.2, z: depotP.z + uz * 2.5 + pz * 1.2 };
   // steam vents near the base
   const vents = [0, 1, 2].map(i => { const a = 1.1 + i * 2.1, r = 14 + i * 3; const x = base.x + Math.cos(a) * r, z = base.z + Math.sin(a) * r; return { x, z, y: groundAt(x, z) + 1.2, tt: i * 0.7 }; });
   // lore anchors
@@ -131,6 +138,12 @@ export function makeWorldLife({ scene, camera, env, groundAt, depotP, fields, ba
       const e = 0.9; const fy = groundAt(v.x + tng.x * e, v.z + tng.z * e), by = groundAt(v.x - tng.x * e, v.z - tng.z * e); rover.rotation.x = -Math.atan2(fy - by, 2 * e) ; rover.visible = Math.hypot(v.x - cam.x, v.z - cam.z) < 160;
       if (rover.visible && Math.random() < dt * 30) { const bx = v.x - tng.x * 1.6, bz = v.z - tng.z * 1.6; parts.emit(bx + (Math.random() - 0.5), gy + 0.3, bz + (Math.random() - 0.5), (Math.random() - 0.5) * 0.8, 0.5 + Math.random() * 0.5, (Math.random() - 0.5) * 0.8, 1.6, 0.9, 0.42, 0.4, 0.38, 0.3, 'smoke', 2.2); } }
     // drill: bit spins + bobs, sparks at the ground
+    // porters: walk A->B carrying a crystal, return empty; wave when the cat is near
+    for (const P of porters) { const cyc = 22, k = ((T / cyc + P.o) % 1); const go = k < 0.5, u = go ? k * 2 : (k - 0.5) * 2; const e = u < 0.1 ? 0 : u > 0.9 ? 1 : (u - 0.1) / 0.8; const a = go ? pA : pB, b = go ? pB : pA;
+      const x = a.x + (b.x - a.x) * e, z = a.z + (b.z - a.z) * e; const dc = cat ? Math.hypot(cat.x - x, cat.z - z) : 99; if (dc < 4.5 && P.wave <= 0) P.wave = 3.5; P.wave -= dt;
+      const R = P.r.root; R.position.set(x, groundAt(x, z), z); const vis = Math.hypot(x - cam.x, z - cam.z) < 90; R.visible = vis; if (!vis) continue;
+      const moving = u >= 0.1 && u <= 0.9; let yaw = Math.atan2(b.x - a.x, b.z - a.z); if (P.wave > 0 && cat) yaw = Math.atan2(cat.x - x, cat.z - z); R.rotation.y = yaw;
+      const mode = P.wave > 0 ? (go ? 'wavecarry' : 'wave') : go ? (moving ? 'carry' : 'carryidle') : (moving ? 'walk' : 'idle'); P.r.update(dt, mode, P.wave > 0 ? null : cam); }
     { const dv = Math.hypot(D.x - cam.x, D.z - cam.z) < 140; drill.visible = dv; if (dv) { bit.rotation.y += dt * 14; bit.position.y = 0.9 + Math.sin(T * 1.3) * 0.25; if (Math.random() < dt * 25) { drill.localToWorld(v.set(0, 0.05, 1.1)); parts.emit(v.x, v.y, v.z, (Math.random() - 0.5) * 5, 2 + Math.random() * 3, (Math.random() - 0.5) * 5, 0.5, 0.25, 2.6, 1.4, 0.4, 0, 'spark', 0, 9); } } }
     // steam puffs
     for (const s of vents) { s.tt -= dt; if (s.tt <= 0) { s.tt = 0.25 + Math.random() * 0.3; if (Math.hypot(s.x - cam.x, s.z - cam.z) < 120) parts.emit(s.x, s.y, s.z, (Math.random() - 0.5) * 0.4, 1.6 + Math.random() * 0.6, (Math.random() - 0.5) * 0.4, 3.2, 1.0, 0.55, 0.55, 0.58, 0.32, 'smoke', 3.5); } }
@@ -146,5 +159,5 @@ export function makeWorldLife({ scene, camera, env, groundAt, depotP, fields, ba
     if (ctrl && ctrl.onGround && ctrl.speed > 0.8 && stepT <= 0) { stepT = 0.42 / Math.min(2, ctrl.speed / 2); audio.step(); }
     if (radioT <= 0) { radioT = 40 + Math.random() * 40; audio.radio(); sub(RADIO[Math.floor(Math.random() * RADIO.length)]); }
   }
-  return { root, update, audio, setVisible(v_) { on = v_; root.visible = v_; parts.pts.visible = v_; bb.mesh.visible = v_; mb.style.display = v_ ? '' : 'none'; }, meshes: { rover, drill, ships, sat, lift, beacons } };
+  return { root, update, audio, setVisible(v_) { on = v_; root.visible = v_; parts.pts.visible = v_; bb.mesh.visible = v_; mb.style.display = v_ ? '' : 'none'; }, meshes: { rover, drill, ships, sat, lift, beacons, porters: porters.map(p => p.r.root) }, drillAt: D };
 }

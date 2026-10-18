@@ -152,7 +152,11 @@ function ccdStep(bone, end, target, w) { bone.getWorldPosition(_pa); end.getWorl
 function applyCatPose() {
   if (!catPose || !catModel) return; const S = catPose.side || 'L'; const B = (n) => catModel.getObjectByName(n); const up = B('upperarm_' + S), fo = B('forearm_' + S), ha = B('hand_' + S), sp = B('spine'); if (!up || !fo || !ha) return;
   _posePre.length = 0; for (const b of [up, fo, ha, sp]) if (b) _posePre.push([b, b.quaternion.clone()]);
-  catRoot.updateMatrixWorld(true); if (sp && catPose.lean) ccdStep(sp, ha, catPose.target, catPose.lean);
+  catRoot.updateMatrixWorld(true);
+  if (sp && catPose.bend) { // forward bend at the spine toward the target (world axis = up x horizontal dir to target)
+    const sw = sp.getWorldPosition(_pa); const dx = catPose.target.x - sw.x, dz = catPose.target.z - sw.z, dl = Math.hypot(dx, dz) || 1; _pb.set(dz / dl, 0, -dx / dl); // up x d
+    sp.parent.getWorldQuaternion(_pq2); _pq.setFromAxisAngle(_pb, catPose.bend); const inv = _pq2.clone().invert(); sp.quaternion.premultiply(inv.multiply(_pq).multiply(_pq2)); sp.updateMatrixWorld(true); }
+  if (sp && catPose.lean) ccdStep(sp, ha, catPose.target, catPose.lean);
   for (let k = 0; k < 4; k++) { ccdStep(fo, ha, catPose.target, 1); ccdStep(up, ha, catPose.target, 1); }
   if (catPose.palm != null) { ha.rotateX(catPose.palm); ha.updateMatrixWorld(true); }
   catPose.dbg = { hand: ha.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(2)), sh: up.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(2)), el: fo.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(2)), n: (catPose.n = (catPose.n || 0) + 1) };
@@ -285,7 +289,7 @@ const game = (!SHOT || Q.has('game')) ? (() => { const cs0 = canyonS(REGIONS.can
   };
   const places = Object.fromEntries(Object.entries({ canyonPad: cp(-18, -1), reactorConsole: sd(0, -10.6), dish: { x: dsh.x + (st.x - dsh.x) / dd * 7.2, z: dsh.z + (st.z - dsh.z) / dd * 7.2 }, launchPad: { x: L.x - L.x / hl * 34, z: L.z - L.z / hl * 34 }, ledge: { x: LEDGE.x, z: LEDGE.z }, homePad: pad, sprintStart }).map(([k, p]) => [k, free(p)]));
   window.__gamePlaces = places; window.__gameLayout = layout;
-  return createGame({ scene, camera, ctrl, renderer, env, solids, setPower, setNight, sd, mobile: MOBILE, catRoot, earthDir, groundAt: solids.standAt, visAt: solids.visAt, Q, places, layout,
+  return createGame({ scene, camera, ctrl, renderer, env, solids, setPower, setNight, setEarthDir: sky.setEarthDir, sd, mobile: MOBILE, catRoot, earthDir, groundAt: solids.standAt, visAt: solids.visAt, Q, places, layout,
     crystalSpots: [...[[-46, 4], [-36, -5], [-27, 4], [6, -4.5], [15, 4.5], [25, -3]].map(([ds, o]) => canyonPoint(cs0 - 18 + ds, o)), sd(-8, -31), sd(7, -27), sd(-20, -6), sd(17, -15)].map(p => free(p)) }); })() : null;
 const prints = makeFootprints(scene, groundAt);
 // soft contact (blob) shadows under the cat and the builder robot: 1 instanced draw, radial alpha, no depth write

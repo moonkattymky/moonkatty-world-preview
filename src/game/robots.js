@@ -139,9 +139,13 @@ export function makeCrewRobot(scene, env, type, level = 1) {
     setLevel(l) { if (l === lvl) return; lvl = l; build(); },
     // mode: idle|walk|work|drive; cam: camera world position (hi mesh within near distance; ?q=low: lo beyond 7 m)
     update(dt, mode, cam) { ph += dt; const near = PRESET.low ? 3.5 : PRESET.mobile ? 4 : 5; // hi mesh only up close (far crew are impostors, see impostors.js) root.getWorldPosition(_w); const d = cam ? _w.distanceTo(cam) : 0; const useHi = d < near; hi.visible = useHi; lo.visible = !useHi;
+      const carry = mode === 'carry' || mode === 'carryidle' || mode === 'wavecarry', wav = mode === 'wave' || mode === 'wavecarry'; if (carry || wav) { if (!api.cry) { const g = makeCrewRobot.cryG ||= new THREE.OctahedronGeometry(0.17, 0).scale(0.8, 1.5, 0.8); const m = makeCrewRobot.cryM ||= new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 2.2, 3.0), toneMapped: false }); api.cry = new THREE.Mesh(g, m); api.cry.name = 'crew_crystal'; api.cry.position.set(-0.3, 0.66, 0.5); root.add(api.cry); } }
+      if (api.cry) { api.cry.visible = carry; if (carry) api.cry.rotation.y += dt * 1.5; }
+      if (mode === 'carry') mode = 'walk'; else if (mode === 'carryidle') mode = 'idle';
       const P = parts; const b = mode === 'walk' && !P.hover && type !== 'geologist' ? Math.abs(Math.sin(ph * 7)) * 0.035 : 0; const hov = P.hover ? 0.04 * Math.sin(ph * 2.2) : 0;
       hi.position.y = b + hov; lo.position.y = hov; api.pivot.rotation.set(0, 0, 0);
-      if (mode === 'walk') api.pivot.rotation.x = Math.sin(ph * 7) * 0.1;
+      if (carry && !wav) api.pivot.rotation.x = -0.9 + Math.sin(ph * 7) * 0.03; else if (wav) { api.pivot.rotation.z = -2.3 + Math.sin(ph * 10) * 0.35; api.pivot.rotation.x = -0.25; }
+      else if (mode === 'walk') api.pivot.rotation.x = Math.sin(ph * 7) * 0.1;
       else if (mode === 'work') { if (type === 'geologist') { api.pivot.rotation.x = 0.12 + Math.sin(ph * 9) * 0.02; } else if (type === 'archaeologist') { api.pivot.rotation.x = -0.15 + Math.sin(ph * 1.3) * 0.25; api.pivot.rotation.y = Math.sin(ph * 0.9) * 0.3; } else if (type === 'engineer') { api.pivot.rotation.x = Math.sin(ph * 6) * 0.18; api.pivot.rotation.z = Math.sin(ph * 6) * 0.1; } else api.pivot.rotation.x = Math.sin(ph * 2.3) * 0.05; }
       if (api.bitM) api.bitM.rotateY(mode === 'work' ? dt * 22 : 0);
       if (api.flame) { const k = 0.85 + 0.15 * Math.sin(ph * 31); api.flame.scale.set(0.3 * k, 0.48 * k, 1); }

@@ -1,3 +1,4 @@
+import { makeCrewRobot } from './robots.js';
 import * as THREE from 'three';
 import { pickLang, makeT } from './i18n.js';
 import { createStore, LocalBackend } from './storage.js';
@@ -20,7 +21,7 @@ import { makeHoloMap, fogGet, fogSet, fogReveal } from './holomap.js';
 //   layout (world positions, all pre-resolved to free spots by main.js):
 //     gates {hub, canyon, launch}, regions {hub, canyon, launch} (centres), cracks [{x,z,tx,tz,w,len,region}], ore [{x,z}], parts [{x,z}],
 //     meteor {x,z,r}, rings [{x,z,yaw}], secrets [{id,x,z,y?}], depot {x,z,yaw}, robotSpawn {x,z}
-export function createGame({ scene, camera, ctrl, renderer, env, solids, setPower = () => { }, setNight = () => { }, sd = null, mobile = false, catRoot = null, earthDir = null, groundAt, visAt, Q, places, crystalSpots, layout: L }) {
+export function createGame({ scene, camera, ctrl, renderer, env, solids, setPower = () => { }, setNight = () => { }, setEarthDir = () => { }, sd = null, mobile = false, catRoot = null, earthDir = null, groundAt, visAt, Q, places, crystalSpots, layout: L }) {
   const FAST = Q.get('fast') === '1'; const lang = pickLang(Q); const t = makeT(lang);
   let dayOffset = 0; const clock = { off: 0 }; // test hooks: shift "today" / advance the job clock
   const nowMs = () => Date.now() + dayOffset * 864e5 + clock.off;
@@ -246,7 +247,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
   hud.$('#mk-sheet .tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { tab = b.dataset.tab; renderSheet(); } });
   // ---------- Chapter 2 (starts when Chapter 1 is complete) ----------
   const ch2 = createChapter2({ scene, env, camera, ctrl, store, hud, t, lang, FAST, depotP, groundAt, robotY, gates: G, layout: L, places: P, burst, miner, grant, addXP, refreshTop, regionOf, me, now: nowMs,
-    setNight, sd, mobile, catRoot, earthDir, renderer, fade: (o) => hud.fade(o), time: () => time, free: (p, r) => { const f = solids.nearestFree(p.x, p.z, r); return { x: f.x, z: f.z }; }, low: Q.get('q') === 'low', openSheet: (o) => openSheet(o), isSheetOpen: () => sheetOpen, setTab: (x) => { tab = x; }, rerender: () => { if (sheetOpen) renderSheet(); } });
+    setNight, setEarthDir, sd, mobile, catRoot, earthDir, renderer, fade: (o) => hud.fade(o), time: () => time, free: (p, r) => { const f = solids.nearestFree(p.x, p.z, r); return { x: f.x, z: f.z }; }, low: Q.get('q') === 'low', openSheet: (o) => openSheet(o), isSheetOpen: () => sheetOpen, setTab: (x) => { tab = x; }, rerender: () => { if (sheetOpen) renderSheet(); } });
   let c2wait = 0;
 
   // ---------- targets ----------
@@ -312,7 +313,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
   function updateLife(dt) {
     if (!LIFE_ON) return; const show = ch2.on && regionOf(me()) === 'hub' && !ch2.inside;
     if (!life && show) { const base = sd ? sd(-1, 5) : L.regions.hub; const ra = Math.atan2(400 - base.z, 440 - base.x); const crater = { x: base.x + Math.cos(ra) * 170, z: base.z + Math.sin(ra) * 170 };
-      life = makeWorldLife({ scene, camera, env, groundAt: terrainAt, depotP, fields: spots.filter(s => Math.hypot(s.x - base.x, s.z - base.z) < 140), base, launch: L.regions.launch, crater, t, hud, low: Q.get('q') === 'low', mobile, ctrl }); }
+      life = makeWorldLife({ scene, camera, env, groundAt: terrainAt, depotP, fields: spots.filter(s => Math.hypot(s.x - base.x, s.z - base.z) < 140), base, launch: L.regions.launch, crater, t, hud, low: Q.get('q') === 'low', mobile, ctrl, makeCrew: makeCrewRobot }); }
     if (!life) return; life.setVisible(show); if (show) life.update(dt, time, me(), ch2.mapCrew ? ch2.mapCrew() : []);
   }
   // ---------- frame ----------
