@@ -40,10 +40,10 @@ export function makeShield(scene, { center, R, groundAt, consoleP, low = false, 
       float fres = pow(1.0 - abs(dot(normalize(vN), vec3(0.0, 0.0, 1.0))), 2.2);
       float flick = 0.85 + 0.15 * sin(uTime * 2.0 + dot(id, vec2(1.7, 2.3)));
       // impact ripples: a ring running across the cells + a flash at the hit
-      float rip = 0.0; for (int i = 0; i < 6; i++) { vec4 H = uHits[i]; float age = uTime - H.w; if (age < 0.0 || age > 3.0) continue; float d = distance(vW, H.xyz); rip += exp(-pow((d - age * 16.0) / 2.6, 2.0)) * exp(-age * 1.0) * 2.0 + exp(-d * 0.35) * exp(-age * 5.0) * 2.5; }
-      vec3 cyan = vec3(0.02, 0.6, 1.0);
-      float k = line * (0.55 + 1.3 * fres) * flick + glowL * 0.04 + 0.01 + pow(fres, 2.0) * 0.32 + pow(fres, 6.0) * 1.6 + exp(-h * 10.0) * 0.35 + lead * 1.6 + rip * (0.25 + line * 1.4);
-      vec3 col = cyan * k + vec3(0.3, 0.9, 1.0) * (lead + rip * line) * 0.5;
+      float rip = 0.0, fl = 0.0; for (int i = 0; i < 6; i++) { vec4 H = uHits[i]; float age = uTime - H.w; if (age < 0.0 || age > 3.0) continue; float d = distance(vW, H.xyz); rip += exp(-pow((d - age * 16.0) / 2.6, 2.0)) * exp(-age * 1.0) * 2.0; fl += exp(-d * 0.9) * exp(-age * 6.0) * 1.2; }
+      vec3 cyan = vec3(0.0, 0.48, 1.0);
+      float k = line * (0.75 + 0.9 * fres) * flick + glowL * 0.025 + 0.004 + pow(fres, 2.0) * 0.12 + pow(fres, 6.0) * 0.9 + exp(-h * 12.0) * 0.6 + lead * 1.6 + rip * (0.25 + line * 1.4);
+      vec3 col = cyan * k + vec3(0.3, 0.9, 1.0) * (lead + rip * line) * 0.5 + vec3(1.3, 0.55, 0.12) * fl * (0.35 + line);
       gl_FragColor = vec4(col * uAlpha, 1.0);
     }` });
   const dg = new THREE.SphereGeometry(R, low ? 40 : 64, low ? 12 : 20, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -52,9 +52,9 @@ export function makeShield(scene, { center, R, groundAt, consoleP, low = false, 
   const qg = new THREE.InstancedBufferGeometry(); qg.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3)); qg.setIndex([0, 1, 2, 0, 2, 3]);
   const iHead = new THREE.InstancedBufferAttribute(new Float32Array(NM * 3), 3), iDir = new THREE.InstancedBufferAttribute(new Float32Array(NM * 4), 4); iHead.setUsage(THREE.DynamicDrawUsage); iDir.setUsage(THREE.DynamicDrawUsage); qg.setAttribute('iHead', iHead); qg.setAttribute('iDir', iDir); qg.instanceCount = NM;
   const mm = new THREE.ShaderMaterial({ uniforms: { uMap: { value: streakTexture() } }, side: THREE.DoubleSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-    vertexShader: `attribute vec3 iHead; attribute vec4 iDir; varying vec2 vUv; varying float vOn; void main(){ vec3 d = iDir.xyz; float len = iDir.w; vOn = step(0.01, len); vec3 toCam = normalize(cameraPosition - iHead); vec3 side = normalize(cross(d, toCam)); float w = 0.8 + len * 0.032;
+    vertexShader: `attribute vec3 iHead; attribute vec4 iDir; varying vec2 vUv; varying float vOn; void main(){ vec3 d = iDir.xyz; float len = iDir.w; vOn = step(0.01, len); vec3 toCam = normalize(cameraPosition - iHead); vec3 side = normalize(cross(d, toCam)); float w = 0.45 + len * 0.014;
       vec3 p = iHead - d * (position.y - 0.06) * len + side * position.x * w; vUv = vec2(position.x + 0.5, position.y); gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0); }`,
-    fragmentShader: `uniform sampler2D uMap; varying vec2 vUv; varying float vOn; void main(){ vec4 c = texture2D(uMap, vUv); if (vOn < 0.5) discard; float hd = exp(-pow((vUv.x - 0.5) * 4.0, 2.0)) * exp(-abs(vUv.y - 0.06) * 26.0); gl_FragColor = vec4(c.rgb * c.a * vec3(4.2, 1.15, 0.22) + vec3(4.5, 2.2, 0.8) * hd, 1.0); }` });
+    fragmentShader: `uniform sampler2D uMap; varying vec2 vUv; varying float vOn; void main(){ vec4 c = texture2D(uMap, vUv); if (vOn < 0.5) discard; float hd = exp(-pow((vUv.x - 0.5) * 4.0, 2.0)) * exp(-abs(vUv.y - 0.06) * 26.0); gl_FragColor = vec4(c.rgb * c.a * vec3(4.2, 1.15, 0.22) + vec3(3.2, 1.4, 0.35) * hd, 1.0); }` });
   const trails = new THREE.Mesh(qg, mm); trails.frustumCulled = false; trails.renderOrder = 6; trails.visible = false; root.add(trails);
   const met = Array.from({ length: NM }, () => ({ on: false }));
   // ---- sparks (impacts: orange; welding: blue-white) ----
@@ -73,11 +73,11 @@ export function makeShield(scene, { center, R, groundAt, consoleP, low = false, 
   cg.push(col(new THREE.TorusGeometry(0.62, 0.05, 6, 32).rotateX(Math.PI / 2).translate(0, 0.72, 0), '#4fd8ff'));
   const cm = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.55, roughness: 0.4, envMap: env || null }); cm.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * (step(0.8, vColor.b) * step(vColor.r, 0.4) * 2.5 + step(0.95, vColor.r) * step(vColor.b, 0.3) * 1.8);'); }; cm.customProgramCacheKey = () => 'ch2_console';
   const cons = new THREE.Mesh(mergeGeometries(cg), cm); cons.name = 'ch2_console'; const cgy = groundAt(consoleP.x, consoleP.z); cons.position.set(consoleP.x, cgy + 0.1, consoleP.z); cons.receiveShadow = true; cons.visible = false; scene.add(cons); // shown by Chapter 2 once the finale unlocks
-  const btnM = new THREE.MeshBasicMaterial({ map: pawTexture(), toneMapped: false, color: new THREE.Color(1.6, 1.6, 1.6) }); const btn = new THREE.Mesh(new THREE.CircleGeometry(0.58, 32).rotateX(-Math.PI / 2), btnM); btn.position.y = 0.73; cons.add(btn);
+  const btnM = new THREE.MeshBasicMaterial({ map: pawTexture(), toneMapped: false, color: new THREE.Color(0.75, 1.15, 1.35) }); const btn = new THREE.Mesh(new THREE.CircleGeometry(0.58, 32).rotateX(-Math.PI / 2), btnM); btn.position.y = 0.73; cons.add(btn);
   // ---- storm state ----
   let state = 'off', T = 0, sT = 0, nextM = 0, hitI = 0, night = 0, alpha = 0; const S = { dur: 30, onHit: null };
   let camA = 0, poseK = 0; const domePoint = () => { const a = camA + (Math.random() - 0.5) * (poseK ? 1.3 : 2.2), el = poseK ? 0.22 + Math.random() * 0.45 : 0.25 + Math.random() * 1.1; return new THREE.Vector3(center.x + Math.cos(a) * Math.cos(el) * R, cy + Math.sin(el) * R * HY, center.z + Math.sin(a) * Math.cos(el) * R); };
-  function spawn() { const m = met.find(m => !m.on); if (!m) return; const E = domePoint(); const ca = Math.cos(camA), sa = Math.sin(camA), sk = 0.5 + Math.random() * 0.25; const dir = new THREE.Vector3(sa * sk - ca * 0.15, -1, -ca * sk - sa * 0.15).normalize(); const L = 90 + Math.random() * 50; m.S = E.clone().addScaledVector(dir, -L); m.E = E; m.dir = dir; m.t = 0; m.dur = (FASTK ? 0.7 : 1.0) * (2.2 + Math.random() * 1.0); m.on = true; m.frozen = false; }
+  function spawn() { const m = met.find(m => !m.on); if (!m) return; const E = domePoint(); const ca = Math.cos(camA), sa = Math.sin(camA), sk = 0.5 + Math.random() * 0.25; const dir = new THREE.Vector3(sa * sk * 0.5 - ca * 0.85, -1, -ca * sk * 0.5 - sa * 0.85).normalize(); const L = 90 + Math.random() * 50; m.S = E.clone().addScaledVector(dir, -L); m.E = E; m.dir = dir; m.t = 0; m.dur = (FASTK ? 0.7 : 1.0) * (2.2 + Math.random() * 1.0); m.on = true; m.frozen = false; }
   let FASTK = false; // meteors fall from the upper left to the lower right on screen (concept)
   const api = { root, dome, console: cons, get state() { return state; }, get night() { return night; }, emit,
     configure(o) { Object.assign(S, o); FASTK = !!o.fast; },
@@ -96,7 +96,7 @@ export function makeShield(scene, { center, R, groundAt, consoleP, low = false, 
       iHead.needsUpdate = true; iDir.needsUpdate = true; trails.visible = state === 'storm' || met.some(m => m.on);
       // sparks
       let any = false; for (let i = 0; i < NS; i++) { const p = P[i]; if (p.life <= 0) { sSize[i] = 0; continue; } any = true; p.life -= dt; p.vy -= p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; const f = Math.max(0, p.life / p.max); sPos[i * 3] = p.x; sPos[i * 3 + 1] = p.y; sPos[i * 3 + 2] = p.z;
-        if (p.kind === 'flash') { sCol[i * 3] = 4.5 * f; sCol[i * 3 + 1] = 3.4 * f; sCol[i * 3 + 2] = 2.2 * f; sSize[i] = 1.0 + 3.0 * f; } else if (p.kind === 'weld') { sCol[i * 3] = 1.4 + 1.5 * f; sCol[i * 3 + 1] = 2.4 + 1.5 * f; sCol[i * 3 + 2] = 5.0; sSize[i] = 0.16 + 0.22 * f; } else { sCol[i * 3] = 4.0; sCol[i * 3 + 1] = 1.2 + 2.0 * f; sCol[i * 3 + 2] = 0.3 * f; sSize[i] = 0.35 + 0.7 * f; } }
+        if (p.kind === 'flash') { sCol[i * 3] = 3.6 * f; sCol[i * 3 + 1] = 1.7 * f; sCol[i * 3 + 2] = 0.5 * f; sSize[i] = 0.6 + 2.0 * f; } else if (p.kind === 'weld') { sCol[i * 3] = 1.4 + 1.5 * f; sCol[i * 3 + 1] = 2.4 + 1.5 * f; sCol[i * 3 + 2] = 5.0; sSize[i] = 0.16 + 0.22 * f; } else { sCol[i * 3] = 4.0; sCol[i * 3 + 1] = 1.0 + 1.6 * f; sCol[i * 3 + 2] = 0.2 * f; sSize[i] = 0.06 + 0.16 * f; } }
       sparks.visible = any; if (any) { sp.attributes.position.needsUpdate = true; sp.attributes.color.needsUpdate = true; sp.attributes.size.needsUpdate = true; }
       pm.uniforms.uScale.value = innerHeight * 0.6;
       btnM.color.setScalar(1.2 + 0.5 * Math.sin(time * 3.2) * (state === 'off' || state === 'done' ? 1 : 0.2)); },

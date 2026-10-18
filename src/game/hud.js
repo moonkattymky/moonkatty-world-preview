@@ -191,6 +191,25 @@ body.game #jump .fl{position:absolute;left:50%;bottom:-16px;width:26px;height:30
 #mk-track.c{min-height:0;padding:9px 14px 9px 18px}
 @media (min-width:900px){#mk-track{top:96px;left:18px;width:196px;min-height:150px}}
 
+@font-face{font-family:"MK Oswald";font-style:normal;font-weight:300 600;font-display:swap;src:url(assets/fonts/oswald-cyr.woff2) format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:"MK Oswald";font-style:normal;font-weight:300 600;font-display:swap;src:url(assets/fonts/oswald-lat.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+#mk-track{width:194px;font-family:"MK Oswald","Roboto Condensed","Arial Narrow",sans-serif;font-stretch:normal}
+#mk-track .ch span:first-child::before{font-weight:400;font-size:12.5px;letter-spacing:.03em}
+#mk-track .qh{font-weight:500;font-size:16.5px;letter-spacing:.02em}
+#mk-track .t{font-weight:300;font-size:14.5px;letter-spacing:.01em}
+@media (min-width:900px){#mk-track{width:208px}}
+#mk-cap{display:none}
+#mk-top{padding-left:0;overflow:visible}
+#mk-ring{width:54px;height:54px;margin:-9px 0 -9px -7px;z-index:1;background:radial-gradient(circle at 50% 32%,#1d3168,#0b1530 68%);box-shadow:0 0 0 2.5px #f0cf7a,0 0 0 4.5px #a8721e,0 0 0 5.5px rgba(255,236,180,.55),0 0 14px rgba(200,145,42,.65),0 3px 8px rgba(0,0,0,.55)}
+#mk-ring b{font-family:"MK Oswald",sans-serif;font-size:21px;font-weight:500;color:#fff;text-shadow:0 1px 2px #000}
+#mk-ring b small{font-family:"MK Oswald",sans-serif;font-size:9.5px;font-weight:500;letter-spacing:.1em;color:#f3d58a;margin-bottom:0}
+#mk-capline{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:#6b4a14;margin:-4px 0 8px}
+#mk-capline .b{flex:1;height:6px;border-radius:3px;background:rgba(107,74,20,.18);overflow:hidden}#mk-capline .b i{display:block;height:100%;background:linear-gradient(90deg,#e9b448,#ffd77a)}
+#mk-map{border-radius:16px;border:2.5px solid #e2b553;background:radial-gradient(ellipse at 50% 18%,rgba(255,255,255,.38),transparent 46%),radial-gradient(circle at 50% 60%,#8a5a2c,#5a3516 62%,#3a210c);box-shadow:0 0 0 1.5px #7a4f12,0 0 0 3px rgba(255,226,150,.35),inset 0 2px 1px rgba(255,240,200,.5),inset 0 -4px 6px rgba(0,0,0,.45),0 5px 10px rgba(0,0,0,.55),0 0 12px rgba(200,145,42,.5);color:#fff1cf;text-shadow:0 1px 1px #000}
+#mk-map svg{filter:drop-shadow(0 2px 2px rgba(0,0,0,.5))}
+body.game #jump{background:radial-gradient(ellipse at 50% 20%,rgba(255,255,255,.35),transparent 42%),radial-gradient(circle at 50% 42%,#25408a,#0f1d48 62%,#081030);border:3.5px solid #e9c46a;box-shadow:0 0 0 2px #8a5a14,0 0 0 4px #f3d58a,0 0 0 5px rgba(110,72,16,.9),inset 0 3px 2px rgba(255,255,255,.35),inset 0 -6px 10px rgba(0,0,0,.55),0 0 20px rgba(103,215,240,.7),0 7px 14px rgba(0,0,0,.6)}
+body.game #jump b{font-family:"MK Oswald",sans-serif;font-weight:600;font-size:17px;letter-spacing:.08em}
+
 
 `;
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -222,7 +241,7 @@ export function makeHUD(t) {
   <div id="mk-pop" class="mk-glass pe"></div>
   <div id="mk-scrim" class="pe"></div>
   <div id="mk-fade"></div>
-  <div id="mk-sheet" class="mk-glass pe"><div class="grab"></div><div class="hd"><div class="tabs"><button data-tab="ch" class="on">${esc(t('chapter'))}</button><button data-tab="daily">${esc(t('daily'))}</button></div><button class="x" aria-label="${esc(t('close'))}">×</button></div><div class="sub"></div><div class="list"></div></div>`;
+  <div id="mk-sheet" class="mk-glass pe"><div class="grab"></div><div class="hd"><div class="tabs"><button data-tab="ch" class="on">${esc(t('chapter'))}</button><button data-tab="daily">${esc(t('daily'))}</button></div><button class="x" aria-label="${esc(t('close'))}">×</button></div><div id="mk-capline">⭐ <span id="mk-capt2">0/300</span><div class="b"><i></i></div></div><div class="sub"></div><div class="list"></div></div>`;
   document.body.appendChild(root);
   const $ = (s) => root.querySelector(s); { const j = document.getElementById('jump'); if (j) j.innerHTML = '<svg viewBox="0 0 92 92"><g fill="none" stroke-linejoin="round"><rect x="16" y="22" width="14" height="42" rx="7" fill="#d8c08a" stroke="#6e4810" stroke-width="2"/><rect x="62" y="22" width="14" height="42" rx="7" fill="#d8c08a" stroke="#6e4810" stroke-width="2"/><path d="M18 30 h10 M18 38 h10 M64 30 h10 M64 38 h10" stroke="#8a5c12" stroke-width="1.6"/><path d="M28 18 Q46 10 64 18 L66 60 Q46 70 26 60 Z" fill="#1c3a78" stroke="#C8912A" stroke-width="2.5"/><path d="M34 58 L36 70 L56 70 L58 58" fill="#9aa6b8" stroke="#6e4810" stroke-width="2"/><ellipse cx="46" cy="70" rx="10" ry="3" fill="#a8f0ff" stroke="#67d7f0" stroke-width="1.5"/></g></svg><b>JET</b><i class="fl"></i>'; } $('#mk-mapl').textContent = t('map') === 'map' ? 'MAP' : t('map'); $('#mk-map').addEventListener('click', () => H.onMap ? H.onMap() : H.toast && H.toast('🗺️ ' + (t('mapSoon') === 'mapSoon' ? '…' : t('mapSoon'))));
   for (const el of root.querySelectorAll('.pe')) for (const ev of ['pointerdown', 'touchstart', 'wheel']) el.addEventListener(ev, e => e.stopPropagation(), { passive: true });
@@ -230,7 +249,7 @@ export function makeHUD(t) {
     root, $,
     setTop({ level, xp, need, points, earned, cap, cry = 0 }) {
       $('#mk-lv').textContent = level; $('#mk-ringp').setAttribute('stroke-dashoffset', (106.8 * (1 - Math.min(1, xp / need))).toFixed(1));
-      $('#mk-pv').textContent = points.toLocaleString('ru-RU'); $('#mk-cv').textContent = (cry | 0).toLocaleString('ru-RU'); $('#mk-capt').textContent = `${earned}/${cap} ${t('today')}`; $('#mk-capbar i').style.width = Math.min(100, earned / cap * 100) + '%';
+      $('#mk-pv').textContent = points.toLocaleString('ru-RU'); $('#mk-cv').textContent = (cry | 0).toLocaleString('ru-RU'); $('#mk-capt').textContent = `${earned}/${cap} ${t('today')}`; $('#mk-capbar i').style.width = Math.min(100, earned / cap * 100) + '%'; $('#mk-capt2').textContent = `${earned}/${cap} ${t('today')}`; $('#mk-capline .b i').style.width = Math.min(100, earned / cap * 100) + '%';
     },
     setTrack(html) { const el = $('#mk-track'); if (el._h !== html) { el.innerHTML = html.replace(/(<div class="t">)/, `<div class="qh"><span>${esc(t('mapQuest'))}:</span></div>$1`); el._h = html; const n = [...el.querySelectorAll('.row span')].map(x => x.textContent).find(x => /^\d+\/\d+$/.test(x.trim())); const qh = el.querySelector('.qh'); if (n && qh) qh.insertAdjacentHTML('beforeend', `<span class="qn">${esc(n)}</span>`); } if (!el._tap) { el._tap = 1; el.addEventListener('click', () => el.classList.toggle('x')); } },
     marker(mode, x, y, rot, label) {
