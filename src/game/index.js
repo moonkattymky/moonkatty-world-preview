@@ -7,13 +7,16 @@ import { makeHUD, esc } from './hud.js';
 import { makeMiner, makePuzzle } from './minigames.js';
 import { makeGate, makeCrack, makeOre, makeParts, makeRings, makeMeteors, makeCache, makeDepot } from './activities.js';
 import { makeRobot } from './robot.js';
+import { makeProgressLabel, makeRobotJob } from './jobs.js';
+import { DEPOT_STAGES } from './activities.js';
+import { groundAt as terrainAt } from '../terrain.js';
 
 // Game layer: progression + Chapter 1 activities on top of the 3D world. createGame() is called once from main.js.
 //   opts: { scene, camera, ctrl, renderer, env, solids, groundAt, Q, places, crystalSpots, layout }
 //   layout (world positions, all pre-resolved to free spots by main.js):
 //     gates {hub, canyon, launch}, regions {hub, canyon, launch} (centres), cracks [{x,z,tx,tz,w,len,region}], ore [{x,z}], parts [{x,z}],
 //     meteor {x,z,r}, rings [{x,z,yaw}], secrets [{id,x,z,y?}], depot {x,z,yaw}, robotSpawn {x,z}
-export function createGame({ scene, camera, ctrl, renderer, env, solids, setPower = () => { }, groundAt, Q, places, crystalSpots, layout: L }) {
+export function createGame({ scene, camera, ctrl, renderer, env, solids, setPower = () => { }, groundAt, visAt, Q, places, crystalSpots, layout: L }) {
   const FAST = Q.get('fast') === '1'; const lang = pickLang(Q); const t = makeT(lang);
   let dayOffset = 0; // test hook: shift "today"
   const store = createStore({ backend: new LocalBackend(), now: () => Date.now() + dayOffset * 864e5 });
@@ -48,7 +51,14 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
   const caches = L.secrets.map(s => { const y = s.y != null ? s.y : solids.standAt(s.x, s.z); return { ...s, y, fx: makeCache(scene, { x: s.x, y, z: s.z, yaw: s.yaw || 0 }, env) }; });
   const depotP = { ...L.depot, y: groundAt(L.depot.x, L.depot.z) }; const depot = makeDepot(scene, depotP, env);
   const robot = makeRobot(scene, env); robot.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
-  const weldSpot = (() => { const dx = L.robotSpawn.x - depotP.x, dz = L.robotSpawn.z - depotP.z, l = Math.hypot(dx, dz) || 1; return { x: depotP.x + dx / l * 2.45, z: depotP.z + dz / l * 2.45 }; })();
+  // robot feet: highest visual contact under the two boots (not the cat capsule's conservative stand height)
+  const VA = visAt || groundAt; const robotY = (x, z, yaw) => { const cx = Math.cos(yaw) * 0.25, cz = -Math.sin(yaw) * 0.25; return Math.max(VA(x + cx, z + cz), VA(x - cx, z - cz), VA(x, z)); };
+  // flattest spot around the module within +-span of angle a0 (no rock lumps under the boots); used for every robot work spot
+  const flatSpot = (a0, span) => { let best = null; for (let k = -16; k <= 16; k++) { const da = k * 0.1; if (Math.abs(da) > span + 1e-6) continue; for (const r of [2.45, 2.8, 3.2]) { const a = a0 + da, x = depotP.x + Math.cos(a) * r, z = depotP.z + Math.sin(a) * r; let bump = 0, lo = 1e9, hi = -1e9; for (const [ox, oz] of [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]]) { const v = VA(x + ox, z + oz); lo = Math.min(lo, v); hi = Math.max(hi, v); bump = Math.max(bump, v - terrainAt(x + ox, z + oz), groundAt(x + ox, z + oz) - v); } bump += hi - lo; const sc = bump + Math.abs(k) * 0.004 + (r - 2.45) * 0.05; if (!best || sc < best.sc) best = { x, z, sc }; } } return { x: best.x, z: best.z }; };
+  const weldSpot = flatSpot(Math.atan2(L.robotSpawn.z - depotP.z, L.robotSpawn.x - depotP.x), 1.6);
+  const stageSpots = (() => { const wa = Math.atan2(weldSpot.z - depotP.z, weldSpot.x - depotP.x); return DEPOT_STAGES.map((s, i) => i === 0 ? weldSpot : flatSpot(wa + s.a, 0.35)); })();
+  const STAGE_T = lang === 'ru' ? { foundation: 'Фундамент', frame: 'Каркас', panels: 'Панели', dome: 'Купол', lights: 'Свет' } : { foundation: 'Foundation', frame: 'Frame', panels: 'Panels', dome: 'Dome', lights: 'Lights' };
+  const jobLabel = makeProgressLabel(scene);
   const depotCollider = { x: depotP.x, z: depotP.z, r: 1.65, h: 4.5 };
   // new props are solid too: ore clusters (until mined) and the robot (circle colliders, same system as the hub props)
   const oreCol = [...ore.spots.map((s, i) => ({ x: s.x, z: s.z, r: 0.75, h: 2.6, f: ore, i })), ...pow.spots.map((s, i) => ({ x: s.x, z: s.z, r: 0.75, h: 2.6, f: pow, i }))]; const robotCol = { x: 0, z: 0, r: 0.45, h: 1.9 };
@@ -190,16 +200,21 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
   }
   // ---------- robot + build ----------
   const robotState = { mode: 'hidden', frac: 0, pos: new THREE.Vector3() };
-  function placeRobot(p, look, snap) { robotState.pos.set(p.x, groundAt(p.x, p.z), p.z); robot.root.position.copy(robotState.pos); robot.root.rotation.y = Math.atan2(look.x - p.x, look.z - p.z); robot.root.visible = true; }
+  function placeRobot(p, look, snap) { robotState.pos.set(p.x, robotY(p.x, p.z, Math.atan2(look.x - p.x, look.z - p.z)), p.z); robot.root.position.copy(robotState.pos); robot.root.rotation.y = Math.atan2(look.x - p.x, look.z - p.z); robot.root.visible = true; }
   function startBuild() { if (robotState.mode !== 'hidden') return; robotState.mode = 'walk'; robotState.frac = 0; placeRobot(L.robotSpawn, weldSpot); hud.toast('🤖 ' + t('robotArrives')); burst.fire(L.robotSpawn.x, groundAt(L.robotSpawn.x, L.robotSpawn.z) + 1, L.robotSpawn.z); }
   async function updateRobot(dt) {
     const S = robotState; const q = cur(); const hubNear = Math.hypot(camera.position.x - depotP.x, camera.position.z - depotP.z) < 220;
     if (S.mode === 'hidden') { robot.root.visible = false; robot.update(dt, 'idle'); return; }
     robot.root.visible = hubNear;
-    if (S.mode === 'walk') { const dx = weldSpot.x - S.pos.x, dz = weldSpot.z - S.pos.z, d = Math.hypot(dx, dz); const sp = (FAST ? 4 : 1.6) * dt; if (d <= sp) { S.mode = 'weld'; placeRobot(weldSpot, depotP); } else { S.pos.x += dx / d * sp; S.pos.z += dz / d * sp; S.pos.y = groundAt(S.pos.x, S.pos.z); robot.root.position.copy(S.pos); robot.root.rotation.y = Math.atan2(dx, dz); } robot.update(dt, 'walk'); depot.set(0, true); hud.build(true, t('building'), 0); }
-    else if (S.mode === 'weld') { const bq = Qs.find(q => q.kind === 'build'); S.frac = Math.min(1, S.frac + dt / bq.buildTime); depot.set(S.frac, true); robot.update(dt, 'weld'); hud.build(true, t('building'), S.frac);
-      if (S.frac >= 1) { S.mode = 'done'; depot.set(1, false); hud.build(false); if (!D().base.built.includes('depot')) D().base.built.push('depot'); if (!ctrl.colliders.includes(depotCollider)) ctrl.colliders.push(depotCollider); const dp = depot.topWorld(); burst.fire(dp.x, dp.y, dp.z); if (q && q.kind === 'build') await reward(q, { note: `🏗️ ${t('built')} · ${t('baseGrows')}` }); placeRobot(weldSpot, { x: camera.position.x, z: camera.position.z }); } }
-    else { robot.update(dt, 'idle'); }
+    if (S.mode === 'walk') { const dx = weldSpot.x - S.pos.x, dz = weldSpot.z - S.pos.z, d = Math.hypot(dx, dz); const sp = (FAST ? 4 : 1.6) * dt; if (d <= sp) { S.mode = 'weld'; placeRobot(weldSpot, depotP); } else { S.pos.x += dx / d * sp; S.pos.z += dz / d * sp; S.pos.y = robotY(S.pos.x, S.pos.z, Math.atan2(dx, dz)); robot.root.position.copy(S.pos); robot.root.rotation.y = Math.atan2(dx, dz); } robot.update(dt, 'walk'); depot.set(0, true); hud.build(false); { const bq = Qs.find(q => q.kind === 'build'); jobLabel.set(new THREE.Vector3(depotP.x, depotP.y + 4.5, depotP.z), 0, bq.buildTime, STAGE_T.foundation); } }
+    else if (S.mode === 'weld') { const bq = Qs.find(q => q.kind === 'build');
+      if (!S.job) S.job = makeRobotJob({ duration: bq.buildTime, stages: DEPOT_STAGES.map((s, i) => ({ ...s, title: STAGE_T[s.id], spot: stageSpots[i] })), label: jobLabel, anchor: depotP, labelHeight: 4.5, onStage: (s) => { S.target = s.spot; } });
+      S.job.update(dt); S.frac = S.job.frac; depot.setValue(S.job.value, true); hud.build(false);
+      const tg = S.target || weldSpot, dx = tg.x - S.pos.x, dz = tg.z - S.pos.z, d = Math.hypot(dx, dz);
+      if (d > 0.06) { const st = Math.min(d, (FAST ? 4 : 1.3) * dt); S.pos.x += dx / d * st; S.pos.z += dz / d * st; S.pos.y = robotY(S.pos.x, S.pos.z, Math.atan2(dx, dz)); robot.root.position.copy(S.pos); robot.root.rotation.y = Math.atan2(dx, dz); robot.update(dt, 'walk'); }
+      else { const ry = Math.atan2(depotP.x - S.pos.x, depotP.z - S.pos.z); let dr = ry - robot.root.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); robot.root.rotation.y += dr * Math.min(1, dt * 5); robot.update(dt, 'weld'); }
+      if (S.job.done) { S.job = null; S.labelT = 2.5; S.mode = 'done'; depot.set(1, false); hud.build(false); if (!D().base.built.includes('depot')) D().base.built.push('depot'); if (!ctrl.colliders.includes(depotCollider)) ctrl.colliders.push(depotCollider); const dp = depot.topWorld(); burst.fire(dp.x, dp.y, dp.z); if (q && q.kind === 'build') await reward(q, { note: `🏗️ ${t('built')} · ${t('baseGrows')}` }); placeRobot({ x: S.pos.x, z: S.pos.z }, { x: camera.position.x, z: camera.position.z }); } }
+    else { robot.update(dt, 'idle'); if (S.labelT > 0) { S.labelT -= dt; if (S.labelT <= 0) jobLabel.hide(); } }
   }
 
   // ---------- quests sheet ----------
@@ -315,6 +330,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
     crystals: () => ({ alive: crystals.alive.filter(Boolean).length, total: spots.length, spots: spots.map((s, i) => ({ ...s, alive: crystals.alive[i] })) }),
     fakeThrust() { lastThrust = time; }, popup: (o) => hud.popup(o, 60000), save: () => store.save(),
     // activity introspection for tests / screenshots
+    buildTo: (f) => { const j = robotState.job; if (j) j.update(Math.max(0, f * j.duration - j.t)); return j ? j.frac : null; }, // QA hook: jump the running robot job (renders at 10/50/90%)
     layout: () => ({ power: pow.spots, gates: Object.fromEntries(Object.entries(G).map(([k, g]) => [k, { x: g.x, y: g.y, z: g.z }])), cracks: cracks.map(c => ({ x: c.x, z: c.z, tx: c.tx, tz: c.tz, w: c.w, len: c.len })), ore: ore.spots, parts: parts.spots, meteor: MZ, rings: rings.pts, sprintStart: L.sprintStart, secrets: caches.map(c => ({ id: c.id, x: c.x, y: c.y, z: c.z })), depot: depotP, weldSpot }),
     miner, puzzle, sprint: () => ({ state: sprint.state, n: sprint.n, time: sprint.time, last: sprint.last }), robotState: () => ({ mode: robotState.mode, frac: robotState.frac, visible: robot.root.visible }), robot: () => robot,
     power: () => ({ level: powerLevel, anim: powerAnim, hookT, firstMineAt: firstMineAt }), gameTime: () => time,

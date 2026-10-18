@@ -24,6 +24,6 @@ export function chapter1(P, fast) {
     { id: 'reactor', kind: 'puzzle', icon: '⚡', target: P.reactorConsole, r: 4, pts: 35, xp: 70, region: 'hub' },
     { id: 'launch', kind: 'sprint', icon: '🏁', target: P.sprintStart, r: 4.5, pts: 30, xp: 70, region: 'launch', starPts: 5, times: fast ? [999, 999] : [40, 55] },
     { id: 'secret', kind: 'secret', icon: '🗝️', cache: 'ledge', pts: 30, xp: 60, region: 'hub' },
-    { id: 'home', kind: 'build', icon: '🤖', target: P.homePad, r: 4.5, pts: 50, xp: 120, buildTime: fast ? 2.5 : 14, region: 'hub' },
+    { id: 'home', kind: 'build', icon: '🤖', target: P.homePad, r: 4.5, pts: 50, xp: 120, buildTime: fast ? 2.5 : 120, region: 'hub' },
   ];
 }

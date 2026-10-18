@@ -121,7 +121,7 @@ const s2 = await S(); ok('progress persists across reload', s2.ch1.done.length =
 await E(() => { const t = MK.game.layout().depot, w = MK.game.layout().weldSpot; const x = w.x + (w.x - t.x) * 2.2 + 1.5, z = w.z + (w.z - t.z) * 2.2; MK.game.teleport(x, z, Math.atan2(t.x - x, t.z - z)); });
 await E(() => { MK.game.auto(); }); ok('robot appears and builds (progress bar)', await until(() => MK.game.robotState().mode === 'weld' && MK.game.robotState().frac > 0.35, 90000));
 await E(() => { const t = MK.game.layout().depot, w = MK.game.layout().weldSpot; const x = w.x + (w.x - t.x) * 2.6 + 2.5, z = w.z + (w.z - t.z) * 2.6 + 1; MK.ctrl.place(x, z, Math.atan2(t.x - x, t.z - z), false); MK.ctrl.camPitch = 0.22; MK.ctrl.camDist = 6; }); await frames(3);
-ok('build progress bar visible', (await disp('#mk-build')) === 'block'); await shot('robot_build');
+ok('build progress label floats above the module (no fullscreen bar)', (await E(() => { const l = MK.scene.getObjectByName('job_label'); return !!l && l.visible && l.position.y > MK.game.layout().depot.y + 3; })) && (await disp('#mk-build')) !== 'block'); await shot('robot_build');
 ok('depot built -> chapter complete', await until(() => MK.game.state().ch1.done.length === 9, 90000)); s = await S();
 ok('depot persisted in base.built', s.base.built.includes('depot')); await page.waitForTimeout(600); await shot('chapter_done'); await closePop(); await frames(3); await shot('robot_done');
 // daily cap

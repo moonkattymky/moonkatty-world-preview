@@ -1,3 +1,4 @@
+import { makeStaticCrystals } from './game/crystal.js';
 import * as THREE from 'three';
 import { groundAt, groundMesh, LEDGE, slopeAt, F, Rt, LOOKOUT, REGIONS, sd, CONCEPT, CAVE, PORTAL, canyonPoint, canyonS, canyonInfo } from './terrain.js';
 import { noise2, seeded } from './noise.js';
@@ -451,11 +452,7 @@ export function buildCrystals(scene, envMap, lite = false) {
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
   const update = (t) => { items.forEach((it, i) => { if (!it.bob && t > 0) return; const y = it.bob ? it.y + Math.sin(t * 1.3 + it.ph) * 0.2 : it.y; q.setFromEuler(e.set(it.tilt || 0, it.bob ? t * 0.5 + it.ph : it.ph, 0)); m4.compose(v.set(it.x, y, it.z), q, sc.set(it.s, it.s * 1.08, it.s)); im.setMatrixAt(i, m4); }); im.instanceMatrix.needsUpdate = true; };
   update(0); im.frustumCulled = false; im.castShadow = false; im.name = 'crystals'; scene.add(im);
-  { const cg = shardClusterGeom(); const cm = new THREE.MeshStandardMaterial({ color: '#a8f2f6', vertexColors: true, metalness: 0.15, roughness: 0.12, flatShading: true, emissive: '#36d6e6', emissiveIntensity: 1.5, envMap, envMapIntensity: 1.2 });
-    cm.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n { float fac = abs(dot(normal, normalize(vViewPosition))); totalEmissiveRadiance *= vColor.r * (0.35 + 1.9 * fac * fac); } /* inner glow: bright core facing the viewer, darker rim */'); };
-    for (const [list, nm] of [[regC, 'crystals_canyon'], [regE, 'crystals_echo']]) { const L = lite ? list.filter((_, i) => i % 2 === 0) : list; const mesh = new THREE.InstancedMesh(cg, cm, L.length);
-      L.forEach((it, i) => { q.setFromEuler(e.set(it.tilt, it.ph, it.tilt * 0.5)); m4.compose(v.set(it.x, it.y, it.z), q, sc.set(it.s, it.s, it.s)); mesh.setMatrixAt(i, m4); });
-      mesh.computeBoundingSphere(); mesh.castShadow = false; mesh.name = nm; scene.add(mesh); } }
+  for (const [list, nm] of [[regC, 'crystals_canyon'], [regE, 'crystals_echo']]) makeStaticCrystals(scene, lite ? list.filter((_, i) => i % 2 === 0) : list, nm, 1.45); // world crystals share the game crystal look (hex shard clusters, facets, halo, ground light)
   return { mesh: im, update, items };
 }
 

@@ -18,6 +18,12 @@ import { Controller } from './controller.js';
 import { buildSolids } from './collide.js';
 import { createGame } from './game/index.js';
 import { LEDGE, LAMPK } from './terrain.js';
+// NaN/Inf guard (iPad "blinking black squares"): a single non-finite pixel (derivative-based normals of sub-pixel far-rock facets -> normalize(0))
+// gets smeared by UnrealBloom's separable blur into a big black rectangle for that frame. Make normals safe, clamp lit output, and sanitize the bloom input.
+{ const C = THREE.ShaderChunk;
+  C.normal_fragment_begin = C.normal_fragment_begin.replace('vec3 normal = normalize( cross( fdx, fdy ) );', 'vec3 nCr = cross( fdx, fdy ); float nLn = length( nCr ); vec3 normal = nLn > 0.0 ? nCr / nLn : vec3( 0.0, 0.0, 1.0 );');
+  C.lights_fragment_begin = 'if ( !( dot( normal, normal ) < 4.0 ) ) normal = vec3( 0.0, 0.0, 1.0 );\n' + C.lights_fragment_begin;
+  C.opaque_fragment = 'outgoingLight = all( lessThan( abs( outgoingLight ), vec3( 6.0e4 ) ) ) ? outgoingLight : vec3( 0.0 );\n' + C.opaque_fragment; }
 
 const Q = new URLSearchParams(location.search);
 const SHOT = Q.has('shot'); const VIEW = Q.get('view') || 'play';
@@ -176,7 +182,7 @@ const VIEWS = {
 // ---------- post ----------
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
 composer.addPass(new RenderPass(scene, camera));
-let bloom = null; if (BLOOM) { bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.52, 0.36, 2.0); composer.addPass(bloom); if (MOBILE) { bloom.nMips = 3; const T = bloom.compositeMaterial.uniforms.bloomTintColors.value; T[3].set(0, 0, 0); T[4].set(0, 0, 0); bloom.compositeMaterial.uniforms.bloomFactors.value = [1.0, 0.9, 0.85, 0, 0]; } } // phones: 3 bloom mips (4 fewer blur passes)
+let bloom = null; if (BLOOM) { bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.52, 0.36, 2.0); composer.addPass(bloom); { const hm = bloom.materialHighPassFilter; hm.fragmentShader = hm.fragmentShader.replace('vec4 texel = texture2D( tDiffuse, vUv );', 'vec4 texel = texture2D( tDiffuse, vUv ); if ( !all( lessThan( abs( texel ), vec4( 6.0e4 ) ) ) ) texel = vec4( 0.0 );'); hm.needsUpdate = true; } if (MOBILE) { bloom.nMips = 3; const T = bloom.compositeMaterial.uniforms.bloomTintColors.value; T[3].set(0, 0, 0); T[4].set(0, 0, 0); bloom.compositeMaterial.uniforms.bloomFactors.value = [1.0, 0.9, 0.85, 0, 0]; } } // phones: 3 bloom mips (4 fewer blur passes)
 composer.addPass(new OutputPass());
 const grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uVig: { value: 0.3 } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; uniform float uVig; varying vec2 vUv;
@@ -245,9 +251,17 @@ const game = (!SHOT || Q.has('game')) ? (() => { const cs0 = canyonS(REGIONS.can
   };
   const places = Object.fromEntries(Object.entries({ canyonPad: cp(-18, -1), reactorConsole: sd(0, -10.6), dish: { x: dsh.x + (st.x - dsh.x) / dd * 7.2, z: dsh.z + (st.z - dsh.z) / dd * 7.2 }, launchPad: { x: L.x - L.x / hl * 34, z: L.z - L.z / hl * 34 }, ledge: { x: LEDGE.x, z: LEDGE.z }, homePad: pad, sprintStart }).map(([k, p]) => [k, free(p)]));
   window.__gamePlaces = places; window.__gameLayout = layout;
-  return createGame({ scene, camera, ctrl, renderer, env, solids, setPower, groundAt: solids.standAt, Q, places, layout,
+  return createGame({ scene, camera, ctrl, renderer, env, solids, setPower, groundAt: solids.standAt, visAt: solids.visAt, Q, places, layout,
     crystalSpots: [...[[-46, 4], [-36, -5], [-27, 4], [6, -4.5], [15, 4.5], [25, -3]].map(([ds, o]) => canyonPoint(cs0 - 18 + ds, o)), sd(-8, -31), sd(7, -27), sd(-20, -6), sd(17, -15)].map(p => free(p)) }); })() : null;
-const prints = makeFootprints(scene, groundAt); // boot-print ring buffer (1 call, hidden until walking)
+const prints = makeFootprints(scene, groundAt);
+// soft contact (blob) shadows under the cat and the builder robot: 1 instanced draw, radial alpha, no depth write
+const contact = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,0.85)'); gr.addColorStop(0.45, 'rgba(0,0,0,0.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  const mat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, opacity: 0.6, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4, fog: true });
+  const geo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2); const im = new THREE.InstancedMesh(geo, mat, 2); im.name = 'contact_shadows'; im.frustumCulled = false; im.renderOrder = 1; scene.add(im);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), n = new THREE.Vector3(); let robot = null;
+  const set = (i, x, y, z, s) => { const e = 0.35; n.set(groundAt(x - e, z) - groundAt(x + e, z), 2 * e, groundAt(x, z - e) - groundAt(x, z + e)).normalize(); q.setFromUnitVectors(up, n); m.compose(pv.set(x, y + 0.03, z), q, sv.set(s, 1, s)); im.setMatrixAt(i, m); };
+  return { update(p, air) { const k = Math.max(0, 1 - air / 2.5); set(0, p.x, air > 0 ? solids.visAt(p.x, p.z) : p.y, p.z, k > 0 ? 0.95 * (0.6 + 0.4 * k) : 0);
+    robot ??= scene.getObjectByName('game_robot'); if (robot && robot.visible) set(1, robot.position.x, robot.position.y, robot.position.z, 1.25); else { m.makeScale(0, 0, 0); im.setMatrixAt(1, m); } im.instanceMatrix.needsUpdate = true; } }; })(); // boot-print ring buffer (1 call, hidden until walking)
 // ---------- loop ----------
 const clock = new THREE.Clock(); let t = 0; const ftimes = [];
 function frame(dt) {
@@ -255,6 +269,10 @@ function frame(dt) {
   if (!SHOT) ctrl.update(dt); else { ctrl.pos.y = ctrl.floorAt(ctrl.pos.x, ctrl.pos.z); if (ctrl.camFree) { ctrl.camTarget.copy(ctrl.pos).add(new THREE.Vector3(0, 1.3, 0)); ctrl.updateCamera(1); } }
   if (game) game.update(dt);
   catRoot.position.copy(ctrl.pos); catRoot.rotation.y = ctrl.yaw;
+  { // visual feet: the physics capsule stands on the highest solid within its 0.36 m radius (so it hovers over rock flanks); drop the model onto the solid right under it
+    const st = solids.standAt(ctrl.pos.x, ctrl.pos.z); const want = ctrl.onGround && Math.abs(ctrl.pos.y - st) < 0.03 ? st - solids.visAt(ctrl.pos.x, ctrl.pos.z) : 0;
+    frame.vOff = (frame.vOff || 0) + (want - (frame.vOff || 0)) * Math.min(1, dt * 14); catRoot.position.y -= frame.vOff; }
+  contact.update(catRoot.position, ctrl.onGround ? 0 : ctrl.pos.y - solids.visAt(ctrl.pos.x, ctrl.pos.z));
   prints.update(ctrl.pos, ctrl.yaw, ctrl.onGround, ctrl.speed);
   if (headBone && headBone.userData.pre) headBone.quaternion.copy(headBone.userData.pre);
   if (mixer) { if (!ctrl.onGround) play(actions.jump ? 'jump' : 'idle', 0.15); else if (ctrl.speed > 0.6) locomotion(ctrl.speed); else play('idle'); mixer.update(dt); }
@@ -265,8 +283,11 @@ function frame(dt) {
   cullFarRegions(); camera.updateMatrixWorld(); space.updateBelt(camera, Math.hypot(camera.position.x, camera.position.z) < 280 && camera.position.y < 70);
   space.group.rotation.y = t * 0.002; space.beltU.value = t;
   // shadow frustum follows the focus point
-  const focus = ctrl.camFree ? ctrl.pos : (VIEW === 'aerial' || VIEW === 'world' ? new THREE.Vector3(sd(0, 5).x, 0, sd(0, 5).z) : new THREE.Vector3(sd(0, -20).x, 0, sd(0, -20).z));
-  sun.target.position.set(Math.round(focus.x), 0, Math.round(focus.z)); sun.position.copy(sun.target.position).addScaledVector(sunDir, 200);
+  const focus = window.__focus || (ctrl.camFree ? ctrl.pos : (VIEW === 'aerial' || VIEW === 'world' ? new THREE.Vector3(sd(0, 5).x, 0, sd(0, 5).z) : new THREE.Vector3(sd(0, -20).x, 0, sd(0, -20).z))); // __focus: QA hook (flicker test)
+  { // texel-snapped shadow frustum: move the light camera only by whole shadow-map texels in light space (no shimmering / blinking shadow squares while walking)
+    const L = (frame.sL ??= (() => { const z = sunDir.clone(), x = new THREE.Vector3(0, 1, 0).cross(z).normalize(), y = z.clone().cross(x); return { x, y, t: (sc.right - sc.left) / sun.shadow.mapSize.x }; })());
+    const f = new THREE.Vector3(focus.x, 0, focus.z); const px = f.dot(L.x), py = f.dot(L.y); f.addScaledVector(L.x, Math.round(px / L.t) * L.t - px).addScaledVector(L.y, Math.round(py / L.t) * L.t - py);
+    sun.target.position.copy(f); sun.position.copy(f).addScaledVector(sunDir, 200); }
   applyPower(t);
   fuelEl.style.width = (ctrl.fuel * 100).toFixed(0) + '%';
   culler.update(camera);
@@ -275,7 +296,7 @@ function frame(dt) {
 function loop() { const dt = Math.min(clock.getDelta(), 0.05); const t0 = performance.now(); frame(dt); ftimes.push(performance.now() - t0); if (ftimes.length > 240) ftimes.shift(); requestAnimationFrame(loop); }
 
 // test / screenshot API
-window.MK = { setPower, POW, THREE, camera, scene, sky, renderer, env, solids, ctrl, rocks, colliders, VIEWS: Object.keys(VIEWS), head: () => headBone && [headBone.name, headBone.type, +headYaw.toFixed(2)],
+window.MK = { setPower, POW, THREE, composer, bloom, camera, scene, sky, renderer, env, solids, ctrl, rocks, colliders, VIEWS: Object.keys(VIEWS), head: () => headBone && [headBone.name, headBone.type, +headYaw.toFixed(2)],
   ready: false, game: game && game.api,
   anim: () => ({ mixer, actions, STRIDES, locomotion, current: current && current.getClip().name }), // test hook (walk/run blending)
   setView(v) { VIEWS[v](); camera.updateProjectionMatrix(); },

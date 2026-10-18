@@ -67,6 +67,8 @@ export function buildSolids({ rocks, meshes, colliders }) {
     top(x, z, r = CAT.rb) { return Math.max(fine.query(x, z, r, false), coarse.query(x, z, r, false)); },
     over(x, z, r = CAT.rs) { return fine.query(x, z, r, true); },
     standAt(x, z) { return Math.max(groundAt(x, z), S.top(x, z, CAT.rs)); },
+    // visual contact height (no capsule margin): solid column in the cell right under the point, never more than 0.45 m below the physics stand height
+    visAt(x, z) { const s = S.standAt(x, z); return Math.min(s, Math.max(groundAt(x, z), fine.query(x, z, 0, false), coarse.query(x, z, 0, false), s - 0.45)); },
     // does the capsule span [y0, y1] overlap any overhead slab around (x, z)? returns the lowest overlapping slab bottom (or Infinity)
     slabHit(x, z, y0, y1, r = CAT.rb) { let lo = Infinity; fine.slab(x, z, r, (a, b) => { if (a < y1 && b > y0 && a < lo) lo = a; }); return lo; },
     // feet height for a cat currently at height y: terrain / column tops, or the top of an overhead slab it is above (lands on a dish rim, pipe, gantry arm)

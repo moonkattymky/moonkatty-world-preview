@@ -118,22 +118,47 @@ export function makeCache(scene, p, env) {
 }
 
 // ---------- the first base module the builder robot builds: storage depot, revealed bottom-up by a clip plane + holo ghost ----------
+// storage module built in visible stages (foundation → frame → panels → dome → lights). Every part carries aStg = (stage, y0, y1):
+// parts of finished stages are shown, the current stage grows upward from y0 to y1 with a hot weld seam at the cut, later stages are a faint wire ghost.
+export const DEPOT_STAGES = [{ id: 'foundation', w: 0.13, a: 0 }, { id: 'frame', w: 0.22, a: 0.85 }, { id: 'panels', w: 0.3, a: -0.85 }, { id: 'dome', w: 0.23, a: 0.45 }, { id: 'lights', w: 0.12, a: -0.4 }];
 export function makeDepot(scene, p, env) {
-  const parts = [colorize(new THREE.CylinderGeometry(1.45, 1.55, 1.9, 18, 1).translate(0, 0.95, 0), '#e4dccb'), colorize(new THREE.CylinderGeometry(1.58, 1.58, 0.16, 18, 1).translate(0, 0.08, 0), '#8d8a84'),
-    colorize(new THREE.CylinderGeometry(1.5, 1.5, 0.14, 18, 1, true).translate(0, 1.35, 0), '#d6a136'), colorize(new THREE.SphereGeometry(1.45, 18, 5, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 1.9, 0), '#ece4d2'),
-    colorize(new THREE.BoxGeometry(0.85, 1.25, 0.2).translate(0, 0.72, 1.45), '#3a3f47'), colorize(new THREE.BoxGeometry(1.0, 0.1, 0.24).translate(0, 1.4, 1.47), '#d6a136'),
-    colorize(new THREE.BoxGeometry(0.42, 0.16, 0.08).translate(-0.95, 1.1, 1.1).rotateY(-0.6), '#6fe7ff'), colorize(new THREE.BoxGeometry(0.42, 0.16, 0.08).translate(0.95, 1.1, 1.1).rotateY(0.6), '#6fe7ff'),
-    colorize(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 5).translate(0.5, 3.6, 0), '#c9c2b2'), colorize(new THREE.SphereGeometry(0.09, 6, 4).translate(0.5, 4.12, 0), '#ffb347')];
-  const geo = mergeGeometries(parts); geo.computeBoundingSphere();
-  const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), p.y); const ghostClip = new THREE.Plane(new THREE.Vector3(0, 1, 0), -p.y);
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.35, roughness: 0.5, envMap: env || null, clippingPlanes: [clip], side: THREE.DoubleSide, emissive: '#6fe7ff', emissiveIntensity: 0 });
-  mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance = vColor.rgb * step(0.9, vColor.b) * step(vColor.r, 0.5) * 1.6;'); };
-  const m = new THREE.Mesh(geo, mat); m.name = 'game_depot'; m.position.set(p.x, p.y, p.z); m.rotation.y = p.yaw || 0; m.castShadow = true; m.receiveShadow = true; m.visible = false; scene.add(m);
-  const ghost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 1.1, 1.5), transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending, wireframe: true, clippingPlanes: [ghostClip], toneMapped: false }));
-  ghost.name = 'game_depot_ghost'; m.add(ghost);
-  const H = 4.2; let frac = 0;
-  const api = { mesh: m, H, get frac() { return frac; },
-    set(f, building) { frac = Math.max(0, Math.min(1, f)); m.visible = f > 0 || building; ghost.visible = building && frac < 1; const y = p.y + 0.02 + frac * H; clip.constant = y; ghostClip.constant = -y; },
-    topWorld() { return new THREE.Vector3(p.x, p.y + frac * H, p.z); } };
+  const parts = []; const add = (g, col, st) => { g = colorize(g, col); g.computeBoundingBox(); const b = g.boundingBox, n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set([st, b.min.y, b.max.y], i * 3); g.setAttribute('aStg', new THREE.BufferAttribute(a, 3)); parts.push(g); };
+  // 0 foundation: slab + anchor pads
+  add(new THREE.CylinderGeometry(1.58, 1.58, 0.16, 18, 1).translate(0, 0.08, 0), '#8d8a84', 0);
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4; add(new THREE.BoxGeometry(0.34, 0.1, 0.34).translate(Math.cos(a) * 1.62, 0.05, Math.sin(a) * 1.62), '#6e6b66', 0); }
+  // 1 frame: 10 struts + top ring
+  for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5; add(new THREE.BoxGeometry(0.07, 1.78, 0.07).translate(Math.cos(a) * 1.5, 1.05, Math.sin(a) * 1.5), '#a8a296', 1); }
+  add(new THREE.TorusGeometry(1.5, 0.045, 4, 20).rotateX(Math.PI / 2).translate(0, 1.92, 0), '#a8a296', 1);
+  // 2 panels: shell, gold band, door
+  add(new THREE.CylinderGeometry(1.45, 1.55, 1.9, 18, 1).translate(0, 0.95, 0), '#e4dccb', 2);
+  add(new THREE.CylinderGeometry(1.5, 1.5, 0.14, 18, 1, true).translate(0, 1.35, 0), '#d6a136', 2);
+  add(new THREE.BoxGeometry(0.85, 1.25, 0.2).translate(0, 0.72, 1.45), '#3a3f47', 2); add(new THREE.BoxGeometry(1.0, 0.1, 0.24).translate(0, 1.4, 1.47), '#d6a136', 2);
+  // 3 dome
+  add(new THREE.SphereGeometry(1.45, 18, 5, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 1.9, 0), '#ece4d2', 3);
+  // 4 lights: windows, mast, beacon
+  add(new THREE.BoxGeometry(0.42, 0.16, 0.08).translate(-0.95, 1.1, 1.1).rotateY(-0.6), '#6fe7ff', 4); add(new THREE.BoxGeometry(0.42, 0.16, 0.08).translate(0.95, 1.1, 1.1).rotateY(0.6), '#6fe7ff', 4);
+  add(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 5).translate(0.5, 3.6, 0), '#c9c2b2', 4); add(new THREE.SphereGeometry(0.09, 6, 4).translate(0.5, 4.12, 0), '#ffb347', 4);
+  const geo = mergeGeometries(parts.map(g => g.index ? g.toNonIndexed() : g)); geo.computeBoundingSphere();
+  const uB = { value: 0 }, NS = DEPOT_STAGES.length;
+  const inject = (sh, ghost) => { sh.uniforms.uB = uB;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aStg; varying vec3 vStg; varying float vLY;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvStg = aStg; vLY = position.y;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uB; varying vec3 vStg; varying float vLY;')
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+      float sf = clamp(uB - vStg.x, 0.0, 1.0); float cut = mix(vStg.y - 0.001, vStg.z + 0.001, sf); bool built = vLY <= cut && uB > vStg.x;
+      ${ghost ? 'if (built) discard;' : 'if (!built) discard; float seam = (sf < 1.0) ? 1.0 - smoothstep(0.0, 0.07, cut - vLY) : 0.0;'}`); };
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.35, roughness: 0.5, envMap: env || null, side: THREE.DoubleSide });
+  mat.onBeforeCompile = (sh) => { inject(sh, false); sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance = vColor.rgb * step(0.9, vColor.b) * step(vColor.r, 0.5) * 1.6 + vec3(1.6, 0.75, 0.25) * seam * 0.9;'); };
+  mat.customProgramCacheKey = () => 'depot_stg';
+  const m = new THREE.Mesh(geo, mat); m.name = 'game_depot'; m.position.set(p.x, p.y, p.z); m.rotation.y = p.yaw || 0; m.castShadow = false; m.receiveShadow = true; m.visible = false; scene.add(m);
+  const gm = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 1.1, 1.5), transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending, wireframe: true, toneMapped: false });
+  gm.onBeforeCompile = (sh) => inject(sh, true); gm.customProgramCacheKey = () => 'depot_ghost';
+  const ghost = new THREE.Mesh(geo, gm); ghost.name = 'game_depot_ghost'; m.add(ghost);
+  const H = 4.2; let frac = 0; const tops = [0.16, 1.97, 1.97, 3.35, 4.2];
+  const toValue = (f) => { let acc = 0; for (let i = 0; i < NS; i++) { const w = DEPOT_STAGES[i].w; if (f <= acc + w || i === NS - 1) return Math.min(NS, i + Math.min(1, (f - acc) / w)); acc += w; } return NS; };
+  const api = { mesh: m, H, stages: DEPOT_STAGES, get frac() { return frac; }, get value() { return uB.value; },
+    // f: overall 0..1 (stage weights applied); building: show the ghost of the unbuilt rest
+    set(f, building) { frac = Math.max(0, Math.min(1, f)); api.setValue(frac >= 1 ? NS : toValue(frac), building); },
+    setValue(v, building) { uB.value = v; frac = v >= NS ? 1 : frac; m.visible = v > 0 || building; ghost.visible = building && v < NS; m.castShadow = v >= NS; },
+    topWorld() { const i = Math.min(NS - 1, Math.floor(uB.value)); return new THREE.Vector3(p.x, p.y + (uB.value >= NS ? H : tops[i]), p.z); } };
   api.set(0, false); return api;
 }
