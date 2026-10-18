@@ -144,6 +144,19 @@ function headLook(dt) {
   headYaw = dt >= 0.5 ? want : headYaw + (want - headYaw) * Math.min(1, dt * 4);
   headBone.userData.pre = (headBone.userData.pre || new THREE.Quaternion()).copy(headBone.quaternion); headBone.parent.getWorldQuaternion(_hp); _hr.setFromAxisAngle(_up, headYaw); _hq.copy(_hp).invert().multiply(_hr).multiply(_hp); headBone.quaternion.premultiply(_hq); headBone.updateMatrixWorld(true);
 }
+
+// runtime 'press' pose (shield finale): 2-bone CCD on the arm toward a world target (palm on the paw pad) + slight spine lean.
+// The GLB and its clips are untouched; this only adds bone rotations on top of the idle clip while catPose is set.
+let catPose = null, catModel = null; const _posePre = []; const _pq = new THREE.Quaternion(), _pq2 = new THREE.Quaternion(), _pa = new THREE.Vector3(), _pb = new THREE.Vector3(), _pc = new THREE.Vector3();
+function ccdStep(bone, end, target, w) { bone.getWorldPosition(_pa); end.getWorldPosition(_pb); const d0 = _pb.sub(_pa).normalize(), d1 = _pc.copy(target).sub(_pa).normalize(); _pq.setFromUnitVectors(d0, d1); if (w < 1) _pq.slerp(_pq2.identity(), 1 - w); bone.parent.getWorldQuaternion(_pq2); const inv = _pq2.clone().invert(); bone.quaternion.premultiply(inv.multiply(_pq).multiply(_pq2)); bone.updateMatrixWorld(true); }
+function applyCatPose() {
+  if (!catPose || !catModel) return; const S = catPose.side || 'L'; const B = (n) => catModel.getObjectByName(n); const up = B('upperarm_' + S), fo = B('forearm_' + S), ha = B('hand_' + S), sp = B('spine'); if (!up || !fo || !ha) return;
+  _posePre.length = 0; for (const b of [up, fo, ha, sp]) if (b) _posePre.push([b, b.quaternion.clone()]);
+  catRoot.updateMatrixWorld(true); if (sp && catPose.lean) ccdStep(sp, ha, catPose.target, catPose.lean);
+  for (let k = 0; k < 4; k++) { ccdStep(fo, ha, catPose.target, 1); ccdStep(up, ha, catPose.target, 1); }
+  if (catPose.palm != null) { ha.rotateX(catPose.palm); ha.updateMatrixWorld(true); }
+  catPose.dbg = { hand: ha.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(2)), sh: up.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(2)), el: fo.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(2)), n: (catPose.n = (catPose.n || 0) + 1) };
+}
 const flame = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 10, 1, true).rotateX(Math.PI).translate(0, -0.35, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 2.2, 0.8), transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
 flame.position.set(0, 0.85, -0.45); flame.visible = false; catRoot.add(flame);
 // walk/run locomotion: per-clip timeScale = speed / measured stride (feet planted up to the cap, then accept a little slide);
@@ -170,7 +183,7 @@ function measureStride(model, clip) {
 }
 const catPromise = new GLTFLoader().loadAsync(catURL + '?v=' + Date.now()).then(gltf => {
   const m = gltf.scene; m.traverse(o => { if (o.isMesh) { o.castShadow = !(MOBILE ? /Eye|Glow|Dome|Glint|Outline|Whisker|Flame/i : /Eye|Glow|Dome|Glint|Outline/i).test(Array.isArray(o.material) ? '' : o.material.name); o.receiveShadow = true; o.frustumCulled = false; const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const mt of ms) { if (mt.transmission > 0) { mt.transmission = 0; mt.transparent = true; mt.opacity = Math.min(mt.opacity, 0.35); mt.depthWrite = false; } /* transmission would re-render the whole opaque scene every frame */ if (mt.isMeshStandardMaterial) { mt.envMap = env; mt.envMapIntensity = /gold/i.test(mt.name) ? 1.6 : 0.6; } if (/Face|Fur|Eye/i.test(mt.name) && mt.isMeshStandardMaterial) { /* cat-only warm fill: face reads bright orange inside the dome even with the sun behind (no scene light added) */ if (mt.map) mt.emissiveMap = mt.map; mt.emissive = new THREE.Color(/Eye/i.test(mt.name) ? '#8a8a8a' : '#ffc89a'); mt.emissiveIntensity = /Eye/i.test(mt.name) ? 0.3 : 0.42; mt.needsUpdate = true; } if (/^MK_Dome$/i.test(mt.name)) { /* clear glass: weaker env/spec glare so the face reads through the helmet */ mt.opacity = 0.16; mt.envMapIntensity = 0.3; if ('specularIntensity' in mt) mt.specularIntensity = 0.5; if ('clearcoat' in mt) mt.clearcoat = 0; mt.needsUpdate = true; } if (/DomeGlint/i.test(mt.name)) mt.opacity = 0.22; if (/Fur/i.test(mt.name)) mt.emissiveIntensity = 0.3; } } });
-  catRoot.add(m); m.traverse(o => { if (!headBone && /^head$/i.test(o.name)) headBone = o; }); if (!headBone) m.traverse(o => { if (!headBone && /head/i.test(o.name) && !o.isMesh) headBone = o; });
+  catRoot.add(m); catModel = m; m.traverse(o => { if (!headBone && /^head$/i.test(o.name)) headBone = o; }); if (!headBone) m.traverse(o => { if (!headBone && /head/i.test(o.name) && !o.isMesh) headBone = o; });
   if (gltf.animations.length) { mixer = new THREE.AnimationMixer(m); for (const c of gltf.animations) actions[c.name] = mixer.clipAction(c); STRIDE = measureStride(m, gltf.animations.find(c => c.name === 'walk')); STRIDES.walk = STRIDE; { const rc = gltf.animations.find(c => c.name === 'run'); if (rc) STRIDES.run = measureStride(m, rc); } play('idle', 0); }
   return gltf;
 }).catch(err => { console.warn('cat glb missing, using placeholder', err); const ph = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.9, 4, 12), mats.ivory); ph.position.y = 0.85; ph.castShadow = true; catRoot.add(ph); });
@@ -297,7 +310,9 @@ function frame(dt) {
   contact.update(catRoot.position, ctrl.onGround ? 0 : ctrl.pos.y - solids.visAt(ctrl.pos.x, ctrl.pos.z));
   prints.update(ctrl.pos, ctrl.yaw, ctrl.onGround, ctrl.speed);
   if (headBone && headBone.userData.pre) headBone.quaternion.copy(headBone.userData.pre);
+  for (const [b, q] of _posePre) b.quaternion.copy(q); _posePre.length = 0;
   if (mixer) { if (!ctrl.onGround) play(actions.jump ? 'jump' : 'idle', 0.15); else if (ctrl.speed > 0.6) locomotion(ctrl.speed); else play('idle'); mixer.update(dt); }
+  applyCatPose();
   headLook(SHOT ? 1 : dt);
   flame.visible = ctrl.thrusting; if (flame.visible) flame.scale.y = 0.8 + Math.random() * 0.5;
   crystals.update(t); mats.beam.uniforms.uTime.value = t; sky.starMat.uniforms.uTime.value = t; sky.earthMat.uniforms.uTime.value = t;
@@ -318,7 +333,7 @@ function frame(dt) {
 function loop() { const dt = Math.min(clock.getDelta(), 0.05); const t0 = performance.now(); frame(dt); ftimes.push(performance.now() - t0); if (ftimes.length > 240) ftimes.shift(); requestAnimationFrame(loop); }
 
 // test / screenshot API
-window.MK = { setPower, POW, THREE, composer, bloom, camera, scene, sky, renderer, env, solids, ctrl, rocks, colliders, VIEWS: Object.keys(VIEWS), head: () => headBone && [headBone.name, headBone.type, +headYaw.toFixed(2)],
+window.MK = { setCatPose: (o) => { catPose = o; }, setPower, POW, THREE, composer, bloom, camera, scene, sky, renderer, env, solids, ctrl, rocks, colliders, VIEWS: Object.keys(VIEWS), head: () => headBone && [headBone.name, headBone.type, +headYaw.toFixed(2)],
   ready: false, game: game && game.api,
   anim: () => ({ mixer, actions, STRIDES, locomotion, current: current && current.getClip().name }), // test hook (walk/run blending)
   setView(v) { VIEWS[v](); camera.updateProjectionMatrix(); },

@@ -105,7 +105,10 @@ export function createChapter2(ctx) {
   // damaged shield-emitter panels sit just outside the dome rim on the console side (concept: robots weld in front of the dome)
   const SPOTS = (() => { const ux = consoleP.x - shieldC.x, uz = consoleP.z - shieldC.z, ul = Math.hypot(ux, uz) || 1, dx = ux / ul, dz = uz / ul, px = -dz, pz = dx; const dC = Math.min(ul - 4.5, 50);
     return [[-3.5, 0.5], [2.5, -1.5], [-8.5, 0.0]].map(([l, f]) => free({ x: shieldC.x + dx * (dC + f) + px * l, z: shieldC.z + dz * (dC + f) + pz * l }, 2)); })();
-  function startStorm() { if (!shield.start()) return; storm.on = true; storm.t = 0; storm.spots = []; storm.replay = isDone('c2_storm'); shield.configure({ dur: FAST ? 8 : 32, fast: FAST, onHit: () => { } }); hud.toast('🐾 ' + t('stormStart')); }
+  function pressPaw() { try { const p = me(); let ex = p.x - consoleP.x, ez = p.z - consoleP.z; const el = Math.hypot(ex, ez) || 1; ex /= el; ez /= el; const kx = consoleP.x + ex * 0.85, kz = consoleP.z + ez * 0.85; const yaw = Math.atan2(consoleP.x - kx, consoleP.z - kz) - 0.9; if (ctrl.place) ctrl.place(kx, kz, yaw);
+    const pad = new THREE.Vector3(); shield.console.updateMatrixWorld(true); shield.console.localToWorld(pad.set(0, 0.74, 0)); pad.x += ex * 0.24; pad.z += ez * 0.24; pad.y += 0.05; const side = (pad.x - kx) * Math.cos(yaw) - (pad.z - kz) * Math.sin(yaw) > 0 ? 'L' : 'R';
+    const M = window.MK; if (M && M.setCatPose) { M.setCatPose({ target: pad, side, lean: 0.25 }); setTimeout(() => M.setCatPose(null), FAST ? 400 : 2200); } } catch (e) { } }
+  function startStorm() { if (!shield.start()) return; pressPaw(); storm.on = true; storm.t = 0; storm.spots = []; storm.replay = isDone('c2_storm'); shield.configure({ dur: FAST ? 8 : 32, fast: FAST, onHit: () => { } }); hud.toast('🐾 ' + t('stormStart')); }
   function updateStorm(dt) { const st = shield.state; if (st === 'off' && !storm.on) { shield.console.visible = FEAT.storm && S().on && isDone('c2_l3'); return; } shield.console.visible = true;
     ctx.setNight(shield.night); if (!storm.on) return; storm.t += dt; const D0 = FAST ? 8 : 32;
     // damaged generator panels appear during the storm (shock waves through the ground)
