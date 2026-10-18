@@ -89,6 +89,7 @@ const mats = {
   beam: beamMaterial(),
 };
 mats.ivory = mats.hull; // placeholder fallback
+mats.hull.color.setRGB(0.8, 0.78, 0.77); mats.lattice.color.setRGB(0.8, 0.78, 0.77); // pass 41 grade: concept ivory is a soft grey-beige, not bright yellow
 { // pass 40: architecture micro-detail (one shared material, no geometry): world-space panel seams + per-panel tone on flat ivory panels
   // (crates, storage modules, walls, pads), fading with distance/footprint so it never aliases; curved hulls keep their atlas panelling
   const hm = mats.hull; hm.onBeforeCompile = (sh) => {
@@ -201,9 +202,12 @@ composer.addPass(new OutputPass());
 const grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uVig: { value: 0.3 } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; uniform float uVig; varying vec2 vUv;
     void main(){ vec4 t = texture2D(tDiffuse, vUv); vec3 c = t.rgb; float l = dot(c, vec3(0.299, 0.587, 0.114));
-      c = mix(c, c * vec3(0.97, 0.99, 1.03), (1.0 - smoothstep(0.0, 0.45, l)) * 0.4); // very slightly cool shadows (neutral grey, no navy)
-      c += vec3(0.045, 0.02, -0.025) * smoothstep(0.45, 1.0, l); // warm highlights
-      c = mix(c, c * c * (3.0 - 2.0 * c), 0.18); // gentle S-curve
+      c = mix(c, c * vec3(0.95, 0.98, 1.06), (1.0 - smoothstep(0.0, 0.5, l)) * 0.7); // pass 41 grade (concept): cool neutral shadows/rock
+      { float s0 = max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b); float ws = smoothstep(0.12, 0.3, s0) * step(c.b, c.r);
+        c += vec3(0.045, 0.02, -0.025) * smoothstep(0.45, 1.0, l) * ws; // warm highlights only on already-warm colours (cat fur, lights, gold); greys stay neutral
+        c = mix(vec3(l), c, mix(0.94, 0.8, smoothstep(0.12, 0.4, s0) * (1.0 - smoothstep(0.35, 0.6, s0)))); } // tame mid-saturation ivory/beige cast, keep vivid colours
+      c = mix(c, c * c * (3.0 - 2.0 * c), 0.42); // stronger S-curve: deep crevices, bright sunlit faces
+      c += vec3(0.0, 0.002, 0.008) * (1.0 - smoothstep(0.0, 0.08, l)); // faint blue in the black sky
       vec2 d = vUv - 0.5; d.x *= 1.15; c *= 1.0 - uVig * smoothstep(0.3, 0.85, length(d) * 1.25);
       gl_FragColor = vec4(c, t.a); }` });
 composer.addPass(grade);

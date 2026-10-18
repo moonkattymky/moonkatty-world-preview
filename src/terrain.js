@@ -199,7 +199,7 @@ export function regolithDetail() { if (DETAIL.value) return DETAIL.value; const 
   const t = new THREE.DataTexture(d, N, N, THREE.RGBAFormat); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 4; t.needsUpdate = true;
   return (DETAIL.value = t); }
 export function terrainMaterial(patch = false, canyon = false) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.customProgramCacheKey = () => 'terrain' + patch + canyon; m.color.setRGB(0.74, 0.72, 0.69); // regolith: slightly brighter, less warm (pass 17)
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.customProgramCacheKey = () => 'terrain' + patch + canyon; m.color.setRGB(0.82, 0.8, 0.78); /* pass 41: brighter regolith (concept) */ // regolith: slightly brighter, less warm (pass 17)
   // procedural regolith: mottled albedo, dark pits, pebble speckle and a bump-mapped normal (fades with distance)
   m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP; sh.uniforms.uLampK = LAMPK; sh.uniforms.uAOMap = AOMAP; sh.uniforms.uPatchOn = PATCH.on; sh.uniforms.uPatch2On = PATCH2.on; sh.uniforms.uPatch3On = PATCH3.on; sh.uniforms.uDet = { value: regolithDetail() };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;').replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
@@ -233,7 +233,7 @@ export function terrainMaterial(patch = false, canyon = false) {
         }
         return acc; }`)
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
-      reflectedLight.directDiffuse *= 1.28; reflectedLight.indirectDiffuse *= 0.92;`)
+      reflectedLight.directDiffuse *= 1.45; reflectedLight.indirectDiffuse *= 0.85; /* pass 41: brighter sunlit regolith, deeper shade (concept contrast) */`)
       .replace('#include <opaque_fragment>', `{ vec3 kd = normalize((viewMatrix * vec4(${TFILL}, 0.0)).xyz); outgoingLight += diffuseColor.rgb * vec3(0.98, 0.96, 0.92) * 0.55 * max(dot(normal, kd), 0.0);
         vec2 lu = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (lu.x > 0.0 && lu.x < 1.0 && lu.y > 0.0 && lu.y < 1.0) outgoingLight += diffuseColor.rgb * texture2D(uLampMap, lu).rgb * 9.0 * uLampK; }
       #include <opaque_fragment>`)
@@ -263,7 +263,7 @@ export function terrainMaterial(patch = false, canyon = false) {
           ${patch ? `{ vec3 fnT = normalize(vWN); vec3 tw = pow(abs(fnT), vec3(4.0)); tw /= tw.x + tw.y + tw.z + 1e-4; float wS = (1.0 - pFlat) * (1.0 - smoothstep(30.0, 160.0, tDist));
             if (wS > 0.01) { float ta = texture2D(uDet, vWP.zy / 4.5).r * tw.x + texture2D(uDet, vWP.xz / 4.5).r * tw.y + texture2D(uDet, vWP.xy / 4.5).r * tw.z; float tb = texture2D(uDet, vWP.zy / 17.0 + 0.3).r * tw.x + texture2D(uDet, vWP.xz / 17.0 + 0.3).r * tw.y + texture2D(uDet, vWP.xy / 17.0 + 0.3).r * tw.z;
               diffuseColor.rgb *= mix(1.0, (0.4 + 1.0 * ta) * (0.55 + 0.75 * tb), wS * 0.85) * mix(0.62, 1.0, smoothstep(-0.4, 0.4, fnT.y)); } }` : ''} /* pass 41: triplanar rock grain + overhang occlusion on steep walls */
-          float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(vec3(lum), diffuseColor.rgb, 0.4) * vec3(0.95, 0.98, 1.06); } /* lunar grey (concept): mostly neutral regolith, warmth comes from the lights */
+          float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(vec3(lum), diffuseColor.rgb, 0.4) * vec3(0.95, 0.98, 1.06) * mix(vec3(1.0), vec3(0.8, 0.85, 0.96), smoothstep(70.0, 260.0, tDist)); } /* pass 41: far relief cools/darkens (concept rim) */ /* lunar grey (concept): mostly neutral regolith, warmth comes from the lights */
         vec2 au = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (au.x > 0.0 && au.x < 1.0 && au.y > 0.0 && au.y < 1.0) diffuseColor.rgb *= texture2D(uAOMap, au).r; }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       if (tFade > 0.01) { float e = 0.15; float n0 = rg(vWP.xz * 1.6), nx = rg(vWP.xz * 1.6 + vec2(e, 0.)), nz = rg(vWP.xz * 1.6 + vec2(0., e));
