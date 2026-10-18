@@ -170,6 +170,27 @@ body.game #jump .fl{position:absolute;left:50%;bottom:-16px;width:26px;height:30
 #mk-track .t{font-size:13.5px;font-weight:400}
 #mk-pts .v,#mk-cry .v{font-size:18px}#mk-pts .v .st{font-size:20px}#mk-cry svg{width:18px;height:22px}
 
+#mk-track{top:max(92px,calc(env(safe-area-inset-top) + 82px));left:13px;width:150px;min-height:0;max-height:150px;padding:9px 11px 10px 12px;transform:perspective(420px) rotateY(14deg);transform-origin:0 50%;pointer-events:auto;cursor:pointer;overflow:hidden}
+#mk-track .ch{font-size:6.5px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mk-track .ch span:first-child::before{font-size:11px;margin-bottom:1px}
+#mk-track .qh{font-size:13.5px;margin-top:8px;display:flex;justify-content:space-between;align-items:baseline}
+#mk-track .qh .qn{font-size:9.5px;color:#9fe6ff;font-weight:500;letter-spacing:0}
+#mk-track .t{font-size:12.5px;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:0}
+#mk-track .row,#mk-track .hint{display:none}
+#mk-track.x{max-height:none}#mk-track.x .hint{display:block}#mk-track.x .row:not(:has(.dist)){display:flex}
+#mk-track.c{width:auto;padding:7px 10px}#mk-track.c .t,#mk-track.c .ch span:first-child{display:none}#mk-track.c .qh{margin-top:0}
+@media (min-width:900px){#mk-track{top:96px;left:18px;width:168px}#mk-track .qh{font-size:14.5px}#mk-track .t{font-size:13.5px}}
+
+#mk-track{width:182px;min-height:142px;max-height:none;padding:30px 16px 22px 28px;box-sizing:border-box;transform:perspective(380px) rotateY(22deg);background:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 156 142' preserveAspectRatio='none'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23123a66' stop-opacity='.78'/><stop offset='.55' stop-color='%23061630' stop-opacity='.82'/><stop offset='1' stop-color='%230e3460' stop-opacity='.78'/></linearGradient></defs><path d='M15 1.5H148L154.5 8V40L151.5 44V128L144 140.5H23L17 134.5H7L1.5 129V61L4.5 57V12Z' fill='url(%23g)' stroke='%2388e6ff' stroke-width='1.7' vector-effect='non-scaling-stroke'/><path d='M18 7H144L148.5 11.5V125L141.5 135H24L11 128V60L9.5 58V17Z' fill='none' stroke='%2370d8ff' stroke-opacity='.6' stroke-width='1' vector-effect='non-scaling-stroke'/><path d='M24 134.5H70M148 22V36' stroke='%23c8f4ff' stroke-width='2' vector-effect='non-scaling-stroke'/></svg>") 0 0/100% 100% no-repeat;filter:drop-shadow(0 0 5px rgba(90,210,255,.75)) drop-shadow(0 0 14px rgba(60,170,255,.35));font-family:"Roboto Condensed","Arial Narrow","Segoe UI",Roboto,system-ui,sans-serif;font-stretch:condensed}
+#mk-track::before,#mk-track::after{content:none;display:none}
+#mk-track .ch span:first-child::before{font-size:12.5px;font-weight:400;letter-spacing:0;color:#d8f6ff}
+#mk-track .ch{font-size:6px;color:#5fb8d8;opacity:.9}
+#mk-track .qh{font-size:16.5px;font-weight:500;margin-top:14px;color:#e8fbff}
+#mk-track .t{font-size:14px;font-weight:400;margin-top:1px;color:#e8fbff;letter-spacing:-.01em}
+#mk-track{padding-right:14px;padding-left:28px}
+#mk-track.c{min-height:0;padding:9px 14px 9px 18px}
+@media (min-width:900px){#mk-track{top:96px;left:18px;width:196px;min-height:150px}}
+
 
 `;
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -211,7 +232,7 @@ export function makeHUD(t) {
       $('#mk-lv').textContent = level; $('#mk-ringp').setAttribute('stroke-dashoffset', (106.8 * (1 - Math.min(1, xp / need))).toFixed(1));
       $('#mk-pv').textContent = points.toLocaleString('ru-RU'); $('#mk-cv').textContent = (cry | 0).toLocaleString('ru-RU'); $('#mk-capt').textContent = `${earned}/${cap} ${t('today')}`; $('#mk-capbar i').style.width = Math.min(100, earned / cap * 100) + '%';
     },
-    setTrack(html) { const el = $('#mk-track'); if (el._h !== html) { el.innerHTML = html.replace(/(<div class="t">)/, `<div class="qh">${esc(t('mapQuest'))}:</div>$1`); el._h = html; } },
+    setTrack(html) { const el = $('#mk-track'); if (el._h !== html) { el.innerHTML = html.replace(/(<div class="t">)/, `<div class="qh"><span>${esc(t('mapQuest'))}:</span></div>$1`); el._h = html; const n = [...el.querySelectorAll('.row span')].map(x => x.textContent).find(x => /^\d+\/\d+$/.test(x.trim())); const qh = el.querySelector('.qh'); if (n && qh) qh.insertAdjacentHTML('beforeend', `<span class="qn">${esc(n)}</span>`); } if (!el._tap) { el._tap = 1; el.addEventListener('click', () => el.classList.toggle('x')); } },
     marker(mode, x, y, rot, label) {
       const a = $('#mk-arrow'), c = $('#mk-chip');
       if (mode === 'arrow') { a.style.display = 'block'; a.style.transform = `translate(${x}px,${y}px)`; a.querySelector('.a').style.transform = `rotate(${rot}rad)`; a.querySelector('span').textContent = label; c.style.display = 'none'; }

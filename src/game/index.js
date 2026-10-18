@@ -285,8 +285,8 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
 
 
   // ---------- holographic world map (HUD map button / M key) ----------
-  const MAP_R = { hub: 150, canyon: 110, launch: 110 };
-  const mapRegion = () => { const k = regionOf(me()); const c = L.regions[k]; return { key: k, x: c.x, z: c.z, R: MAP_R[k] || 120, name: t('map_r_' + k) }; };
+  const MAP_R = { hub: 90, canyon: 90, launch: 90 };
+  const mapRegion = () => { const k = regionOf(me()); const c = k === 'hub' && sd ? sd(-1, 12) : L.regions[k]; return { key: k, x: c.x, z: c.z, R: MAP_R[k] || 120, name: t('map_r_' + k) }; };
   let holo = null, fogA = null, fogK = null, fogT = 0, goT = 0;
   const fogFor = (rg) => { if (fogK !== rg.key) { fogK = rg.key; fogA = fogGet(store, rg.key); } return fogA; };
   function mapData() {

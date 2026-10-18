@@ -35,6 +35,7 @@ const holoVS = `varying vec3 vW; varying vec3 vL; varying float vH; attribute fl
 const holoFS = `uniform float uT; uniform float uOpen; uniform sampler2D uFog; uniform float uR; uniform float uHK;
 varying vec3 vW; varying vec3 vL; varying float vH;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
 void main(){
   vec2 uv = vL.xz / (2.0 * uR) + 0.5; float m = pow(abs(vL.x / uR), 4.0) + pow(abs(vL.z / uR), 4.0); if (m > 1.0) discard;
   float fog = texture2D(uFog, uv).r;
@@ -46,12 +47,13 @@ void main(){
   float scan = 0.82 + 0.18 * sin(gl_FragCoord.y * 1.6 + uT * 6.0);
   float flick = 0.93 + 0.07 * sin(uT * 23.0 + hash(floor(uv * 40.0)) * 6.28);
   vec3 cyan = vec3(0.25, 0.85, 1.0);
-  vec3 col = rock * 0.85 + cyan * (cl * 0.35 + ridge * 0.35 + 0.06);
+  float tx = vn(vL.xz * 2.2) * 0.5 + vn(vL.xz * 6.0) * 0.3 + vn(vL.xz * 17.0) * 0.2; rock *= 0.7 + 0.75 * tx;
+  vec3 col = rock * 1.05 + cyan * (cl * 0.35 + ridge * 0.35 + 0.06);
   float edge = smoothstep(0.82, 1.0, m); col += cyan * edge * 0.9;
   float grid = (1.0 - smoothstep(0.0, 0.03, abs(fract(vL.x / uR * 6.0) - 0.5) - 0.47)) + (1.0 - smoothstep(0.0, 0.03, abs(fract(vL.z / uR * 6.0) - 0.5) - 0.47));
   col += cyan * grid * 0.05;
   float unk = 1.0 - fog; float noise = hash(floor(uv * 90.0) + floor(uT * 9.0));
-  col = mix(col, vec3(0.05, 0.16, 0.3) + cyan * (0.12 * noise + cl * 0.15), unk * 0.85);
+  col = mix(col, vec3(0.06, 0.2, 0.36) * (0.7 + 0.6 * tx) + cyan * (0.1 * noise + cl * 0.2 + ridge * 0.15), unk * 0.75);
   float a = (0.92 - unk * 0.35) * scan * flick * uOpen;
   gl_FragColor = vec4(col * scan * flick, a);
 }`;
@@ -95,25 +97,25 @@ export function makeHoloMap({ renderer, t, onGo }) {
   const NP = 60; const pathG = new THREE.BufferGeometry(); pathG.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NP * 3), 3));
   const path = new THREE.Points(pathG, new THREE.PointsMaterial({ color: new THREE.Color(1.6, 1.15, 0.35), size: 0.22, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })); board.add(path);
   // the wrist device: fluffy paw + gold bracelet with a cyan screen, projection cone toward the map
-  const wrist = new THREE.Group(); scene.add(wrist);
+  const wrist = new THREE.Group(); scene.add(cam); cam.add(wrist);
   { const fur = new THREE.MeshStandardMaterial({ color: '#efe3cc', roughness: 1 }); const hand = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16).scale(1.0, 0.85, 1.25), fur); hand.position.set(0, 0.25, -0.9); wrist.add(hand);
     for (let k = 0; k < 4; k++) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 10), fur); f.position.set(-0.6 + k * 0.4, 0.75 + (k === 1 || k === 2 ? 0.15 : 0), -1.75); wrist.add(f); }
     const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.0, 3.2, 20).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#e9dfca', roughness: 0.8 })); arm.position.set(0, -0.1, 1.4); wrist.add(arm);
     const band = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 0.98, 0.8, 28, 1, true).rotateX(Math.PI / 2), gold); band.position.set(0, -0.05, 0.25); wrist.add(band);
     const face = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.22, 28), gold); face.position.set(0, 0.95, 0.25); wrist.add(face);
     const scr = new THREE.Mesh(new THREE.CircleGeometry(0.48, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.2, 1.8), toneMapped: false })); scr.position.set(0, 1.07, 0.25); wrist.add(scr); wrist.userData.scr = scr; }
-  const cone = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 32, 1, true), new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, vertexShader: `varying float vY; void main(){ vY = position.y + 0.5; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float uOpen; uniform float uT; varying float vY; void main(){ gl_FragColor = vec4(vec3(0.2, 0.7, 1.0) * (0.08 + 0.12 * vY) * uOpen * (0.85 + 0.15 * sin(uT * 9.0)), 1.0); }` })); scene.add(cone);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 32, 1, true), new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, vertexShader: `varying float vY; void main(){ vY = position.y + 0.5; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float uOpen; uniform float uT; varying float vY; void main(){ gl_FragColor = vec4(vec3(0.2, 0.7, 1.0) * (0.03 + 0.07 * vY * vY) * uOpen * (0.85 + 0.15 * sin(uT * 9.0)), 1.0); }` })); scene.add(cone);
 
   // ---------- state ----------
-  let open = false, openK = 0, yaw = 0, zoom = 1, data = null, region = null, R = 140, cx = 0, cz = 0, S = W / 140, HK = 1, h0 = 0; const pins = [];
+  let openAt = 0, open = false, openK = 0, yaw = 0, zoom = 1, data = null, region = null, R = 140, cx = 0, cz = 0, S = W / 140, HK = 1, h0 = 0; const pins = [];
   const toMap = (x, z, y) => new THREE.Vector3((x - cx) * S, y != null ? y : 0, (z - cz) * S);
-  const hAt = (x, z) => (data.groundAt(x, z) - h0) * S * 1.7;
+  const HMAX = 1.5; const hMap = h => HMAX * Math.tanh((h - h0) * S * 3.0 / HMAX); const hAt = (x, z) => hMap(data.groundAt(x, z));
   function buildTerrain() {
     if (terr) { board.remove(terr); terr.geometry.dispose(); }
     const N = 110, g = new THREE.PlaneGeometry(2 * W, 2 * W, N, N).rotateX(-Math.PI / 2); const P = g.attributes.position; const aH = new Float32Array(P.count);
     let mn = 1e9, mx = -1e9; const hs = []; for (let i = 0; i < P.count; i++) { const x = cx + P.getX(i) / S, z = cz + P.getZ(i) / S; const h = data.groundAt(x, z); hs.push(h); mn = Math.min(mn, h); mx = Math.max(mx, h); }
-    h0 = (mn + mx) * 0.5 - (mx - mn) * 0.1; for (let i = 0; i < P.count; i++) { const y = (hs[i] - h0) * S * 1.7; P.setY(i, y); aH[i] = y; }
-    HK = 1 / Math.max(0.5, (mx - mn) * S * 1.7); U.uHK.value = HK; g.setAttribute('aH', new THREE.BufferAttribute(aH, 1)); g.computeVertexNormals();
+    { const so = hs.slice().sort((a, b) => a - b); h0 = so[Math.floor(so.length * 0.4)]; } for (let i = 0; i < P.count; i++) { const y = hMap(hs[i]); P.setY(i, y); aH[i] = y; }
+    HK = 1 / (2 * HMAX); U.uHK.value = HK; g.setAttribute('aH', new THREE.BufferAttribute(aH, 1)); g.computeVertexNormals();
     terr = new THREE.Mesh(g, hmat); terr.renderOrder = 1; board.add(terr); built = region;
   }
   function buildMinis() {
@@ -143,7 +145,7 @@ export function makeHoloMap({ renderer, t, onGo }) {
     data = api.getData(); if (!data) return;
     if (data.region.key !== region || !terr) { region = data.region.key; R = data.region.R; cx = data.region.x; cz = data.region.z; S = W / R; buildTerrain(); buildMinis(); }
     updateFogTex();
-    const cs = data.crystals.slice(0, 64); const M = new THREE.Matrix4(); cs.forEach((c, i) => { const p = toMap(c.x, c.z, hAt(c.x, c.z)); const s = 0.16 + 0.06 * ((i * 0.618) % 1); M.compose(p.setY(p.y + s * 1.2), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, i, 0.15 * Math.sin(i))), new THREE.Vector3(s, s, s)); crysI.setMatrixAt(i, M); }); crysI.count = cs.length; crysI.instanceMatrix.needsUpdate = true;
+    const cs = data.crystals.slice(0, 64); const M = new THREE.Matrix4(); cs.forEach((c, i) => { const p = toMap(c.x, c.z, hAt(c.x, c.z)); const s = 0.3 + 0.1 * ((i * 0.618) % 1); M.compose(p.setY(p.y + s * 1.2), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, i, 0.15 * Math.sin(i))), new THREE.Vector3(s, s, s)); crysI.setMatrixAt(i, M); }); crysI.count = cs.length; crysI.instanceMatrix.needsUpdate = true;
     const mp = toMap(data.me.x, data.me.z, hAt(data.me.x, data.me.z) + 0.12); catM.position.copy(mp); catM.rotation.y = data.me.yaw + Math.PI;
     const tg = data.target; beam.visible = ring.visible = path.visible = !!tg;
     if (tg) { const tp = toMap(tg.x, tg.z, hAt(tg.x, tg.z)); beam.position.copy(tp); ring.position.copy(tp).setY(tp.y + 0.05); const A = pathG.attributes.position; const mx = (mp.x + tp.x) / 2, mz = (mp.z + tp.z) / 2; const nx = -(tp.z - mp.z) * 0.18, nz = (tp.x - mp.x) * 0.18;
@@ -166,28 +168,31 @@ export function makeHoloMap({ renderer, t, onGo }) {
   const pv = new THREE.Vector3(); let T = 0;
   const api = {
     getData: null, get open() { return open; },
-    show() { if (open) return; open = true; openK = 0; ui.classList.add('on'); document.body.classList.add('mk-mapopen'); yaw = 0; zoom = 1; sync(); },
+    show() { if (open) return; open = true; openK = 0; openAt = performance.now(); ui.classList.add('on'); document.body.classList.add('mk-mapopen'); yaw = 0; zoom = 1; sync(); },
     close() { if (!open) return; open = false; ui.classList.remove('on'); document.body.classList.remove('mk-mapopen'); api.onClose && api.onClose(); },
     toggle() { open ? api.close() : api.show(); },
     frame(dt) {
-      T += dt; openK = Math.min(1, openK + dt / 0.45); U.uT.value = T; U.uOpen.value = openK < 1 ? openK * (0.6 + 0.4 * Math.sin(T * 60.0) * (1 - openK)) + openK * 0.4 : 1;
+      T += dt; openK = Math.min(1, (performance.now() - openAt) / 450); U.uT.value = T; U.uOpen.value = openK < 1 ? openK * (0.6 + 0.4 * Math.sin(T * 60.0) * (1 - openK)) + openK * 0.4 : 1;
       const w = innerWidth, h = innerHeight; const pr = renderer.getPixelRatio(); const port = h > w;
       cam.aspect = w / h; cam.fov = port ? 62 : 42; cam.updateProjectionMatrix();
-      const dist = (port ? 30 : 22) / zoom; cam.position.set(0, dist * 0.78, dist * 0.62); cam.lookAt(0, port ? -0.6 : -1.2, port ? 0.5 : 1.2);
+      const dist = (port ? 30 : 21) / zoom; cam.position.set(0, dist * 0.62, dist * 0.78); cam.lookAt(0, port ? -0.8 : -1.8, port ? 0.8 : 1.0);
       board.rotation.y = yaw; board.scale.setScalar(0.25 + 0.75 * (1 - Math.pow(1 - openK, 3))); board.position.y = 0;
       board.rotation.x = 0; board.rotation.z = 0;
       scene.userData.earth.rotation.y += dt * 0.03;
       // wrist in the lower-left foreground, projection cone from the screen to the board
-      const wp = new THREE.Vector3(port ? -0.55 : -0.62, -0.62, 0.5).unproject(cam); const dir = wp.clone().sub(cam.position).normalize(); wrist.position.copy(cam.position).addScaledVector(dir, 7); wrist.lookAt(0, 0, 0); wrist.rotateY(Math.PI); wrist.rotateX(-0.35); wrist.scale.setScalar(1.25);
-      const s0 = wrist.userData.scr.getWorldPosition(new THREE.Vector3()); const s1 = new THREE.Vector3(0, 0, 0); const mid = s0.clone().add(s1).multiplyScalar(0.5); const len = s0.distanceTo(s1);
+      wrist.position.set(port ? -1.05 : -2.35, port ? -2.6 : -1.75, -5.0); wrist.rotation.set(0.55, -0.55, 0.25, 'YXZ'); wrist.scale.setScalar(port ? 0.42 : 0.55);
+      cam.updateMatrixWorld(true); const s0 = wrist.userData.scr.getWorldPosition(new THREE.Vector3()); const s1 = new THREE.Vector3(0, 0, 0); const mid = s0.clone().add(s1).multiplyScalar(0.5); const len = s0.distanceTo(s1);
       cone.position.copy(mid); cone.scale.set(W * 0.8 * board.scale.x, len, W * 0.8 * board.scale.x); cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), s1.clone().sub(s0).normalize());
       catM.children[0].material.color.setScalar(1).setRGB(1.6, 0.7 + 0.2 * Math.sin(T * 5), 0.15);
       const path_ = pathG.attributes.position; void path_; path.material.size = 0.2 + 0.05 * Math.sin(T * 6);
       board.updateMatrixWorld(true);
-      for (const p of pins) { pv.copy(toMap(p.x, p.z, p.y + p.lift)); board.localToWorld(pv); pv.project(cam); const vis = pv.z < 1 && Math.abs(pv.x) < 1.1 && Math.abs(pv.y) < 1.1; p.el.style.display = vis && openK > 0.6 ? '' : 'none'; if (vis) p.el.style.transform = `translate(${((pv.x + 1) / 2 * w).toFixed(1)}px,${((1 - pv.y) / 2 * h).toFixed(1)}px) translate(-50%,${p.bot ? '-50%' : '-100%'})`; }
+      for (const p of pins) { pv.copy(toMap(p.x, p.z, p.y + p.lift)); board.localToWorld(pv); pv.project(cam); const vis = pv.z < 1 && Math.abs(pv.x) < 1.1 && Math.abs(pv.y) < 1.1; p.el.style.display = vis && openK > 0.6 ? '' : 'none'; p.sx = (pv.x + 1) / 2 * w; p.sy = (1 - pv.y) / 2 * h; p.vis = vis; }
+      { const placed = []; const lab = pins.filter(p => p.vis && !p.bot && !p.cat).sort((a, b) => b.sy - a.sy); for (const p of lab) { const bw = p.kind === 'hint' ? 26 : 70, bh = p.kind === 'hint' ? 26 : 44; let bx = p.sx, by = p.sy; const C = [[0, 0], [-0.55, 0], [0.55, 0], [0, -1], [-0.55, -0.6], [0.55, -0.6], [-1.1, 0], [1.1, 0], [-0.55, -1.2], [0.55, -1.2], [0, -2]]; for (const [kx, ky] of C) { const x = p.sx + kx * (bw + 4), y = p.sy + ky * (bh + 2); if (!placed.some(q => Math.abs(q.x - x) < (bw + q.w) / 2 && Math.abs(q.y - y) < (bh + q.h) / 2)) { bx = x; by = y; break; } } placed.push({ x: bx, y: by, w: bw, h: bh }); p.sx = bx; p.sy = by; } }
+      for (const p of pins) if (p.vis) p.el.style.transform = `translate(${p.sx.toFixed(1)}px,${p.sy.toFixed(1)}px) translate(-50%,${p.bot ? '-50%' : '-100%'})`;
       const tm = renderer.toneMapping; renderer.toneMapping = THREE.ACESFilmicToneMapping; const ot = renderer.getRenderTarget(); renderer.setRenderTarget(null); renderer.render(scene, cam); renderer.setRenderTarget(ot); renderer.toneMapping = tm; void pr;
     },
     stats() { return renderer.info.render; },
+    dbg() { const p = pins[0]; if (!p) return { n: 0, openK }; const q = toMap(p.x, p.z, p.y + p.lift); board.localToWorld(q); const w = q.clone(); q.project(cam); return { n: pins.length, openK, w: [w.x, w.y, w.z], ndc: [q.x, q.y, q.z], cam: cam.position.toArray(), disp: p.el.style.display }; },
   };
   return api;
 }
