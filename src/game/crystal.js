@@ -51,13 +51,13 @@ const shardMat = () => new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 
       vec3 c = mix(deep, royal, smoothstep(0.12, 0.5, tone));
       c = mix(c, lite, smoothstep(0.62, 0.92, tone) * 0.75);                     // lighter facets / cells
       c = mix(c, ice, smoothstep(0.95, 1.0, tone) * 0.45);                       // an occasional near-white sliver
-      c += lite * streak * 0.4 * mix(0.25, 1.0, vE);                                                  // internal fracture streaks (lighter blue, no hard lines)
+      c += lite * streak * 0.4 * vE;                                                  // internal fracture streaks (lighter blue, no hard lines)
       c += mix(lite, ice, 0.4) * pow(1.0 - vH, 4.0) * 0.55 * mix(0.35, 1.0, vE) * pulse;               // glowing core toward the base
       c += royal * pow(nv, 3.0) * 0.18;                                          // inner light seen straight through
       float e = min(min(vB.x, vB.y), vB.z); float w = fwidth(e);
       float core = 1.0 - smoothstep(w * 0.6, w * 2.8, e);                        // crisp white-cyan ridge
       float band = 1.0 - smoothstep(0.0, 0.035, e);                              // glowing border band along every ridge, fading into the facet
-      float ek = mix(0.22, 1.0, vE); band *= ek; core *= ek; // small shards: solid stained-glass blue, faint ridges (no wireframe look)
+      band *= mix(0.12, 1.0, vE); core *= vE; // small shards: solid stained-glass blue, faint ridges (no wireframe look)
       c = mix(c, ice, band * band * 0.5); c += lite * band * 0.15 + hot * core * 0.7;
       c += hot * smoothstep(0.9, 1.0, vH) * 0.5 * mix(0.3, 1.0, vE);                                 // bright tips
       if (vS > 0.5) c = c * vec3(0.35, 0.33, 0.4) + vec3(0.5, 0.12, 0.05) * core; // mined / cracked
@@ -74,7 +74,7 @@ const glowMat = () => new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }
       // bright regolith (pure additive blue on a light background turns lavender)
       if (vK < 0.5) { vec2 e = vec2(vP.x * 1.45, (vP.y - 0.08) * 1.0); float rr = dot(e, e); float h = exp(-rr * 6.0) * 1.4 * pulse; float wr = smoothstep(0.1, 0.32, rr); // halo ringing the silhouette (no tint over the crystal body)
         add = vec3(0.004, 0.07, 0.9) * h * wr; occ = min(0.55, h * 0.6 * wr);
-        vec2 b = vec2(vP.x / 0.62, (vP.y + 0.5) / 0.13); add += vec3(0.1, 0.55, 1.9) * exp(-dot(b, b)) * 1.2 * pulse; } // white-cyan flare at the base
+        vec2 b = vec2(vP.x / 0.62, (vP.y + 0.5) / 0.13); add += vec3(0.1, 0.55, 1.9) * exp(-dot(b, b)) * 0.6 * pulse; } // white-cyan flare at the base
       else { float a = (pow(1.0 - r, 3.0) * 1.1 + smoothstep(0.08, 0.0, abs(r - fract(uTime * 0.45 + vSeed))) * 0.16 * (1.0 - r)) * pulse;
         vec3 col = mix(vec3(0.02, 0.2, 1.2), vec3(0.15, 0.7, 1.9), pow(1.0 - r, 6.0)); add = col * a * a * 1.4; occ = 0.0; } // pooled light on the ground
       if (vS > 0.5) { add *= 0.25; occ *= 0.25; } gl_FragColor = vec4(add, occ); }` });

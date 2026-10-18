@@ -183,7 +183,7 @@ const SUNXZ = (() => { const x = -Rt.x * 0.75 - F.x * 0.45, z = -Rt.z * 0.75 - F
 // Fine grain + ~1000 pebbles (domes with baked shading via the normal) + small craters (bowl + rim). Sampled at two scales/rotations in the
 // terrain shader with distance blending, so it never repeats visibly and fades into the macro noise far away.
 export const DETAIL = { value: null };
-function regolithDetail() { if (DETAIL.value) return DETAIL.value; const N = 512, Hh = new Float32Array(N * N), A = new Float32Array(N * N).fill(1);
+export function regolithDetail() { if (DETAIL.value) return DETAIL.value; const N = 512, Hh = new Float32Array(N * N), A = new Float32Array(N * N).fill(1);
   let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const lat = (G) => { const g = new Float32Array(G * G); for (let i = 0; i < G * G; i++) g[i] = rnd(); return (x, y) => { const fx = x / N * G, fy = y / N * G, ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy; const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty); const v = (i, j) => g[((j % G + G) % G) * G + ((i % G + G) % G)]; return (v(ix, iy) * (1 - sx) + v(ix + 1, iy) * sx) * (1 - sy) + (v(ix, iy + 1) * (1 - sx) + v(ix + 1, iy + 1) * sx) * sy; }; };
   const o = [[lat(8), 0.5], [lat(24), 0.3], [lat(64), 0.15], [lat(160), 0.1]];

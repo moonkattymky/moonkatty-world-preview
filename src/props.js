@@ -1,6 +1,6 @@
 import { makeStaticCrystals } from './game/crystal.js';
 import * as THREE from 'three';
-import { groundAt, groundMesh, LEDGE, slopeAt, F, Rt, LOOKOUT, REGIONS, sd, CONCEPT, CAVE, PORTAL, canyonPoint, canyonS, canyonInfo } from './terrain.js';
+import { groundAt, groundMesh, LEDGE, slopeAt, F, Rt, LOOKOUT, REGIONS, sd, CONCEPT, CAVE, PORTAL, canyonPoint, canyonS, canyonInfo, regolithDetail } from './terrain.js';
 import { noise2, seeded } from './noise.js';
 import { colliders, LAMPS } from './base.js';
 import { KEEP } from './world.js';
@@ -127,7 +127,7 @@ function pebbleGeom(seed) {
 }
 function rockMaterial(fog = true, bump = 2.2, smooth = false, key = 0.0, far = false, crack = false, amb = 0.32, rug = 0, cliff = 0) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: !smooth, roughness: 0.95, metalness: 0.0, fog }); m.color.setScalar(0.82); m.customProgramCacheKey = () => 'rock' + bump + fog + smooth + key + far + crack + amb + rug + 'c' + cliff;
-  m.onBeforeCompile = (sh) => {
+  m.onBeforeCompile = (sh) => { sh.uniforms.uDet = { value: regolithDetail() };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;').replace('#include <project_vertex>', `#include <project_vertex>
       #ifdef USE_INSTANCING
         vWP = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
@@ -138,6 +138,7 @@ function rockMaterial(fog = true, bump = 2.2, smooth = false, key = 0.0, far = f
       varying vec3 vWP;
       float hh(vec2 p){ p = fract(p * vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(hh(i), hh(i + vec2(1, 0)), f.x), mix(hh(i + vec2(0, 1)), hh(i + vec2(1, 1)), f.x), f.y); }
+      uniform sampler2D uDet;
       float vor(vec2 p){ vec2 i = floor(p), f = fract(p); float m1 = 8., m2 = 8.; for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 o = vec2(x, y); vec2 r = o + vec2(hh(i + o), hh(i + o + 17.3)) - f; float dd = dot(r, r); if (dd < m1) { m2 = m1; m1 = dd; } else if (dd < m2) m2 = dd; } return sqrt(m2) - sqrt(m1); }
       float crH(vec3 w){ vec2 a = w.xz * 5.0 + w.y * 3.3, c = vec2(w.x + w.y * 0.8, w.z - w.y * 0.8) * 11.0; return vn(a) * 0.45 + vn(c) * 0.3 + vn(a * 4.3) * 0.17 + vn(c * 3.1) * 0.08; }
       float farH(vec3 w){ float sb = smoothstep(0.25, 0.75, vn(vec2(w.y * 0.55, (w.x + w.z) * 0.03))); float cn = vn(w.xz * 0.3 + w.y * 0.45) * 0.7 + vn(w.xz * 0.9 - w.y * 0.8) * 0.3; return sb * 0.5 + cn * 0.5; }
@@ -145,7 +146,10 @@ function rockMaterial(fog = true, bump = 2.2, smooth = false, key = 0.0, far = f
       float clH(vec3 w, vec3 n, out float crev, out float wt, out float shd){ float ax = n.x * n.x, az = n.z * n.z, s = ax + az + 1e-3; float c1, c2, s1, s2; float h = (clP(vec2(w.z, w.y), c1, s1) * ax + clP(vec2(w.x, w.y) + 31.0, c2, s2) * az) / s; wt = smoothstep(0.25, 0.7, ax + az); crev = (c1 * ax + c2 * az) / s * wt; shd = mix(1.0, (s1 * ax + s2 * az) / s, wt); return h * wt; }
       float rkH(vec3 w){ vec2 a = w.xz * 2.3 + w.y * 1.7, b = vec2(w.x + w.y * 0.7, w.z - w.y * 0.7) * 3.1; return vor(a) * 0.55 + vor(b) * 0.3 + vn(a * 4.0) * 0.15; }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-      diffuseColor.rgb *= mix(vec3(1.01, 1.0, 0.96), vec3(1.06, 1.0, 0.9), smoothstep(0.25, 0.8, vn(vWP.xz * 0.06 + 4.0))); // warm regolith tones, varying by area
+      diffuseColor.rgb *= mix(vec3(0.97, 0.98, 1.0), vec3(1.02, 1.0, 0.95), smoothstep(0.25, 0.8, vn(vWP.xz * 0.06 + 4.0))); // pass 40: near-neutral lunar grey (was warm)
+      { vec3 fnD = normalize(cross(dFdx(vWP), dFdy(vWP))); vec3 tw = pow(abs(fnD), vec3(4.0)); tw /= tw.x + tw.y + tw.z + 1e-4; float dD = length(vWP - cameraPosition); float fdD = 1.0 - smoothstep(25.0, 110.0, dD);
+        float ta = texture2D(uDet, vWP.zy / 2.6).r * tw.x + texture2D(uDet, vWP.xz / 2.6).r * tw.y + texture2D(uDet, vWP.xy / 2.6).r * tw.z; /* pass 40: triplanar crisp grain/pits (same detail map as the ground) */
+        diffuseColor.rgb *= mix(1.0, 0.35 + 1.05 * ta, fdD * 0.9) * mix(0.6, 1.0, smoothstep(-0.55, 0.35, fnD.y)); } /* undersides / bases darker: contact occlusion */
       { float d = length(vWP - cameraPosition); float fd = 1.0 - smoothstep(30.0, 120.0, d); vec2 q = vWP.xz * 1.9 + vWP.yy * 1.3;
         float n = vn(q) * 0.6 + vn(q * 3.7) * 0.4; diffuseColor.rgb *= mix(1.0, 0.93 + 0.14 * n, fd);
         ${rug > 0 ? 'vec2 rq = vec2(vWP.x * 0.7 + vWP.z * 0.7, vWP.y * 1.8) * 0.16; float rv = vor(rq) + 0.5 * vor(rq * 2.7 + 3.0); diffuseColor.rgb *= mix(1.0, 0.62 + 0.5 * smoothstep(0.02, 0.35, rv), smoothstep(40.0, 90.0, d) * ' + rug.toFixed(2) + ');' : ''}
@@ -160,6 +164,10 @@ function rockMaterial(fog = true, bump = 2.2, smooth = false, key = 0.0, far = f
           float H = ${smooth ? 'crH(vWP)' : 'rkH(vWP)'}; float dhx = dFdx(H), dhy = dFdy(H); vec3 grad = sign(det) * (dhx * R1 + dhy * R2); normal = normalize(mix(normal, normalize(abs(det) * normal - grad * ${bump.toFixed(2)}), fb)); }
         ${cliff > 0 ? '{ float cfb = smoothstep(12.0, 25.0, d) * (1.0 - smoothstep(220.0, 320.0, d)); if (cfb > 0.01) { vec3 fnw = normalize(cross(dFdx(vWP), dFdy(vWP))); float ccv, cwt, csh; float H = clH(vWP, fnw, ccv, cwt, csh) * ' + (1.0 * cliff).toFixed(2) + '; vec3 sp = -vViewPosition; vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 R1 = cross(sy, normal), R2 = cross(normal, sx); float det = dot(sx, R1); vec3 grad = sign(det) * (dFdx(H) * R1 + dFdy(H) * R2); normal = normalize(mix(normal, normalize(abs(det) * normal - grad), cfb)); } }' : ''}
         ${far ? 'float ffb = smoothstep(25.0, 60.0, d); if (ffb > 0.01) { vec3 sp = -vViewPosition; vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 R1 = cross(sy, normal), R2 = cross(normal, sx); float det = dot(sx, R1); float H = farH(vWP) * 1.6; vec3 grad = sign(det) * (dFdx(H) * R1 + dFdy(H) * R2); normal = normalize(mix(normal, normalize(abs(det) * normal - grad), ffb * 0.8)); }' : ''} }`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      { vec3 fnD = normalize(cross(dFdx(vWP), dFdy(vWP))); vec3 tw = pow(abs(fnD), vec3(4.0)); tw /= tw.x + tw.y + tw.z + 1e-4; float fnK = 1.0 - smoothstep(15.0, 70.0, length(vWP - cameraPosition));
+        if (fnK > 0.01) { vec2 nx = texture2D(uDet, vWP.zy / 2.6).gb - 0.5, ny = texture2D(uDet, vWP.xz / 2.6).gb - 0.5, nz = texture2D(uDet, vWP.xy / 2.6).gb - 0.5;
+          vec3 gw = vec3(0.0, nx.y, nx.x) * tw.x + vec3(ny.x, 0.0, ny.y) * tw.y + vec3(nz.x, nz.y, 0.0) * tw.z; normal = normalize(normal + (viewMatrix * vec4(gw * 3.2 * fnK, 0.0)).xyz); } } /* pass 40: triplanar detail normal: faces are no longer flat */`)
       .replace('#include <opaque_fragment>', `${key > 0 ? `{ vec3 kd = normalize((viewMatrix * vec4(${KEY}, 0.0)).xyz); outgoingLight += diffuseColor.rgb * vec3(1.0, 0.96, 0.9) * (${key.toFixed(2)} * max(dot(normal, kd), 0.0) + ${amb.toFixed(2)}); }` : ''}
       #include <opaque_fragment>`);
   };
