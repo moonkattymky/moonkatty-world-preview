@@ -89,6 +89,20 @@ const mats = {
   beam: beamMaterial(),
 };
 mats.ivory = mats.hull; // placeholder fallback
+{ // pass 40: architecture micro-detail (one shared material, no geometry): world-space panel seams + per-panel tone on flat ivory panels
+  // (crates, storage modules, walls, pads), fading with distance/footprint so it never aliases; curved hulls keep their atlas panelling
+  const hm = mats.hull; hm.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPh;').replace('#include <project_vertex>', '#include <project_vertex>\nvWPh = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPh; float hhP(vec2 p){ p = fract(p * vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+      { float dH = length(vWPh - cameraPosition); float kH = 1.0 - smoothstep(30.0, 90.0, dH); vec3 fn = normalize(cross(dFdx(vWPh), dFdy(vWPh)));
+        float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); float sat = max(max(diffuseColor.r, diffuseColor.g), diffuseColor.b) - min(min(diffuseColor.r, diffuseColor.g), diffuseColor.b);
+        float iv = smoothstep(0.3, 0.45, lum) * smoothstep(0.42, 0.58, diffuseColor.b / max(diffuseColor.r, 1e-3)); /* ivory (linear): bright, not gold */ float flat_ = 1.0 - smoothstep(0.02, 0.08, length(fwidth(fn)));
+        float k = kH * iv * flat_; if (k > 0.01) { vec3 aw = abs(fn); vec2 uv = (aw.x > aw.y && aw.x > aw.z) ? vWPh.zy : ((aw.y > aw.z) ? vWPh.xz : vWPh.xy);
+          vec2 g = uv / vec2(0.8, 0.55); vec2 fw = fwidth(g); vec2 dd = min(fract(g), 1.0 - fract(g)); vec2 sl = (1.0 - smoothstep(fw * 0.9, fw * 2.2, dd)) * (1.0 - smoothstep(0.18, 0.4, fw)); vec2 hl = (1.0 - smoothstep(fw * 2.2, fw * 3.6, abs(fract(g) - fw * 3.0))) * (1.0 - smoothstep(0.18, 0.4, fw));
+          float seam = max(sl.x, sl.y); float pt = hhP(floor(g) + floor(vWPh.y * 0.1)); diffuseColor.rgb *= mix(1.0, (1.0 - 0.42 * seam + 0.12 * max(hl.x, hl.y) * (1.0 - seam)) * (0.93 + 0.14 * pt), k); } } /* dark seam + lit bevel on one side */`);
+  }; hm.customProgramCacheKey = () => 'hull_p40';
+}
 const built = b.build(mats, scene); for (const [n, B] of [...Object.entries(WB), ['beams', wb]]) { const bw = B.build(mats, scene, '_' + n); for (const k in bw) bw[k].castShadow = false; }
 // far chapter-region hulls sit behind the crater rim: skip them while the camera is low inside the hub basin (cheap occlusion cull)
 const farRegion = []; scene.traverse(o => { if (o.isMesh && /_(launch|echo|canyon|reactor)$/.test(o.name)) { o.geometry.computeBoundingSphere(); farRegion.push([o, o.geometry.boundingSphere.center.clone()]); } });
