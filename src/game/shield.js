@@ -34,7 +34,7 @@ export function makeShield(scene, { center, R, groundAt, consoleP, low = false, 
       float h = lat / 1.5708; float edge = uReveal * 1.15 - h; if (edge < 0.0) discard;
       float lead = exp(-edge * 18.0) * step(uReveal, 0.999);
       // hex grid: side projection (azimuth x height) blended into a top projection near the apex
-      float cell = 0.34; vec2 uvS = vec2(atan(n.z, n.x) * uR * 0.159 * 6.2832 / 4.6, lat * uR / 4.6) ; vec2 uvT = vP.xz / 4.6; float wt = smoothstep(0.62, 0.82, n.y);
+      float cell = 0.34; vec2 uvS = vec2(atan(n.z, n.x) * uR * 0.159 * 6.2832 / 3.1, lat * uR / 3.1) ; vec2 uvT = vP.xz / 3.1; float wt = smoothstep(0.62, 0.82, n.y);
       vec4 a = hexC(uvS), b = hexC(uvT); float ea = 0.5 - hexD(a.xy), eb = 0.5 - hexD(b.xy); float e = mix(ea, eb, wt); vec2 id = mix(a.zw, b.zw, wt);
       float line = 1.0 - smoothstep(0.0, 0.03, e); float glowL = exp(-e * 14.0);
       float fres = pow(1.0 - abs(dot(normalize(vN), vec3(0.0, 0.0, 1.0))), 2.2);
@@ -43,7 +43,7 @@ export function makeShield(scene, { center, R, groundAt, consoleP, low = false, 
       float rip = 0.0, fl = 0.0; for (int i = 0; i < 6; i++) { vec4 H = uHits[i]; float age = uTime - H.w; if (age < 0.0 || age > 3.0) continue; float d = distance(vW, H.xyz); rip += exp(-pow((d - age * 16.0) / 2.6, 2.0)) * exp(-age * 1.0) * 2.0; fl += exp(-d * 0.9) * exp(-age * 6.0) * 1.2; }
       vec3 lineC = vec3(0.03, 0.65, 1.0), tint = vec3(0.003, 0.144, 0.35);
       float lineK = (1.0 - smoothstep(0.0, 0.022, e)); float edgeK = 1.0 - smoothstep(0.0, 0.008, e);
-      vec3 col = tint * (0.07 + 0.22 * pow(fres, 2.0) + exp(-h * 10.0) * 0.5) + lineC * (lineK * (0.55 + 0.5 * fres) * flick + glowL * 0.05 + edgeK * 0.45 + pow(fres, 5.0) * 0.18 + exp(-h * 12.0) * 0.55 + lead * 1.3 + rip * (0.2 + lineK * 1.1))
+      vec3 col = tint * (0.07 + 0.22 * pow(fres, 2.0) + exp(-h * 10.0) * 0.5) + lineC * (lineK * (0.9 + 0.6 * fres) * flick + glowL * 0.08 + edgeK * 0.7 + pow(fres, 5.0) * 0.18 + exp(-h * 12.0) * 0.55 + lead * 1.3 + rip * (0.2 + lineK * 1.1))
         + vec3(0.25, 0.85, 1.0) * edgeK * 0.25 * (0.6 + fres) + vec3(1.2, 0.45, 0.08) * fl * (0.35 + lineK);
       float aT = clamp(0.16 + 0.28 * pow(fres, 2.0) + lineK * 0.35 + exp(-h * 10.0) * 0.2, 0.0, 0.8);
       gl_FragColor = vec4(col * uAlpha, aT * uAlpha);
@@ -56,7 +56,7 @@ export function makeShield(scene, { center, R, groundAt, consoleP, low = false, 
   const mm = new THREE.ShaderMaterial({ uniforms: { uMap: { value: streakTexture() } }, side: THREE.DoubleSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
     vertexShader: `attribute vec3 iHead; attribute vec4 iDir; varying vec2 vUv; varying float vOn; void main(){ vec3 d = iDir.xyz; float len = iDir.w; vOn = step(0.01, len); vec3 toCam = normalize(cameraPosition - iHead); vec3 side = normalize(cross(d, toCam)); float w = 0.3 + len * 0.008;
       vec3 p = iHead - d * (position.y - 0.06) * len + side * position.x * w; vUv = vec2(position.x + 0.5, position.y); gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0); }`,
-    fragmentShader: `uniform sampler2D uMap; varying vec2 vUv; varying float vOn; void main(){ vec4 c = texture2D(uMap, vUv); if (vOn < 0.5) discard; float hd = exp(-pow((vUv.x - 0.5) * 4.0, 2.0)) * exp(-abs(vUv.y - 0.06) * 26.0); float g = smoothstep(0.04, 0.75, vUv.y); vec3 tc = mix(vec3(1.6, 0.45, 0.04), vec3(0.75, 0.08, 0.01), g); float core = exp(-pow((vUv.x - 0.5) * 3.4, 2.0)); float hh = exp(-pow((vUv.x - 0.5) * 7.0, 2.0)) * exp(-abs(vUv.y - 0.06) * 40.0); gl_FragColor = vec4(tc * c.a * core * 1.15 + vec3(1.0, 0.42, 0.06) * hd * 0.9 + vec3(1.9, 1.6, 1.25) * hh, 1.0); }` });
+    fragmentShader: `uniform sampler2D uMap; varying vec2 vUv; varying float vOn; void main(){ vec4 c = texture2D(uMap, vUv); if (vOn < 0.5) discard; float hd = exp(-pow((vUv.x - 0.5) * 4.0, 2.0)) * exp(-abs(vUv.y - 0.06) * 26.0); float g = smoothstep(0.04, 0.75, vUv.y); vec3 tc = mix(vec3(1.9, 0.42, 0.02), vec3(0.8, 0.07, 0.008), g); float core = exp(-pow((vUv.x - 0.5) * 3.4, 2.0)); float hh = exp(-pow((vUv.x - 0.5) * 10.0, 2.0)) * exp(-abs(vUv.y - 0.06) * 70.0); gl_FragColor = vec4(tc * c.a * core * 1.15 + vec3(2.0, 0.55, 0.03) * hd * 1.1 + vec3(1.9, 1.5, 1.0) * hh, 1.0); }` });
   const trails = new THREE.Mesh(qg, mm); trails.frustumCulled = false; trails.renderOrder = 6; trails.visible = false; root.add(trails);
   const met = Array.from({ length: NM }, () => ({ on: false }));
   // ---- sparks (impacts: orange; welding: blue-white) ----
