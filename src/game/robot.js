@@ -6,7 +6,7 @@ import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtil
 // gold knuckles, welding torch + dark hose in the right hand, steel I-beam in the left, gold knee pads and rounded ivory boots on gold soles.
 // Materials per vertex: glossy ivory, metallic gold, painted hat gold, dark rubber, glossy black glass, steel. 3 draws + sparks/flame.
 const COL = { ivory: '#88807c', ivoryS: '#7a736f', gold: '#a07812', hat: '#a27408', dark: '#24272d', rubber: '#16181c', steel: '#80858d', black: '#050608' };
-const MAT = { ivory: [0.0, 0.34], ivoryS: [0.0, 0.38], gold: [0.85, 0.3], hat: [0.2, 0.42], dark: [0.15, 0.55], rubber: [0.0, 0.62], steel: [0.8, 0.35], black: [0.1, 0.08] };
+const MAT = { ivory: [0.0, 0.34], ivoryS: [0.0, 0.38], gold: [0.85, 0.3], hat: [0.3, 0.2], dark: [0.15, 0.55], rubber: [0.0, 0.62], steel: [0.8, 0.35], black: [0.1, 0.08] };
 
 // geometry detail per preset (same detection as main.js): phone / q=low get coarser tessellation of the rounded volumes (Chapter-1 triangle budget)
 const _Q = new URLSearchParams(location.search).get('q'); const _MOB = _Q === 'mobile' || _Q === 'low' || (!_Q && (matchMedia('(pointer:coarse)').matches || Math.min(innerWidth, innerHeight) < 480));
@@ -68,12 +68,14 @@ export function makeRobot(scene, env) {
   body.add(crescent(0.08), 'gold', { p: [0.015, 0.76, 0.222], r: [0.0, 0, 0] }); // chest crescent on the plate
   body.add(tor(0.16, 0.02, 3, 14), 'gold', { p: [0, 0.94, 0.0], r: [Math.PI / 2, 0, 0], s: [1.3, 1.1, 1] }); // gold collar
   body.add(cyl(0.12, 0.13, 0.07, 12), 'dark', { p: [0, 0.955, 0] }); // neck
-  for (const sx of [-1, 1]) { // chunky rounded shoulder caps with big gold pads
-    const so = sx < 0 ? 0.37 : 0.41, sy = sx < 0 ? 0 : -0.035; body.add(sq(0.28, 0.27, 0.31, 2.5, 10, 6), 'ivory', { p: [sx * so, 0.78 + sy, 0] }); body.add(sq(0.24, 0.22, 0.1, 2.8, 6, 4), 'gold', { p: [sx * (so + 0.04), 0.79 + sy, 0.135], r: [0, sx * 0.55, -sx * 0.22] }); body.add(sq(0.3, 0.08, 0.33, 2.8, 8, 3), 'gold', { p: [sx * (so + 0.01), 0.9 + sy, 0], r: [0, 0, -sx * 0.32] }); } // ivory cap, gold front plate + top band
+  for (const sx of [-1, 1]) { // rounded ivory shoulder pads with gold trim (concept: mostly ivory, gold edging along the front/lower rim)
+    const so = sx < 0 ? 0.37 : 0.41, sy = sx < 0 ? 0 : -0.035; body.add(sq(0.28, 0.28, 0.32, 2.3, 12, 7), 'ivory', { p: [sx * so, 0.8 + sy, 0] });
+    body.add(sq(0.3, 0.045, 0.34, 2.4, 10, 3), 'gold', { p: [sx * (so + 0.005), 0.69 + sy, 0], r: [0, 0, -sx * 0.12] }); // gold lower rim
+    body.add(sq(0.05, 0.22, 0.05, 2.5, 4, 5), 'gold', { p: [sx * (so + 0.03), 0.81 + sy, 0.165], r: [0, 0, -sx * 0.2] }); } // gold front edge strip
   // left arm (+x, static): elbow out, glove gripping the I-beam end from above
-  body.add(capsule([0.43, 0.73, 0], [0.54, 0.57, 0.02], 0.1, 8, 2), 'ivory'); body.add(sph(0.072, 6, 4), 'dark', { p: [0.55, 0.54, 0.04] });
-  body.add(capsule([0.54, 0.54, 0.05], [0.52, 0.62, 0.24], 0.115, 8, 2), 'ivory'); body.add(ring([0.54, 0.54, 0.05], [0.525, 0.6, 0.2], 0.112, 0.02), 'gold');
-  gloveTo(body, [0.5, 0.6, 0.35], 1, [1.05, 0.0, 0.15]); // fingers wrap down over the beam flange
+  body.add(capsule([0.43, 0.74, 0], [0.56, 0.64, -0.02], 0.1, 8, 2), 'ivory'); body.add(sph(0.072, 6, 4), 'dark', { p: [0.565, 0.62, 0.0] });
+  body.add(capsule([0.56, 0.62, 0.03], [0.53, 0.6, 0.25], 0.112, 8, 2), 'ivory'); body.add(ring([0.56, 0.62, 0.03], [0.535, 0.6, 0.24], 0.11, 0.02), 'gold');
+  gloveTo(body, [0.52, 0.58, 0.36], 1, [1.25, 0.0, 0.1]); // fingers wrap down over the beam flange
   { // steel I-beam, low across the front, rising to the left hand (concept: ends under the glove, does not stick out past it)
     const L = 0.84, c = [0.12, 0.45, 0.4], R = [-0.3, -0.12, 0.2]; for (const [w, h, d, dy, col] of [[L, 0.022, 0.17, 0.08, 'steel'], [L, 0.022, 0.17, -0.08, 'steel'], [L, 0.16, 0.03, 0, 'dark']]) body.add(new THREE.BoxGeometry(w, h, d), col, { p: [c[0], c[1] + dy, c[2]], r: R }); }
   // head (built separately, then tilted a little forward / sideways about the neck like the concept): wide soft squircle shell, ear discs, glossy black screen, gold hard hat
@@ -98,7 +100,7 @@ export function makeRobot(scene, env) {
   { const d = TT.clone().sub(TB); const L = d.length(); const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
     const at = (f) => TB.clone().addScaledVector(d, f); const put = (g, f, col) => { g.applyQuaternion(q); const p = at(f); g.translate(p.x, p.y, p.z); arm.add(g, col); };
     put(cyl(0.034, 0.038, L * 0.4, 10), 0.22, 'rubber'); put(cyl(0.045, 0.045, 0.035, 12), 0.44, 'gold'); put(cyl(0.02, 0.026, L * 0.4, 8), 0.66, 'steel'); put(cyl(0.012, 0.018, 0.05, 8), 0.9, 'gold'); }
-  arm.add(tube([[0.06, -0.16, 0.28], [0.0, -0.12, 0.31], [-0.12, -0.2, 0.27], [-0.29, -0.33, 0.2], [-0.39, -0.45, 0.11], [-0.33, -0.52, 0.03], [-0.17, -0.45, -0.04], [-0.03, -0.32, -0.13], [0.05, -0.2, -0.2]], 0.026, 18, 5), 'rubber'); // dark hose: from the torch down into a hanging loop, back up behind the leg
+  arm.add(tube([[0.06, -0.16, 0.28], [-0.02, -0.1, 0.3], [-0.15, -0.15, 0.26], [-0.27, -0.29, 0.2], [-0.33, -0.47, 0.16], [-0.35, -0.65, 0.16], [-0.38, -0.76, 0.22], [-0.46, -0.78, 0.32]], 0.026, 18, 5), 'rubber'); // dark hose: from the torch down the outside of the leg to the ground (concept)
   const mat = material(env);
   const root = new THREE.Group(); root.name = 'game_robot';
   const SX = 0.86, SZ = 0.92; // overall slimming measured against the concept silhouette (width/height profile)

@@ -5,12 +5,12 @@ import * as THREE from 'three';
 
 // hexagonal shard: tapered prism + long faceted point (optional second ring = convex "gothic" point); barycentric attribute marks only the real
 // crystal ridges (vertical ridges, shoulder ring, tip ridges) - no horizontal ring lines and no quad diagonals, so it reads as a cut gem, not a wire mesh
-function shard(pos, bary, hh, { x, z, h, r, rb = 0.85, tilt = 0, dir = 0, tip, rot = 0.3, tm = null }) {
+function shard(pos, bary, hh, { x, z, h, r, rb = 0.85, tilt = 0, dir = 0, tip, rot = 0.3, tm = null }, small = false) {
   const m = new THREE.Matrix4().compose(new THREE.Vector3(x, -0.06, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt * Math.sin(dir), 0, -tilt * Math.cos(dir))), new THREE.Vector3(1, 1, 1));
   const v = (a, y, rr) => new THREE.Vector3(Math.cos(a) * rr, y, Math.sin(a) * rr).applyMatrix4(m);
   const ring = (y, rr) => Array.from({ length: 6 }, (_, i) => v(i / 6 * Math.PI * 2 + rot, y, rr));
   const B = ring(0, r * rb), T = ring(h, r), P = v(0, h + tip, 0); const H = h + tip;
-  const tri = (a, b, c, ba, bb, bc) => { for (const [p, q] of [[a, ba], [c, bc], [b, bb]]) { pos.push(p.x, p.y, p.z); bary.push(...q); hh.push(Math.max(0, p.y - m.elements[13]) / H); } };
+  const tri = (a, b, c, ba, bb, bc) => { for (const [p, q] of [[a, ba], [c, bc], [b, bb]]) { pos.push(p.x, p.y, p.z); bary.push(...q); hh.push(Math.max(0, p.y - m.elements[13]) / H + (small ? 2 : 0)); } }; // aH: height 0..1, +2 on the small shards (softer ridges)
   for (let i = 0; i < 6; i++) { const j = (i + 1) % 6; tri(B[i], B[j], T[j], [1, 1, 1], [0, 1, 0], [0, 1, 1]); tri(B[i], T[j], T[i], [1, 1, 0], [0, 1, 1], [0, 1, 0]);
     if (!tm) { tri(T[i], T[j], P, [1, 0, 0], [0, 1, 0], [0, 0, 1]); continue; }
     const M = ring(h + tip * tm[0], r * tm[1]); // band T -> M (ridges continue, no ring line), then M -> apex
@@ -24,15 +24,15 @@ export const CLUSTER = [{ x: 0, z: 0, h: 0.94, r: 0.44, rb: 0.74, tip: 0.7, tm: 
   { x: -0.04, z: 0.26, h: 0.12, r: 0.09, tip: 0.1, tilt: 0.95, dir: 2.071 },
   { x: -0.48, z: 0.12, h: 0.1, r: 0.12, tip: 0.09, tilt: 1.42, dir: 3.392 }, { x: 0.38, z: 0.14, h: 0.1, r: 0.12, tip: 0.09, tilt: 1.46, dir: -0.25 }, { x: 0.12, z: 0.28, h: 0.07, r: 0.06, tip: 0.06, tilt: 0.8, dir: 0.971 }];
 export function buildCluster(list, low = false) { const pos = [], bary = [], hh = [];
-  list.forEach((s, i) => { if (!(low && i >= 4)) shard(pos, bary, hh, s); });
+  list.forEach((s, i) => { if (!(low && i >= 4)) shard(pos, bary, hh, s, i > 0); });
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('aBary', new THREE.Float32BufferAttribute(bary, 3)); g.setAttribute('aH', new THREE.Float32BufferAttribute(hh, 1)); g.computeVertexNormals(); g.computeBoundingSphere();
   return g; }
 export function clusterGeometry() { // q=low: skip the tiny base chips (main + splayed shards + front shard kept)
   return _geo || (_geo = buildCluster(CLUSTER, new URLSearchParams(location.search).get('q') === 'low')); }
 const shardMat = () => new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 } }, toneMapped: false,
-  vertexShader: `attribute vec3 aBary; attribute float aH; attribute float aState; varying vec3 vB; varying float vH; varying vec3 vV; varying float vS; varying float vSeed; varying vec3 vLP; varying vec3 vWP;
-    void main(){ vLP = position; mat4 im = modelMatrix * instanceMatrix; vec4 wp = im * vec4(position, 1.0); vWP = wp.xyz; vV = cameraPosition - wp.xyz; vB = aBary; vH = aH; vS = aState; vSeed = im[3].x * 0.37 + im[3].z * 0.11; gl_Position = projectionMatrix * viewMatrix * wp; }`,
-  fragmentShader: `uniform float uTime; varying vec3 vB; varying float vH; varying vec3 vV; varying float vS; varying float vSeed; varying vec3 vLP; varying vec3 vWP;
+  vertexShader: `attribute vec3 aBary; attribute float aH; attribute float aState; varying vec3 vB; varying float vH; varying float vE; varying vec3 vV; varying float vS; varying float vSeed; varying vec3 vLP; varying vec3 vWP;
+    void main(){ vLP = position; mat4 im = modelMatrix * instanceMatrix; vec4 wp = im * vec4(position, 1.0); vWP = wp.xyz; vV = cameraPosition - wp.xyz; vB = aBary; vH = aH > 1.5 ? aH - 2.0 : aH; vE = aH > 1.5 ? 0.0 : 1.0; vS = aState; vSeed = im[3].x * 0.37 + im[3].z * 0.11; gl_Position = projectionMatrix * viewMatrix * wp; }`,
+  fragmentShader: `uniform float uTime; varying vec3 vB; varying float vH; varying float vE; varying vec3 vV; varying float vS; varying float vSeed; varying vec3 vLP; varying vec3 vWP;
     float h3(vec3 p){ p = fract(p * vec3(0.1031, 0.103, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
     void main(){
       vec3 fn = cross(dFdx(vWP), dFdy(vWP)); float fl = length(fn); vec3 n = fl > 1e-12 ? fn / fl : vec3(0.0, 1.0, 0.0); // flat facet normal (cut-gem faces)
@@ -44,21 +44,22 @@ const shardMat = () => new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 
       vec4 d = vec4(dot(q, vec3(0.86, 0.45, 0.24)), dot(q, vec3(-0.42, 0.8, 0.43)), dot(q, vec3(0.3, -0.25, 0.92)), dot(q, vec3(0.62, -0.7, 0.36)) * 0.8);
       vec4 cid = floor(d); float cell = h3(cid.xyz * 1.7 + cid.w * 5.3 + 3.1); vec4 fd = abs(fract(d) - 0.5); float ib = 0.5 - max(max(fd.x, fd.y), max(fd.z, fd.w));
       float streak = (1.0 - smoothstep(0.0, 0.05, ib)) * step(0.45, h3(cid.xyz + cid.w * 2.0 + 11.0));
-      float tone = clamp(face * 0.55 + cell * 0.8 - 0.16, 0.0, 1.0);
+      float tone = clamp(face * 0.55 + cell * 0.8 - 0.22, 0.0, 1.0);
       float pulse = 0.9 + 0.1 * sin(uTime * 2.4 + vSeed);
       // colours solved through the ACES output transform so the final pixels land on the reference: deep (25,65,215) royal (35,80,233) light (90,170,245) ice (175,230,250) hot (225,248,255)
-      vec3 deep = vec3(0.02, 0.06, 0.66), royal = vec3(0.0, 0.086, 1.28), lite = vec3(0.0, 0.32, 1.84), ice = vec3(0.0, 1.16, 3.2), hot = vec3(0.0, 2.9, 7.6);
+      vec3 deep = vec3(0.0, 0.075, 1.0), royal = vec3(0.0, 0.13, 1.5), lite = vec3(0.0, 0.42, 2.0), ice = vec3(0.0, 1.0, 3.0), hot = vec3(0.0, 2.6, 7.0);
       vec3 c = mix(deep, royal, smoothstep(0.12, 0.5, tone));
-      c = mix(c, lite, smoothstep(0.62, 0.92, tone) * 0.85);                     // lighter facets / cells
+      c = mix(c, lite, smoothstep(0.62, 0.92, tone) * 0.75);                     // lighter facets / cells
       c = mix(c, ice, smoothstep(0.95, 1.0, tone) * 0.45);                       // an occasional near-white sliver
-      c += lite * streak * 0.4;                                                  // internal fracture streaks (lighter blue, no hard lines)
-      c += mix(lite, ice, 0.4) * pow(1.0 - vH, 4.0) * 0.55 * pulse;               // glowing core toward the base
+      c += lite * streak * 0.4 * mix(0.25, 1.0, vE);                                                  // internal fracture streaks (lighter blue, no hard lines)
+      c += mix(lite, ice, 0.4) * pow(1.0 - vH, 4.0) * 0.55 * mix(0.35, 1.0, vE) * pulse;               // glowing core toward the base
       c += royal * pow(nv, 3.0) * 0.18;                                          // inner light seen straight through
       float e = min(min(vB.x, vB.y), vB.z); float w = fwidth(e);
       float core = 1.0 - smoothstep(w * 0.6, w * 2.8, e);                        // crisp white-cyan ridge
       float band = 1.0 - smoothstep(0.0, 0.035, e);                              // glowing border band along every ridge, fading into the facet
-      c = mix(c, ice, band * band * 0.5); c += lite * band * 0.15 + hot * core * 0.75;
-      c += hot * smoothstep(0.9, 1.0, vH) * 0.5;                                 // bright tips
+      float ek = mix(0.22, 1.0, vE); band *= ek; core *= ek; // small shards: solid stained-glass blue, faint ridges (no wireframe look)
+      c = mix(c, ice, band * band * 0.5); c += lite * band * 0.15 + hot * core * 0.7;
+      c += hot * smoothstep(0.9, 1.0, vH) * 0.5 * mix(0.3, 1.0, vE);                                 // bright tips
       if (vS > 0.5) c = c * vec3(0.35, 0.33, 0.4) + vec3(0.5, 0.12, 0.05) * core; // mined / cracked
       gl_FragColor = vec4(c * pulse, 1.0); }` });
 const glowMat = () => new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
@@ -71,11 +72,11 @@ const glowMat = () => new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }
     void main(){ float r = length(vP); if (r > 1.0) discard; float pulse = 0.75 + 0.25 * sin(uTime * 2.4 + vSeed); vec3 add; float occ;
       // premultiplied blend (One, OneMinusSrcAlpha): the halo both adds blue light and dims what is behind it, so it reads as a deep blue glow even on
       // bright regolith (pure additive blue on a light background turns lavender)
-      if (vK < 0.5) { vec2 e = vec2(vP.x * 1.45, (vP.y - 0.08) * 1.0); float rr = dot(e, e); float h = (exp(-rr * 3.0) * 1.3 + exp(-rr * 1.0) * 0.3) * pulse; float wr = smoothstep(0.1, 0.32, rr); // halo ringing the silhouette (no tint over the crystal body)
-        add = vec3(0.004, 0.07, 0.9) * h * wr; occ = min(0.85, h * 0.8 * wr);
+      if (vK < 0.5) { vec2 e = vec2(vP.x * 1.45, (vP.y - 0.08) * 1.0); float rr = dot(e, e); float h = exp(-rr * 6.0) * 1.4 * pulse; float wr = smoothstep(0.1, 0.32, rr); // halo ringing the silhouette (no tint over the crystal body)
+        add = vec3(0.004, 0.07, 0.9) * h * wr; occ = min(0.55, h * 0.6 * wr);
         vec2 b = vec2(vP.x / 0.62, (vP.y + 0.5) / 0.13); add += vec3(0.1, 0.55, 1.9) * exp(-dot(b, b)) * 1.2 * pulse; } // white-cyan flare at the base
-      else { float a = (pow(1.0 - r, 3.0) * 0.9 + pow(1.0 - r, 1.2) * 0.2 + smoothstep(0.08, 0.0, abs(r - fract(uTime * 0.45 + vSeed))) * 0.16 * (1.0 - r)) * pulse;
-        vec3 col = mix(vec3(0.02, 0.2, 1.2), vec3(0.15, 0.7, 1.9), pow(1.0 - r, 6.0)); add = col * a * (0.35 + 0.65 * a) * 1.3; occ = a * 0.2; } // pooled light on the ground
+      else { float a = (pow(1.0 - r, 3.0) * 1.1 + smoothstep(0.08, 0.0, abs(r - fract(uTime * 0.45 + vSeed))) * 0.16 * (1.0 - r)) * pulse;
+        vec3 col = mix(vec3(0.02, 0.2, 1.2), vec3(0.15, 0.7, 1.9), pow(1.0 - r, 6.0)); add = col * a * a * 1.4; occ = 0.0; } // pooled light on the ground
       if (vS > 0.5) { add *= 0.25; occ *= 0.25; } gl_FragColor = vec4(add, occ); }` });
 let _glowGeo = null;
 const glowGeometry = () => { if (_glowGeo) return _glowGeo; const q = new THREE.PlaneGeometry(2, 2).toNonIndexed(); const a = q.clone(); const b = q.clone(); const g = new THREE.BufferGeometry(); const P = [...a.attributes.position.array, ...b.attributes.position.array]; g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('aK', new THREE.Float32BufferAttribute([...Array(6).fill(0), ...Array(6).fill(1)], 1)); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 3.5); return (_glowGeo = g); };
