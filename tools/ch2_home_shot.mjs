@@ -4,8 +4,8 @@ const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); const errs = []; p.on('pageerror', e => errs.push('ERR ' + e.message)); p.on('console', m => { if (m.type() === 'error') errs.push('C ' + m.text().slice(0, 200)); });
 await seed(p, q, { done: ['c2_collect'], level: 3, museum: ['ancient:tablet', 'ancient:idol', 'meteor:geode', 'station:helmet'] });
 const info = await p.evaluate(async () => { const G = MK.game, H = G.ch2.home(); G.teleport(H.outside.x, H.outside.z); await new Promise(r => setTimeout(r, 300)); await G.ch2.enterHome(); const h = G.ch2.home(); const o = h.origin;
-  const catP = { x: o.x + Math.sin(-0.62) * 2.35, z: o.z - Math.cos(-0.62) * 2.35 }; MK.ctrl.place(catP.x, catP.z, Math.atan2(0 - Math.sin(-0.85), 3.5 + Math.cos(-0.85)) + 0.3, false);
-  window.__camFix = () => { const C = MK.camera; MK.ctrl.camFree = false; C.position.set(o.x + 0.15, o.y + 1.3, o.z + 1.5); C.lookAt(o.x + 0.15, o.y + 1.05, o.z - 3); C.fov = 60; C.updateProjectionMatrix(); }; window.__camFix(); setInterval(window.__camFix, 30);
+  const catP = { x: o.x - 1.9, z: o.z - 1.25 }; MK.ctrl.place(catP.x, catP.z, Math.atan2(1.0, 1.1), false);
+  window.__camFix = () => { const C = MK.camera; MK.ctrl.camFree = false; C.position.set(o.x, o.y + 1.35, o.z + 1.9); C.lookAt(o.x, o.y + 1.12, o.z - 3); C.fov = 66; C.updateProjectionMatrix(); }; window.__camFix(); setInterval(window.__camFix, 30);
   const R = MK.renderer.info.render; return { inside: h.inside }; });
 await p.addStyleTag({ content: '#mk-root{display:none !important} body > *:not(#app):not(canvas){opacity:0}' });
 await p.waitForTimeout(4000);

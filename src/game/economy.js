@@ -45,7 +45,7 @@ export const MUSEUM = {
 export const ALL_ART = Object.entries(MUSEUM).flatMap(([s, v]) => v.items.map(i => s + ':' + i));
 export const STORY = ['old_probe', 'tracks', 'signal', 'cave_lights', 'frozen_flag', 'whale_rock'];
 export const ROBOT_XP = [0, 3, 8, 15, 25]; // xp needed for robot level 1..5
-export const DAILY_POOL = ['collect', 'send', 'crystals', 'help', 'points', 'jet', 'visit'];
+export const DAILY_POOL = ['collect', 'send', 'crystals', 'help', 'points', 'jet', 'visit', 'home'];
 export const DAILY_NEED = { collect: 1, send: 1, crystals: 3, help: 1, points: 40, jet: 8, visit: 1, home: 1 };
 export const DAILY_PTS = 20, DAILY_ALL_ORE = 20;
 const H = 3600e3;

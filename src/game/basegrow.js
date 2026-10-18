@@ -15,7 +15,7 @@ export const MUSEUM_SLOTS = ['ancient:tablet', 'ancient:idol', 'ancient:glyph', 
 export function makeBaseGrowth(scene, p, env, { groundAt, low = false, mobile = false } = {}) {
   const yaw = p.yaw || 0, cy = Math.cos(yaw), sy = Math.sin(yaw);
   const toW = (lx, lz) => ({ x: p.x + lx * cy + lz * sy, z: p.z - lx * sy + lz * cy }); // local -> world (mesh rotation.y = yaw)
-  const seg = (n) => Math.max(6, Math.round(n * (low ? 0.4 : mobile ? 0.5 : 1)));
+  const seg = (n) => Math.max(6, Math.round(n * (low ? 0.4 : 0.5)));
   const parts = []; const pieces = []; // pieces: {level, lx, lz, r} -> colliders
   let curOff = 0;
   const at = (lx, lz) => { const w = toW(lx, lz); curOff = groundAt(w.x, w.z) - p.y; return curOff; };
@@ -76,7 +76,7 @@ export function makeBaseGrowth(scene, p, env, { groundAt, low = false, mobile = 
     siteW: (level) => { const P = pieces.filter(q => q.level === level); const c = P.reduce((s, q) => ({ x: s.x + q.lx / P.length, z: s.z + q.lz / P.length }), { x: 0, z: 0 }); return toW(c.x, c.z); },
     // level: built base level (1..5); building: level under construction or 0; frac 0..1 of that build
     set(level, building = 0, frac = 0) { const v = building ? (building - 2) * 3 + 3 * Math.max(0, Math.min(1, frac)) : Math.max(0, (level - 1) * 3); uB.value = v; m.visible = v > 0 || !!building; ghost.visible = !!building && frac < 1; artOK = level >= 3; artM.visible = artOK; },
-    cull(cam) { if (!artOK) return; const w = artM.getWorldPosition(_aw); artM.visible = w.distanceTo(cam) < (low ? 14 : mobile ? 18 : 60); }, // small artifacts: distance-culled (budget)
+    cull(cam) { if (!artOK) return; const w = toW(museum.lx, museum.lz); artM.visible = Math.hypot(w.x - cam.x, w.z - cam.z) < 10; }, // small artifacts: distance-culled (budget)
     setArtifacts(list) { MUSEUM_SLOTS.forEach((id, i) => uMask.value[i] = list.includes(id) ? 1 : 0); },
     colliders(level) { return api.pieces.filter(q => q.level <= level).map(q => ({ x: q.x, z: q.z, r: q.r, h: q.level === 3 && !q.museum ? 6 : 4.5, ch2: true })); },
     update(dt) { spin += dt; } };

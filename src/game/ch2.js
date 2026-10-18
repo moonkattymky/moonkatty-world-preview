@@ -17,7 +17,7 @@ import { makeHome } from './home.js';
 //   - sheet tabs: Chapter (ch2 quests), Crew (robot panel), Daily (login reward, streak, 3 tasks)
 // ============================================================================================
 // staged rollout switches (v40 base/storage/robots, v41 + home, v42 + storm finale)
-export const FEAT = { home: false, storm: false };
+export const FEAT = { home: true, storm: false };
 const CH2_ALL = [
   { id: 'c2_collect', icon: '📦', kind: 'collect', pts: 20, xp: 20 },
   { id: 'c2_home', icon: '🏠', kind: 'home', pts: 20, xp: 20 },
