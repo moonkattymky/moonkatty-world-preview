@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
 import { makeCrewRobot } from './robots.js';
+import { makeStaticCrystals } from './crystal.js';
 // ============================================================================================
 // The cat's home (concept 2d260de8): an enterable living module. Outside: a round gold-framed airlock door on the
 // living dome. Inside (its own scene on render layer 1 - the outside world is not rendered while inside):
@@ -99,12 +100,12 @@ export function makeHome(scene, { env, groundAt, door, origin, low = false, eart
   // crystals + artifacts on the shelf (rebuilt from the save on entry)
   const crysMat = new THREE.MeshStandardMaterial({ color: '#58c8ff', emissive: '#2aa8ff', emissiveIntensity: 3.0, roughness: 0.15, metalness: 0.1, envMap: env || null }); let crys = null, arts = null;
   const artMat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.6, roughness: 0.35, envMap: env || null });
-  function fillShelf() { for (const m of [crys, arts]) if (m) { I.remove(m); m.geometry.dispose(); } const cg = [], ag = []; const list = getMuseum(); const AC = { ancient: '#d8a640', station: '#c8ced8', meteor: '#7a6aa8' };
+  function fillShelf() { for (const m of [crys, arts]) if (m) { I.remove(m); m.geometry.dispose(); } const cg = [], ag = [], cl = []; const list = getMuseum(); const AC = { ancient: '#d8a640', station: '#c8ced8', meteor: '#7a6aa8' };
     const SH = { tablet: () => new THREE.BoxGeometry(0.12, 0.16, 0.03), idol: () => new THREE.CapsuleGeometry(0.045, 0.09, 2, 6), glyph: () => new THREE.TorusGeometry(0.06, 0.018, 4, 10), mask: () => new THREE.SphereGeometry(0.075, 8, 5, 0, Math.PI), badge: () => new THREE.CylinderGeometry(0.06, 0.06, 0.02, 10).rotateX(Math.PI / 2), logbook: () => new THREE.BoxGeometry(0.15, 0.04, 0.11), helmet: () => new THREE.SphereGeometry(0.08, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.6), flag: () => new THREE.BoxGeometry(0.12, 0.08, 0.01), shard: () => new THREE.OctahedronGeometry(0.07, 0).scale(0.6, 1.3, 0.6), geode: () => new THREE.DodecahedronGeometry(0.07, 0), iron: () => new THREE.IcosahedronGeometry(0.065, 0).scale(1.3, 0.8, 1), pearl: () => new THREE.SphereGeometry(0.06, 10, 8) };
     let slot = 0; const pos = (k) => { const row = k % 4, col = Math.floor(k / 4); const phi = shelf.phi - 0.24 + col * 0.12 + (row % 2) * 0.05; const w = onWall(phi, R - 0.24); return new THREE.Vector3(w.x, 0.75 + row * 0.5 + 0.02, w.z); };
-    for (let k = 0; k < 6; k++) { const p = pos(slot++); const h = 0.22 + (k % 3) * 0.07; cg.push(new THREE.OctahedronGeometry(1, 0).scale(0.07, h / 2, 0.07).translate(p.x, p.y + h / 2, p.z)); cg.push(new THREE.OctahedronGeometry(1, 0).scale(0.05, h / 3, 0.05).rotateZ(0.4).translate(p.x + 0.05, p.y + h / 3, p.z)); }
+    for (let k = 0; k < 6; k++) { const p = pos(slot++); const h = 0.22 + (k % 3) * 0.07; cl.push({ x: p.x, y: p.y, z: p.z, s: h * 1.05, tilt: 0.05 * (k % 2), ph: k * 1.7 }); }
     for (const a of list) { if (slot >= 16) break; const [set, it] = a.split(':'); if (!SH[it]) continue; const p = pos(slot++); ag.push(colorize(SH[it]().translate(p.x, p.y + 0.09, p.z), AC[set])); }
-    crys = new THREE.Mesh(mergeGeometries(cg.map(g => g.index ? g.toNonIndexed() : g)), crysMat); I.add(crys); if (ag.length) { arts = new THREE.Mesh(mergeGeometries(ag), artMat); I.add(arts); } else arts = null; setL(I); }
+    crys = makeStaticCrystals(I, cl, 'home_crystals'); crys.position.y -= 0;  if (ag.length) { arts = new THREE.Mesh(mergeGeometries(ag), artMat); I.add(arts); } else arts = null; setL(I); }
   // robot beside the console
   const robot = makeCrewRobot(I, env, 'builder', 1); { const rp = onWall(LAY.robot, 2.3); robot.root.position.set(rp.x, 0, rp.z); const yD = Math.atan2(desk.x - rp.x, desk.z - rp.z), yC = Math.atan2(0 - rp.x, 2.2 - rp.z); robot.root.rotation.y = yD + Math.atan2(Math.sin(yC - yD), Math.cos(yC - yD)) * 0.55; robot.root.visible = true; }
   // lights (layer 1 only: they never touch the outside world)
