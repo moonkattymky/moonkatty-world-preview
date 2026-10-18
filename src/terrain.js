@@ -179,16 +179,34 @@ export function groundMesh(x, z) { // exact height of the rendered terrain mesh
 const TFILL = (() => { const x = Rt.x * 0.6 - F.x * 0.3, z = Rt.z * 0.6 - F.z * 0.3, y = 0.6, l = Math.hypot(x, y, z); return `vec3(${(x / l).toFixed(3)}, ${(y / l).toFixed(3)}, ${(z / l).toFixed(3)})`; })();
 export const LAMPMAP = { value: null }; export const LAMPK = { value: 1 }; /* base power (game: reactor out -> lamp pools off) */ export const LAMPMAP_R = 75; export const AOMAP = { value: new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1) }; AOMAP.value.needsUpdate = true;
 const SUNXZ = (() => { const x = -Rt.x * 0.75 - F.x * 0.45, z = -Rt.z * 0.75 - F.z * 0.45, l = Math.hypot(x, z); return `${(x / l).toFixed(3)}, ${(z / l).toFixed(3)}`; })(); // sun direction on the ground plane (for painted rubble highlights/shadows)
+// pass 40: crisp tiling regolith detail (generated once, 512^2, mipmapped): R = albedo, G/B = world-xz normal, A = unused.
+// Fine grain + ~1000 pebbles (domes with baked shading via the normal) + small craters (bowl + rim). Sampled at two scales/rotations in the
+// terrain shader with distance blending, so it never repeats visibly and fades into the macro noise far away.
+export const DETAIL = { value: null };
+function regolithDetail() { if (DETAIL.value) return DETAIL.value; const N = 512, Hh = new Float32Array(N * N), A = new Float32Array(N * N).fill(1);
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const lat = (G) => { const g = new Float32Array(G * G); for (let i = 0; i < G * G; i++) g[i] = rnd(); return (x, y) => { const fx = x / N * G, fy = y / N * G, ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy; const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty); const v = (i, j) => g[((j % G + G) % G) * G + ((i % G + G) % G)]; return (v(ix, iy) * (1 - sx) + v(ix + 1, iy) * sx) * (1 - sy) + (v(ix, iy + 1) * (1 - sx) + v(ix + 1, iy + 1) * sx) * sy; }; };
+  const o = [[lat(8), 0.5], [lat(24), 0.3], [lat(64), 0.15], [lat(160), 0.1]];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { let h = 0; for (const [f, w] of o) h += f(x, y) * w; Hh[y * N + x] = h * 0.6; A[y * N + x] = 0.82 + 0.3 * (o[0][0](x, y) - 0.5) + 0.25 * (o[2][0](x, y) - 0.5) + 0.2 * (rnd() - 0.5); }
+  const stamp = (cx, cy, r, fn) => { const R = Math.ceil(r * 1.6); for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const d = Math.hypot(dx, dy) / r; if (d > 1.6) continue; const i = (((cy + dy) % N + N) % N) * N + (((cx + dx) % N + N) % N); fn(i, d); } };
+  for (let k = 0; k < 26; k++) { const r = 7 + rnd() * rnd() * 30, cx = Math.floor(rnd() * N), cy = Math.floor(rnd() * N); stamp(cx, cy, r, (i, d) => { const bowl = d < 1 ? -(1 - d * d) * 0.9 : 0, rim = Math.exp(-(((d - 1) / 0.22) ** 2)) * 0.35; Hh[i] += (bowl + rim) * r * 0.07; if (d < 1) A[i] *= 0.9 + 0.06 * d; else A[i] *= 1 + 0.08 * Math.exp(-(((d - 1.1) / 0.25) ** 2)); }); }
+  for (let k = 0; k < 1100; k++) { const big = rnd() < 0.12, r = big ? 4 + rnd() * 5 : 1.4 + rnd() * 2.6, cx = Math.floor(rnd() * N), cy = Math.floor(rnd() * N), tone = 0.7 + rnd() * 0.55;
+    stamp(cx, cy, r, (i, d) => { if (d < 1) { Hh[i] = Math.max(Hh[i], Hh[i] * 0.3 + Math.sqrt(1 - d * d) * r * 0.22); A[i] = A[i] * 0.3 + tone * 0.7; } else A[i] *= 1 - 0.18 * Math.exp(-(((d - 1.05) / 0.25) ** 2)); }); } // pebble + dark contact ring
+  const d = new Uint8Array(N * N * 4); const at = (x, y) => Hh[((y + N) % N) * N + ((x + N) % N)];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const nx = (at(x - 1, y) - at(x + 1, y)) * 1.6, nz = (at(x, y - 1) - at(x, y + 1)) * 1.6; const l = Math.hypot(nx, nz, 1); const i = (y * N + x) * 4;
+    d[i] = Math.max(0, Math.min(255, A[y * N + x] * 160)); d[i + 1] = (nx / l * 0.5 + 0.5) * 255; d[i + 2] = (nz / l * 0.5 + 0.5) * 255; d[i + 3] = 255; }
+  const t = new THREE.DataTexture(d, N, N, THREE.RGBAFormat); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 4; t.needsUpdate = true;
+  return (DETAIL.value = t); }
 export function terrainMaterial(patch = false, canyon = false) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0, flatShading: true }); m.customProgramCacheKey = () => 'terrain' + patch + canyon; m.color.setRGB(0.74, 0.72, 0.69); // regolith: slightly brighter, less warm (pass 17)
   // procedural regolith: mottled albedo, dark pits, pebble speckle and a bump-mapped normal (fades with distance)
-  m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP; sh.uniforms.uLampK = LAMPK; sh.uniforms.uAOMap = AOMAP; sh.uniforms.uPatchOn = PATCH.on; sh.uniforms.uPatch2On = PATCH2.on; sh.uniforms.uPatch3On = PATCH3.on;
+  m.onBeforeCompile = (sh) => { sh.uniforms.uLampMap = LAMPMAP; sh.uniforms.uLampK = LAMPK; sh.uniforms.uAOMap = AOMAP; sh.uniforms.uPatchOn = PATCH.on; sh.uniforms.uPatch2On = PATCH2.on; sh.uniforms.uPatch3On = PATCH3.on; sh.uniforms.uDet = { value: regolithDetail() };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;').replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
       varying vec3 vWP; varying vec3 vWN;
       float hh(vec2 p){ p = fract(p * vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(hh(i), hh(i + vec2(1, 0)), f.x), mix(hh(i + vec2(0, 1)), hh(i + vec2(1, 1)), f.x), f.y); }
-      uniform sampler2D uLampMap; uniform float uLampK; uniform sampler2D uAOMap; uniform float uPatchOn; uniform float uPatch2On; uniform float uPatch3On;
+      uniform sampler2D uDet; uniform sampler2D uLampMap; uniform float uLampK; uniform sampler2D uAOMap; uniform float uPatchOn; uniform float uPatch2On; uniform float uPatch3On;
       ${patch ? `float vor(vec2 p){ vec2 i = floor(p), f = fract(p); float m1 = 8., m2 = 8.; for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 o = vec2(x, y); vec2 r = o + vec2(hh(i + o), hh(i + o + 17.3)) - f; float dd = dot(r, r); if (dd < m1) { m2 = m1; m1 = dd; } else if (dd < m2) m2 = dd; } return sqrt(m2) - sqrt(m1); }
       /* pass 21: low-frequency soft strata + sparse wide cracks, both faded by the pixel footprint fw (world m/px) so they never alias into dashes */
       float clP(vec2 p, float fw, out float cv, out float sh){ vec2 wq = p * 0.025; p += vec2(vn(wq) - 0.5, vn(wq + 5.2) - 0.5) * 8.0;
@@ -239,19 +257,24 @@ export function terrainMaterial(patch = false, canyon = false) {
               float aa = fwidth(q.x) * 3.0; float st = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, d1); float stS = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, d1s);
               float lit = st * (0.82 + 0.5 * (1.0 - d1)); float shad = (1.0 - st) * stS; diffuseColor.rgb *= mix(1.0, mix(1.0 - 0.45 * shad, lit, st), rw); } } }
         ${patch && !canyon ? 'float ccv, cwt, csh; float chh = clH(vWP, normalize(vWN), pFW, ccv, cwt, csh); diffuseColor.rgb *= mix(1.0, (1.0 - 0.4 * ccv) * csh * (0.94 + 0.12 * clamp(chh, 0.0, 1.0)), 1.0 - smoothstep(160.0, 260.0, tDist));' : ''}
+        { vec2 dq1 = vWP.xz / 7.0; vec2 dq2 = mat2(0.8, -0.6, 0.6, 0.8) * vWP.xz / 2.3 + 0.37; float dA1 = texture2D(uDet, dq1).r * 1.6, dA2 = texture2D(uDet, dq2).r * 1.6; /* pass 40: crisp regolith detail, two scales */
+          float dw1 = (1.0 - smoothstep(35.0, 140.0, tDist)) * pFlat, dw2 = (1.0 - smoothstep(10.0, 40.0, tDist)) * pFlat; diffuseColor.rgb *= mix(1.0, 0.45 + 0.55 * dA1, dw1 * 0.8) * mix(1.0, 0.45 + 0.55 * dA2, dw2 * 0.75);
+          float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(vec3(lum), diffuseColor.rgb, 0.4) * vec3(0.95, 0.98, 1.06); } /* lunar grey (concept): mostly neutral regolith, warmth comes from the lights */
         vec2 au = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (au.x > 0.0 && au.x < 1.0 && au.y > 0.0 && au.y < 1.0) diffuseColor.rgb *= texture2D(uAOMap, au).r; }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       if (tFade > 0.01) { float e = 0.15; float n0 = rg(vWP.xz * 1.6), nx = rg(vWP.xz * 1.6 + vec2(e, 0.)), nz = rg(vWP.xz * 1.6 + vec2(0., e));
         vec3 gW = vec3(-(nx - n0) / e, 0.0, -(nz - n0) / e) * 0.35 * tFade - vec3(cr.y, 0.0, cr.z) * 2.4 * tNear;
         if (tNear > 0.01) { float ge = 0.03; vec2 q = vWP.xz * 9.0; float g0 = vn(q), gx = vn(q + vec2(ge * 9.0, 0.)), gz = vn(q + vec2(0., ge * 9.0)); gW += vec3(-(gx - g0), 0.0, -(gz - g0)) * 0.9 * tNear * (1.0 - smoothstep(4.0, 30.0, tDist)); }
         if (tMid > 0.01) { float me = 0.06; vec2 q = vWP.xz * 2.6; float m0 = vn(q), mx = vn(q + vec2(me * 2.6, 0.)), mz = vn(q + vec2(0., me * 2.6)); gW += vec3(-(mx - m0), 0.0, -(mz - m0)) / me * 0.09 * tMid; }
+        { vec2 dq1 = vWP.xz / 7.0; vec2 dq2 = mat2(0.8, -0.6, 0.6, 0.8) * vWP.xz / 2.3 + 0.37; vec2 n1 = texture2D(uDet, dq1).gb - 0.5, n2 = (texture2D(uDet, dq2).gb - 0.5) * mat2(0.8, -0.6, 0.6, 0.8);
+          float dw1 = (1.0 - smoothstep(35.0, 140.0, tDist)) * pFlat, dw2 = (1.0 - smoothstep(10.0, 40.0, tDist)) * pFlat; gW += vec3(n1.x, 0.0, n1.y) * 1.3 * dw1 + vec3(n2.x, 0.0, n2.y) * 1.5 * dw2; } /* pass 40: detail normal */
         normal = normalize(normal + (viewMatrix * vec4(gW, 0.0)).xyz); }
       ${patch && !canyon ? '{ float ccv, cwt, csh; float H = clH(vWP, normalize(vWN), pFW, ccv, cwt, csh) * 0.6 * (1.0 - smoothstep(0.6, 2.0, pFW)); vec3 sp = -vViewPosition; vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 R1 = cross(sy, normal), R2 = cross(normal, sx); float det = dot(sx, R1); vec3 grad = sign(det) * (dFdx(H) * R1 + dFdy(H) * R2); normal = normalize(abs(det) * normal - grad); }' : ''}`);
   };
   return m;
 }
 
-const cA = new THREE.Color('#8e8e92'), cB = new THREE.Color('#717277'), cDark = new THREE.Color('#4a4e58'), cTeal = new THREE.Color('#2f6f78'), cOrange = new THREE.Color('#c0602a'), cLight = new THREE.Color('#aaa8a3'), cTan = new THREE.Color('#a08a6c'), cSlate = new THREE.Color('#5c5d60');
+const cA = new THREE.Color('#8e8e92'), cB = new THREE.Color('#717277'), cDark = new THREE.Color('#4a4e58'), cTeal = new THREE.Color('#2f6f78'), cOrange = new THREE.Color('#c0602a'), cLight = new THREE.Color('#aaa8a3'), cTan = new THREE.Color('#99958e'), cSlate = new THREE.Color('#5c5d60');
 function vertexColor(c, x, z, h, step) { const r = Math.hypot(x, z);
     const hx = heightAt(x + step, z), hx2 = heightAt(x - step, z), hz = heightAt(x, z + step), hz2 = heightAt(x, z - step);
     const slope = clamp(Math.hypot(hx - hx2, hz - hz2) / (2 * step), 0, 2);
