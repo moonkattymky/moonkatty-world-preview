@@ -84,6 +84,29 @@ export function makeAtlas() {
   // generic panel facade + solar cells
   { const [x, y, w, h] = R.panel; P(x, y, w, h, IV, null, 0.5, 0.02); lines(x, y, w, h, 48, 32, IVL, 2, true); gold(x, y, w, 6); for (let k = 0; k < 4; k++) win(x + 10 + k * 46, y + 50, 28, 26, 2); }
   { const [x, y, w, h] = R.solar; P(x, y, w, h, '#18375a', null, 0.25, 0.5); a.fillStyle = '#9fb3c8'; for (let k = 0; k <= 8; k++) { a.fillRect(x + k * w / 8, y, 2, h); a.fillRect(x, y + k * h / 8, w, 2); } }
+  // pass 41: decals + lights painted into the shared atlas (zero geometry / draw calls): paw + moon emblems, warm LED strips, window light spill, subtle grime
+  { const rr = (() => { let q = 41; return () => (q = (q * 16807) % 2147483647) / 2147483647; })();
+    const paw = (ctx, cx, cy, s, sx, col) => { ctx.save(); ctx.translate(cx, cy); ctx.scale(sx, 1); ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, s * 0.28, s * 0.42, s * 0.34, 0, 0, 7); ctx.fill();
+      for (const [tx, ty, tr] of [[-0.42, -0.12, 0.15], [-0.16, -0.38, 0.16], [0.16, -0.38, 0.16], [0.42, -0.12, 0.15]]) { ctx.beginPath(); ctx.ellipse(tx * s, ty * s, tr * s, tr * s * 1.2, 0, 0, 7); ctx.fill(); } ctx.restore(); };
+    const moon = (ctx, cx, cy, r, sx, col) => { ctx.save(); ctx.translate(cx, cy); ctx.scale(sx, 1); ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.clip(); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.arc(r * 0.42, -r * 0.18, r * 0.86, 0, 7, true); ctx.fill('evenodd'); ctx.restore(); };
+    const badge = (cx, cy, rad, sx, kind) => { a.save(); a.translate(cx, cy); a.scale(sx, 1); a.fillStyle = GOLDD; a.beginPath(); a.arc(0, 0, rad + 3, 0, 7); a.fill(); a.fillStyle = '#efe6d2'; a.beginPath(); a.arc(0, 0, rad, 0, 7); a.fill(); a.restore();
+      m.save(); m.translate(cx, cy); m.scale(sx, 1); m.fillStyle = orm(0.28, 0.95); m.beginPath(); m.arc(0, 0, rad + 3, 0, 7); m.fill(); m.fillStyle = orm(0.45, 0.02); m.beginPath(); m.arc(0, 0, rad, 0, 7); m.fill(); m.restore();
+      e.save(); e.translate(cx, cy); e.scale(sx, 1); e.strokeStyle = '#6a4418'; e.lineWidth = 1.5; e.beginPath(); e.arc(0, 0, rad + 1.5, 0, 7); e.stroke(); e.restore(); /* faint lit rim */
+      if (kind === 'paw') paw(a, cx, cy + 1, rad * 1.1, sx, GOLD); else moon(a, cx, cy, rad * 0.78, sx, GOLD); };
+    const spill = (cx, cy, rx, ry, k) => { const g = e.createRadialGradient(cx, cy, 0, cx, cy, ry); g.addColorStop(0, `rgba(120,70,28,${k})`); g.addColorStop(1, 'rgba(120,70,28,0)'); e.save(); e.globalCompositeOperation = 'lighter'; e.translate(cx, cy); e.scale(rx / ry, 1); e.translate(-cx, -cy); e.fillStyle = g; e.fillRect(cx - ry, cy - ry, ry * 2, ry * 2); e.restore(); };
+    const led = (x, y, w, h, col = '#c8843c') => { a.fillStyle = '#ffe2a8'; a.fillRect(x, y, w, h); e.fillStyle = col; e.fillRect(x, y, w, h); m.fillStyle = orm(0.2, 0); m.fillRect(x, y, w, h); };
+    const grime = (x, y, w, h, k) => { const g = a.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(60,52,40,0)'); g.addColorStop(1, `rgba(60,52,40,${k})`); a.fillStyle = g; a.fillRect(x, y, w, h);
+      for (let i = 0; i < w / 6; i++) { const sx = x + rr() * w, sw = 1 + rr() * 3, sh = h * (0.3 + rr() * 0.7); a.fillStyle = `rgba(70,60,46,${(0.04 + rr() * 0.07).toFixed(3)})`; a.fillRect(sx, y + h - sh, sw, sh); } };
+    { const [x, y, w, h] = R.domeWall; grime(x, y + 56, w, h - 86, 0.16);
+      for (let k = 0; k < 32; k++) { spill(x + k * 32 + 15.5, y + 44, 10, 20, 0.6); spill(x + k * 32 + 16, y + 74, 6, 10, 0.4); }
+      for (let k = 0; k < 4; k++) { const cx = x + k * 256 + 128 + 7; a.fillStyle = IV; a.fillRect(cx - 24, y + 28, 48, 54); e.fillStyle = '#000'; e.fillRect(cx - 24, y + 28, 48, 54); m.fillStyle = orm(0.5, 0.02); m.fillRect(cx - 24, y + 28, 48, 54); badge(cx, y + 54, 17, 0.62, k % 2 ? 'moon' : 'paw'); }
+      led(x, y + h - 34, w, 2); for (let k = 0; k < 64; k++) led(x + k * 16 + 6, y + h - 16, 4, 3, '#a8662c'); }
+    { const [x, y, w, h] = R.reactorWall; grime(x, y + 70, w, h - 80, 0.14); led(x, y + 101, w, 2); led(x, y + 10, w, 2, '#a8662c');
+      for (let k = 0; k < 24; k++) { const xx = x + k * (w / 24); for (const cx of [xx + 14, xx + 34]) spill(cx, y + 62, 11, 28, 0.5); } }
+    { const [x, y, w, h] = R.corridor; grime(x, y + 60, w, 28, 0.12); for (let k = 0; k < 32; k++) led(x + k * 32 + 14, y + h / 2 - 1, 5, 2); for (const u of [0.125, 0.375, 0.625, 0.875]) spill(x + u * w, y + 48, 28, 28, 0.45); }
+    { const [x, y, w, h] = R.domeCap; for (let k = 0; k < 12; k++) { const sx = x + k * 85 + 22; for (let j = 0; j < 3; j++) { const g = a.createLinearGradient(0, y + 30 + j * 60, 0, y + 90 + j * 60); g.addColorStop(0, 'rgba(70,60,46,0.10)'); g.addColorStop(1, 'rgba(70,60,46,0)'); a.fillStyle = g; a.fillRect(sx - 2 + rr() * 30, y + 30 + j * 60, 2 + rr() * 3, 60); } } }
+    { const [x, y, w, h] = R.panel; badge(x + w - 30, y + 98, 18, 1.0, 'paw'); a.fillStyle = GOLDD; a.font = 'bold 15px sans-serif'; a.fillText('BASE ALPHA', x + 10, y + 104); led(x, y + 8, w, 2); grime(x, y + 80, w, 48, 0.12); }
+  }
   const tex = (c, srgb) => { const t = new THREE.CanvasTexture(c); t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.needsUpdate = true; return t; };
   return { map: tex(A, true), emissiveMap: tex(E, true), ormMap: tex(M, false), canvases: { A, E, M } };
 }

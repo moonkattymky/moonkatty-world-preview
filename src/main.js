@@ -98,10 +98,10 @@ mats.ivory = mats.hull; // placeholder fallback
       { float dH = length(vWPh - cameraPosition); float kH = 1.0 - smoothstep(30.0, 90.0, dH); vec3 fn = normalize(cross(dFdx(vWPh), dFdy(vWPh)));
         float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); float sat = max(max(diffuseColor.r, diffuseColor.g), diffuseColor.b) - min(min(diffuseColor.r, diffuseColor.g), diffuseColor.b);
         float iv = smoothstep(0.3, 0.45, lum) * smoothstep(0.42, 0.58, diffuseColor.b / max(diffuseColor.r, 1e-3)); /* ivory (linear): bright, not gold */ float flat_ = 1.0 - smoothstep(0.02, 0.08, length(fwidth(fn)));
-        float k = kH * iv * flat_; if (k > 0.01) { vec3 aw = abs(fn); vec2 uv = (aw.x > aw.y && aw.x > aw.z) ? vWPh.zy : ((aw.y > aw.z) ? vWPh.xz : vWPh.xy);
+        float ny_ = abs(fn.y); float k = kH * iv * flat_ * max(max(1.0 - smoothstep(0.2, 0.4, ny_), smoothstep(0.9, 0.97, ny_)), 0.3); /* pass 41: only walls + flat tops (no diagonal stripes on slanted roofs) */ if (k > 0.01) { vec3 aw = abs(fn); vec2 uv = (aw.x > aw.y && aw.x > aw.z) ? vWPh.zy : ((aw.y > aw.z) ? vWPh.xz : vWPh.xy);
           vec2 g = uv / vec2(0.8, 0.55); vec2 fw = fwidth(g); vec2 dd = min(fract(g), 1.0 - fract(g)); vec2 sl = (1.0 - smoothstep(fw * 0.9, fw * 2.2, dd)) * (1.0 - smoothstep(0.18, 0.4, fw)); vec2 hl = (1.0 - smoothstep(fw * 2.2, fw * 3.6, abs(fract(g) - fw * 3.0))) * (1.0 - smoothstep(0.18, 0.4, fw));
           float seam = max(sl.x, sl.y); float pt = hhP(floor(g) + floor(vWPh.y * 0.1)); diffuseColor.rgb *= mix(1.0, (1.0 - 0.42 * seam + 0.12 * max(hl.x, hl.y) * (1.0 - seam)) * (0.93 + 0.14 * pt), k); } } /* dark seam + lit bevel on one side */`);
-  }; hm.customProgramCacheKey = () => 'hull_p40';
+  }; hm.customProgramCacheKey = () => 'hull_p41';
 }
 const built = b.build(mats, scene); for (const [n, B] of [...Object.entries(WB), ['beams', wb]]) { const bw = B.build(mats, scene, '_' + n); for (const k in bw) bw[k].castShadow = false; }
 // far chapter-region hulls sit behind the crater rim: skip them while the camera is low inside the hub basin (cheap occlusion cull)
