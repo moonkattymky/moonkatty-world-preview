@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { fbm, ridged, noise2, smoothstep, lerp, clamp } from './noise.js';
+import { toCreasedNormals } from '../vendor/three/jsm/utils/BufferGeometryUtils.js';
 
 // World layout (meters). Hub "Base Alpha" centered at origin, ~180 m across.
 export const REGIONS = {
@@ -240,7 +241,7 @@ export function terrainMaterial(patch = false, canyon = false) {
       ${patch ? '' : `if (uPatchOn > 0.5 && length(vWP.xz - vec2(${PATCH.x.toFixed(1)}, ${PATCH.z.toFixed(1)})) < ${PATCH.cut.toFixed(1)}) discard; if (uPatch2On > 0.5 && length(vWP.xz - vec2(${PATCH2.x.toFixed(1)}, ${PATCH2.z.toFixed(1)})) < ${PATCH2.cut.toFixed(1)}) discard; if (uPatch3On > 0.5) { vec2 d3 = vWP.xz - vec2(${PATCH3.x.toFixed(2)}, ${PATCH3.z.toFixed(2)}); vec2 u3 = vec2(${PATCH3.rect.ux.toFixed(5)}, ${PATCH3.rect.uz.toFixed(5)}); if (abs(dot(d3, u3)) < ${(PATCH3.rect.hl-PATCH3.cut).toFixed(1)} && abs(dot(d3, vec2(-u3.y, u3.x))) < ${(PATCH3.rect.hw-PATCH3.cut).toFixed(1)}) discard; } /* covered by the high-res region patches */`}
       float tDist = length(vWP - cameraPosition); float tFade = 1.0 - smoothstep(40.0, 200.0, tDist); float tNear = 1.0 - smoothstep(18.0, 85.0, tDist);
       ${patch ? '' : 'float pFlat = 1.0;'}${patch ? 'float pFW = length(fwidth(vWP)); float pFlat = smoothstep(0.55, 0.85, normalize(vWN).y); tFade *= pFlat; tNear *= pFlat; /* xz-projected regolith detail streaks on steep walls */' : ''}
-      float tN = rg(vWP.xz); vec3 cr = vec3(1.0, 0.0, 0.0); if (tNear > 0.01) cr = craters(vWP.xz, 2.6); ${canyon ? 'float sY = vWP.y * 0.42 + (vn(vWP.xz * 0.035) - 0.5) * 1.4; float sF = fract(sY); float sA = 1.0 - smoothstep(0.25, 0.8, fwidth(sY)); float stp = 1.0 - smoothstep(0.75, 0.9, normalize(vWN).y); float lay = vn(vec2(floor(vWP.y / 4.6 + (vn(vWP.xz * 0.02) - 0.5) * 0.8) * 3.7, 2.0)); diffuseColor.rgb *= mix(vec3(1.0), mix(vec3(1.06, 0.99, 0.9), vec3(0.9, 0.92, 0.95), lay) * (0.92 + 0.12 * smoothstep(0.15, 0.85, sF) - 0.2 * (1.0 - smoothstep(0.0, 0.09 + fwidth(sY), sF)) * sA), stp); /* horizontal strata on the risers */ ' + 'cr.x = mix(1.0, cr.x, 0.3); cr.yz *= 0.25; /* canyon floor: small sparse pits, no sponge */' : `float kEc = 1.0 - smoothstep(120.0, 180.0, length(vWP.xz - vec2(${REGIONS.echo.x.toFixed(1)}, ${REGIONS.echo.z.toFixed(1)}))); cr.x = mix(cr.x, mix(1.0, cr.x, 0.3), kEc); cr.yz *= 1.0 - 0.75 * kEc; /* pass 23: echo field - same calm craters as the canyon floor */`} if (tDist < 28.0) { vec3 c2 = craters(vWP.xz + 31.7, 0.85); float w2 = 1.0 - smoothstep(14.0, 28.0, tDist); cr.x *= mix(1.0, c2.x, w2); cr.yz += c2.yz * 0.7 * w2; }
+      float tN = rg(vWP.xz); vec3 cr = vec3(1.0, 0.0, 0.0); if (tNear > 0.01) cr = craters(vWP.xz, 2.6); ${canyon ? 'float sY = vWP.y * 0.42 + (vn(vWP.xz * 0.035) - 0.5) * 1.4; float sF = fract(sY); float sA = 1.0 - smoothstep(0.25, 0.8, fwidth(sY)); float stp = 1.0 - smoothstep(0.75, 0.9, normalize(vWN).y); float lay = vn(vec2(floor(vWP.y / 4.6 + (vn(vWP.xz * 0.02) - 0.5) * 0.8) * 3.7, 2.0)); diffuseColor.rgb *= mix(vec3(1.0), mix(vec3(1.03, 1.01, 0.98), vec3(0.9, 0.92, 0.95), lay) * (0.92 + 0.12 * smoothstep(0.15, 0.85, sF) - 0.2 * (1.0 - smoothstep(0.0, 0.09 + fwidth(sY), sF)) * sA), stp); /* horizontal strata on the risers */ ' + 'cr.x = mix(1.0, cr.x, 0.3); cr.yz *= 0.25; /* canyon floor: small sparse pits, no sponge */' : `float kEc = 1.0 - smoothstep(120.0, 180.0, length(vWP.xz - vec2(${REGIONS.echo.x.toFixed(1)}, ${REGIONS.echo.z.toFixed(1)}))); cr.x = mix(cr.x, mix(1.0, cr.x, 0.3), kEc); cr.yz *= 1.0 - 0.75 * kEc; /* pass 23: echo field - same calm craters as the canyon floor */`} if (tDist < 28.0) { vec3 c2 = craters(vWP.xz + 31.7, 0.85); float w2 = 1.0 - smoothstep(14.0, 28.0, tDist); cr.x *= mix(1.0, c2.x, w2); cr.yz += c2.yz * 0.7 * w2; }
       { float w3 = ${canyon ? '0.0' : '(1.0 - kEc)'} * pFlat * (1.0 - smoothstep(70.0, 130.0, tDist)) * smoothstep(14.0, 24.0, tDist) * smoothstep(28.0, 36.0, length(vWP.xz)); if (w3 > 0.01) { vec3 c3 = craters(vWP.xz + 77.0, 6.5); cr.x *= mix(1.0, c3.x, w3); cr.yz += c3.yz * 1.4 * w3; } }
       { float w4 = ${canyon ? '0.35' : '(1.0 - 0.65 * kEc)'} * pFlat * (1.0 - smoothstep(60.0, 110.0, tDist)) * smoothstep(8.0, 16.0, tDist); if (w4 > 0.01) { vec3 c4 = craters(vWP.xz + 13.3, 1.7); cr.x *= mix(1.0, c4.x, w4); cr.x *= mix(1.0, c4.x * c4.x, w4); cr.yz += c4.yz * 1.7 * w4; } }
       float tMid = (1.0 - smoothstep(55.0, 140.0, tDist)) * smoothstep(6.0, 14.0, tDist)${patch ? ' * pFlat' : ''}; // mid-ground craters (2-3 m) between the ledge and the base
@@ -259,6 +260,9 @@ export function terrainMaterial(patch = false, canyon = false) {
         ${patch && !canyon ? 'float ccv, cwt, csh; float chh = clH(vWP, normalize(vWN), pFW, ccv, cwt, csh); diffuseColor.rgb *= mix(1.0, (1.0 - 0.4 * ccv) * csh * (0.94 + 0.12 * clamp(chh, 0.0, 1.0)), 1.0 - smoothstep(160.0, 260.0, tDist));' : ''}
         { vec2 dq1 = vWP.xz / 7.0; vec2 dq2 = mat2(0.8, -0.6, 0.6, 0.8) * vWP.xz / 2.3 + 0.37; float dA1 = texture2D(uDet, dq1).r * 1.6, dA2 = texture2D(uDet, dq2).r * 1.6; /* pass 40: crisp regolith detail, two scales */
           float dw1 = (1.0 - smoothstep(35.0, 140.0, tDist)) * pFlat, dw2 = (1.0 - smoothstep(10.0, 40.0, tDist)) * pFlat; diffuseColor.rgb *= mix(1.0, 0.45 + 0.55 * dA1, dw1 * 0.8) * mix(1.0, 0.45 + 0.55 * dA2, dw2 * 0.75);
+          ${patch ? `{ vec3 fnT = normalize(vWN); vec3 tw = pow(abs(fnT), vec3(4.0)); tw /= tw.x + tw.y + tw.z + 1e-4; float wS = (1.0 - pFlat) * (1.0 - smoothstep(30.0, 160.0, tDist));
+            if (wS > 0.01) { float ta = texture2D(uDet, vWP.zy / 4.5).r * tw.x + texture2D(uDet, vWP.xz / 4.5).r * tw.y + texture2D(uDet, vWP.xy / 4.5).r * tw.z; float tb = texture2D(uDet, vWP.zy / 17.0 + 0.3).r * tw.x + texture2D(uDet, vWP.xz / 17.0 + 0.3).r * tw.y + texture2D(uDet, vWP.xy / 17.0 + 0.3).r * tw.z;
+              diffuseColor.rgb *= mix(1.0, (0.4 + 1.0 * ta) * (0.55 + 0.75 * tb), wS * 0.85) * mix(0.62, 1.0, smoothstep(-0.4, 0.4, fnT.y)); } }` : ''} /* pass 41: triplanar rock grain + overhang occlusion on steep walls */
           float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(vec3(lum), diffuseColor.rgb, 0.4) * vec3(0.95, 0.98, 1.06); } /* lunar grey (concept): mostly neutral regolith, warmth comes from the lights */
         vec2 au = vec2(vWP.x / 150.0 + 0.5, 0.5 - vWP.z / 150.0); if (au.x > 0.0 && au.x < 1.0 && au.y > 0.0 && au.y < 1.0) diffuseColor.rgb *= texture2D(uAOMap, au).r; }`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -269,6 +273,9 @@ export function terrainMaterial(patch = false, canyon = false) {
         { vec2 dq1 = vWP.xz / 7.0; vec2 dq2 = mat2(0.8, -0.6, 0.6, 0.8) * vWP.xz / 2.3 + 0.37; vec2 n1 = texture2D(uDet, dq1).gb - 0.5, n2 = (texture2D(uDet, dq2).gb - 0.5) * mat2(0.8, -0.6, 0.6, 0.8);
           float dw1 = (1.0 - smoothstep(35.0, 140.0, tDist)) * pFlat, dw2 = (1.0 - smoothstep(10.0, 40.0, tDist)) * pFlat; gW += vec3(n1.x, 0.0, n1.y) * 1.3 * dw1 + vec3(n2.x, 0.0, n2.y) * 1.5 * dw2; } /* pass 40: detail normal */
         normal = normalize(normal + (viewMatrix * vec4(gW, 0.0)).xyz); }
+      ${patch ? `{ vec3 fnT = normalize(vWN); vec3 tw = pow(abs(fnT), vec3(4.0)); tw /= tw.x + tw.y + tw.z + 1e-4; float dT = length(vWP - cameraPosition); float wS = (1.0 - smoothstep(0.55, 0.85, fnT.y)) * (1.0 - smoothstep(20.0, 110.0, dT));
+        if (wS > 0.01) { vec2 nx = texture2D(uDet, vWP.zy / 4.5).gb - 0.5, ny = texture2D(uDet, vWP.xz / 4.5).gb - 0.5, nz = texture2D(uDet, vWP.xy / 4.5).gb - 0.5;
+          vec3 gw = vec3(0.0, nx.y, nx.x) * tw.x + vec3(ny.x, 0.0, ny.y) * tw.y + vec3(nz.x, nz.y, 0.0) * tw.z; normal = normalize(normal + (viewMatrix * vec4(gw * 2.6 * wS, 0.0)).xyz); } }` : ''}
       ${patch && !canyon ? '{ float ccv, cwt, csh; float H = clH(vWP, normalize(vWN), pFW, ccv, cwt, csh) * 0.6 * (1.0 - smoothstep(0.6, 2.0, pFW)); vec3 sp = -vViewPosition; vec3 sx = dFdx(sp), sy = dFdy(sp); vec3 R1 = cross(sy, normal), R2 = cross(normal, sx); float det = dot(sx, R1); vec3 grad = sign(det) * (dFdx(H) * R1 + dFdy(H) * R2); normal = normalize(abs(det) * normal - grad); }' : ''}`);
   };
   return m;
@@ -299,7 +306,7 @@ function buildPatch(mat, PATCH, name, M = 112) {
   const mesh = new THREE.Mesh(g, mat); mesh.name = name; mesh.receiveShadow = true; return mesh;
 }
 // pass 22: canyon patch = crisp low-poly rock: jittered coarse grid, flat-shaded non-indexed faces, per-face strata colours
-const CPAL = ['#9c8f7c', '#8d8983', '#a99d88', '#857b6e', '#97928a', '#a0927e'].map(h => new THREE.Color(h)); const cLedge = new THREE.Color('#c4b9a5'), cFloorA = new THREE.Color('#827f79'), cFloorB = new THREE.Color('#9a968e');
+const CPAL = ['#8f8e8b', '#868583', '#9a9996', '#7e7d7b', '#929190', '#8a8986'].map(h => new THREE.Color(h)); const cLedge = new THREE.Color('#b4b3af') /* pass 41: lunar grey strata (was tan) */, cFloorA = new THREE.Color('#827f79'), cFloorB = new THREE.Color('#9a968e');
 let RP = null; // rect patch grid for exact ground queries
 function rpDiag(i, j) { const q = Math.sin(i * 91.7 + j * 47.3) * 9631.17; return q - Math.floor(q) > 0.5; } // random diagonals: no zig-zag pattern
 function rpVert(i, j) { return i * RP.NV + j; }
@@ -331,8 +338,9 @@ function buildRectPatch(mat, P, name) { const R = P.rect; const dt = 4.0; const 
       nrm.push(n.x, n.y, n.z); let f = 1; if (wall) { const vi = canyonInfo(X[k], Z[k]); const ph = clamp((vi.fr - 0.3) / 0.4, 0, 1); f = vi.fr < 0.3 ? 0.62 : vi.fr > 0.7 ? 1.12 : 0.62 + 0.5 * ph; } /* shadowed undercut at the riser foot -> lit lip at the top */
       pos.push(X[k], Hh[k], Z[k]); col.push(c.r * f, c.g * f, c.b * f); } };
   for (let i = 0; i < NI - 1; i++) for (let j = 0; j < NV - 1; j++) { const a = i * NV + j, b = a + 1, cc = a + NV, d = cc + 1; if (rpDiag(i, j)) { face(a, b, cc); face(b, d, cc); } else { face(a, d, cc); face(a, b, d); } }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.computeBoundingSphere(); mat.flatShading = false; /* crisp walls come from per-face normals */
-  const mesh = new THREE.Mesh(g, mat); mesh.name = name; mesh.receiveShadow = true; return mesh; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); mat.flatShading = false;
+  const gc = toCreasedNormals(g, 1.25); { const P = gc.attributes.position, C = gc.attributes.color, acc = new Map(); const key = (i) => Math.round(P.getX(i) * 20) + ',' + Math.round(P.getZ(i) * 20); for (let i = 0; i < P.count; i++) { const k = key(i); let a = acc.get(k); if (!a) acc.set(k, a = [0, 0, 0, 0]); a[0] += C.getX(i); a[1] += C.getY(i); a[2] += C.getZ(i); a[3]++; } for (let i = 0; i < P.count; i++) { const a = acc.get(key(i)); C.setXYZ(i, C.getX(i) * 0.15 + a[0] / a[3] * 0.85, C.getY(i) * 0.15 + a[1] / a[3] * 0.85, C.getZ(i) * 0.15 + a[2] / a[3] * 0.85); } } gc.computeBoundingSphere(); /* per-corner colour: no per-triangle tone steps */ /* pass 41: creased normals - natural rounded walls, crisp only at ledge breaks (no triangle facets) */
+  const mesh = new THREE.Mesh(gc, mat); mesh.name = name; mesh.receiveShadow = true; return mesh; }
 export function buildTerrain() {
   const topo = buildTopology(); PX = topo.px; PZ = topo.pz; TRI = topo.tris; const NV = topo.NV;
   H = new Float32Array(NV); for (let i = 0; i < NV; i++) H[i] = heightAt(PX[i], PZ[i]);
@@ -349,12 +357,12 @@ export function buildTerrain() {
     const key = r < 75 ? 'i' + Math.floor(ang / (Math.PI * 2) * GRID.si) : r < nearR ? 'n' + Math.floor(ang / (Math.PI * 2) * GRID.sn) : 'f' + Math.floor(ang / (Math.PI * 2) * GRID.sf);
     let l = sectors.get(key); if (!l) sectors.set(key, l = []); l.push(a, b, cc);
   }
-  const group = new THREE.Group(); group.name = 'terrain'; const mat = terrainMaterial();
+  const group = new THREE.Group(); group.name = 'terrain'; const mat = terrainMaterial(); mat.flatShading = false;
   for (const [key, idx] of sectors) {
     const pos = new Float32Array(idx.length * 3), cl = new Float32Array(idx.length * 3);
     idx.forEach((v, i) => { pos[i * 3] = PX[v]; pos[i * 3 + 1] = H[v]; pos[i * 3 + 2] = PZ[v]; cl[i * 3] = col[v * 3]; cl[i * 3 + 1] = col[v * 3 + 1]; cl[i * 3 + 2] = col[v * 3 + 2]; });
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(cl, 3)); g.computeVertexNormals(); g.computeBoundingSphere();
-    const mesh = new THREE.Mesh(g, mat); mesh.name = 'terrain_' + key; mesh.receiveShadow = true; mesh.castShadow = false; group.add(mesh);
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(cl, 3)); const gs = toCreasedNormals(g, 0.8); gs.computeBoundingSphere(); /* pass 41: smooth terrain shading, crisp only at sharp breaks (no triangle facets on hills) */
+    const mesh = new THREE.Mesh(gs, mat); mesh.name = 'terrain_' + key; mesh.receiveShadow = true; mesh.castShadow = false; group.add(mesh);
   }
   const pmat = terrainMaterial(true); group.add(buildPatch(pmat, PATCH, 'terrain_patch')); group.add(buildPatch(pmat, PATCH2, 'terrain_patch2', 96)); group.add(buildRectPatch(terrainMaterial(true, true), PATCH3, 'terrain_patch3'));
   group.userData.tris = TRI.length / 3;

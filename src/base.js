@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { toCreasedNormals } from '../vendor/three/jsm/utils/BufferGeometryUtils.js';
 import { G, quatFromDir, GQ } from './builder.js';
 import { groundAt, sd, PORTAL, F, CAVE, PLAY_START, CONCEPT } from './terrain.js';
 import { noise2 } from './noise.js';
@@ -244,7 +245,7 @@ function beaconPad(b, s, d, beams, height = 46) {
 function rockyArch(R, tube, seed) {
   const g = new THREE.TorusGeometry(R, tube, 6, 16, PI).toNonIndexed(); const P = g.attributes.position; const v = new THREE.Vector3();
   for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); const n = noise2(v.x * 0.45 + seed, v.y * 0.45 + v.z * 0.6) * 0.9 + noise2(v.x * 1.3, v.y * 1.3 + seed) * 0.35; const ang = Math.atan2(v.y, v.x); const c = new THREE.Vector3(Math.cos(ang) * R, Math.sin(ang) * R, 0); const d = v.clone().sub(c); v.copy(c).addScaledVector(d, 1 + n * 0.55); if (v.y < 0) v.y = -0.5; P.setXYZ(i, v.x, v.y, v.z); }
-  g.computeVertexNormals(); return g;
+  return toCreasedNormals(g, 1.0); /* pass 41: rounded rock arch (no triangle facets) */
 }
 function portalCave(b, beams) {
   const P0 = PORTAL; let yaw = Math.atan2(P0.x - CAVE.x, P0.z - CAVE.z); // faces out of the wall, toward the hub

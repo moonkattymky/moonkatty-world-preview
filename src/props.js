@@ -4,7 +4,13 @@ import { groundAt, groundMesh, LEDGE, slopeAt, F, Rt, LOOKOUT, REGIONS, sd, CONC
 import { noise2, seeded } from './noise.js';
 import { colliders, LAMPS } from './base.js';
 import { KEEP } from './world.js';
-import { mergeVertices } from '../vendor/three/jsm/utils/BufferGeometryUtils.js';
+import { mergeVertices, toCreasedNormals } from '../vendor/three/jsm/utils/BufferGeometryUtils.js';
+// pass 41: natural boulders - creased normals (smooth across shallow facet joints, crisp only at real breaks) + facet colours blended per corner
+export function creaseRock(g, deg = 55, cm = 0.75) { const o = toCreasedNormals(g, deg * Math.PI / 180); const P = o.attributes.position, C = o.attributes.color;
+  if (C) { const acc = new Map(); const key = (i) => Math.round(P.getX(i) * 500) + ',' + Math.round(P.getY(i) * 500) + ',' + Math.round(P.getZ(i) * 500);
+    for (let i = 0; i < P.count; i++) { const k = key(i); let a = acc.get(k); if (!a) acc.set(k, a = [0, 0, 0, 0]); a[0] += C.getX(i); a[1] += C.getY(i); a[2] += C.getZ(i); a[3]++; }
+    for (let i = 0; i < P.count; i++) { const a = acc.get(key(i)); C.setXYZ(i, C.getX(i) + (a[0] / a[3] - C.getX(i)) * cm, C.getY(i) + (a[1] / a[3] - C.getY(i)) * cm, C.getZ(i) + (a[2] / a[3] - C.getZ(i)) * cm); } C.needsUpdate = true; }
+  o.computeBoundingSphere(); return o; }
 
 const rnd = seeded(2024);
 export function rockGeom(detail, seed, stretch = [1, 1, 1], rough = 0.32, light = 1) {
@@ -216,7 +222,7 @@ function makeKind(scene, name, lods, items, mat, castShadow) {
 }
 
 export function buildRocks(scene, culler, quality = 1) { LOD_SCALE = quality < 0.7 ? 0.6 : quality < 0.9 ? 0.8 : 1;
-  const mat = rockMaterial(true, 0.2, false, 1.0, true, false, 0.24); mat.color.setScalar(0.85); const matFar = rockMaterial(true, 0.0, true, 2.0, false, true, 0.0); matFar.flatShading = true; matFar.color.setScalar(0.3); { const ob = matFar.onBeforeCompile, ok = matFar.customProgramCacheKey; matFar.customProgramCacheKey = () => ok() + 'near'; matFar.onBeforeCompile = (sh) => { ob(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', '{ float dn = length(vWP - cameraPosition); float nk = 1.0 - smoothstep(6.0, 28.0, dn); outgoingLight += diffuseColor.rgb * nk * (0.34 + 0.8 * max(dot(normal, normalize(vec3(-0.45, 0.7, 0.55))), 0.0)); } /* pass 24: lift foreground rock facets out of black */\n#include <opaque_fragment>'); }; } const matDebris = rockMaterial(true, 0.0, true, 2.0, false, false, 0.04); matDebris.color.setScalar(0.32); /* pass 17: debris uses the dark rock tone (no pale chips near camera spots) */ /* debris: smooth normals -> no sub-pixel black/white facet speckle */ const matWall = rockMaterial(true, 1.2, false, 0.35, true, false, 0.32, 1.0, 1.0); /* pass 18: layered/cracked cliff relief */ matWall.color.setScalar(1.05);
+  const mat = rockMaterial(true, 0.2, false, 1.0, true, false, 0.24); mat.color.setScalar(0.85); const matFar = rockMaterial(true, 0.0, true, 2.0, false, true, 0.0); matFar.flatShading = false; mat.flatShading = false; matFar.color.setScalar(0.3); { const ob = matFar.onBeforeCompile, ok = matFar.customProgramCacheKey; matFar.customProgramCacheKey = () => ok() + 'near'; matFar.onBeforeCompile = (sh) => { ob(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', '{ float dn = length(vWP - cameraPosition); float nk = 1.0 - smoothstep(6.0, 28.0, dn); outgoingLight += diffuseColor.rgb * nk * (0.34 + 0.8 * max(dot(normal, normalize(vec3(-0.45, 0.7, 0.55))), 0.0)); } /* pass 24: lift foreground rock facets out of black */\n#include <opaque_fragment>'); }; } const matDebris = rockMaterial(true, 0.0, true, 2.0, false, false, 0.04); matDebris.color.setScalar(0.32); /* pass 17: debris uses the dark rock tone (no pale chips near camera spots) */ /* debris: smooth normals -> no sub-pixel black/white facet speckle */ const matWall = rockMaterial(true, 1.2, false, 0.35, true, false, 0.32, 1.0, 1.0); /* pass 18: layered/cracked cliff relief */ matWall.color.setScalar(1.05); matWall.flatShading = false;
   const L = { crumb: [], pebble: [], rubble: [], bA: [], bB: [], bC: [], cliff: [], peak: [], wall: [] };
   const K = CONCEPT; const cgy = groundAt(K.cat.x, K.cat.z); const ccam = new THREE.PerspectiveCamera(K.fov, 16 / 9, 0.2, 5000);
   ccam.position.set(K.cam.x, cgy + K.eye, K.cam.z); ccam.lookAt(K.target.x, cgy + K.eye - K.drop, K.target.z); ccam.updateMatrixWorld(); ccam.updateProjectionMatrix();
@@ -397,11 +403,11 @@ export function buildRocks(scene, culler, quality = 1) { LOD_SCALE = quality < 0
       scatter.push({ x, y, z, s: [s * (0.85 + r2() * 0.45), sy, s * (0.75 + r2() * 0.45)], r: [(r2() - 0.5) * 0.12, r2() * 6.283, (r2() - 0.5) * 0.12], lodK: (() => { const dK = Math.hypot(x - K.cam.x, z - K.cam.z) - 3; return dK < 34 ? (34 / dK) ** 2 : 1; })() /* draw range shrinks so the concept camera never draws them (its triangle budget) */ }); } }
   L.scatter = scatter;
   const kinds = {
-    rockA: makeKind(scene, 'rockA', [[protoGeom(1, 2, [1.25, 0.75, 1.05]), 8], [protoGeom(1, 2, [1.25, 0.75, 1.05]), 24], [protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 116]], A, mat, 2),
-    debris: makeKind(scene, 'debris', [[chiselGeom(14, 6, 0), 7.5]], debris, matDebris, 0),
+    rockA: makeKind(scene, 'rockA', [[creaseRock(protoGeom(1, 2, [1.25, 0.75, 1.05]), 62), 8], [creaseRock(protoGeom(1, 2, [1.25, 0.75, 1.05]), 62), 24], [creaseRock(protoGeom(0, 2, [1.25, 0.75, 1.05], 0.3), 62), 116]], A, mat, 2),
+    debris: makeKind(scene, 'debris', [[creaseRock(chiselGeom(14, 6, 0), 50), 7.5]], debris, matDebris, 0),
     scatter: makeKind(scene, 'scatter', [[pebbleGeom(23), 34]], scatter, matScatter, 0),
-    strata: makeKind(scene, 'strata', [[chiselGeom(9, 16, 2), 6.5], [chiselGeom(9, 12, 1), 14], [chiselGeom(9, 12, 0), 95]], L.peak, matFar, 0),
-    wall: makeKind(scene, 'wall', [[mesaGeom(protoGeom(1, 33, [1, 1, 1], 0.55), 33), 118], [mesaGeom(protoGeom(0, 33, [1, 1, 1], 0.45), 33), 3000]], L.wall, matWall, 0),
+    strata: makeKind(scene, 'strata', [[creaseRock(chiselGeom(9, 16, 2), 38), 6.5], [creaseRock(chiselGeom(9, 12, 1), 38), 14], [creaseRock(chiselGeom(9, 12, 0), 45), 95]], L.peak, matFar, 0),
+    wall: makeKind(scene, 'wall', [[creaseRock(mesaGeom(protoGeom(1, 33, [1, 1, 1], 0.55), 33), 60), 118], [creaseRock(mesaGeom(protoGeom(0, 33, [1, 1, 1], 0.45), 33), 60), 3000]], L.wall, matWall, 0),
   };
     for (const k of Object.values(kinds)) culler.add(k);
   // contact shadows / crevices: every rock near the hub darkens the regolith around its base (painted into the terrain AO map in main.js)
