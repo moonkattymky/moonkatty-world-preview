@@ -2,7 +2,7 @@ import { T2 } from './i18n_ch2.js';
 // Tiny i18n table: Russian primary, English fallback. Lang: ?lang= > Telegram user language > 'ru'.
 const T = {
   ru: {
-    level: 'Ур.', points: 'Moon Points', today: 'сегодня', quests: 'Задания', chapter: 'Глава 1', daily: 'Ежедневные',
+    level: 'Ур.', points: 'Moon Points', today: 'сегодня', quests: 'Задания', map: 'Карта', mapSoon: 'Голо-карта скоро', chapter: 'Глава 1', daily: 'Ежедневные',
     chapterTitle: 'База Альфа', dailySoon: 'Ежедневные задания появятся на этапе 2.', dailySoon2: 'Кристаллы уже обновляются каждый день — собирайте их!',
     done: 'Выполнено', active: 'Текущее', locked: 'Закрыто', close: 'Закрыть', m: 'м',
     questDone: 'Задание выполнено!', levelUp: 'Новый уровень!', capHit: 'Дневной лимит ⭐ достигнут', capPart: 'лимит дня',
@@ -29,7 +29,7 @@ const T = {
     building: 'Строитель строит: Склад', built: 'Склад построен!', robotArrives: 'Прибыл робот-Строитель!', baseGrows: 'База растёт',
     },
   en: {
-    level: 'Lv', points: 'Moon Points', today: 'today', quests: 'Quests', chapter: 'Chapter 1', daily: 'Daily',
+    level: 'Lv', points: 'Moon Points', today: 'today', quests: 'Quests', map: 'Map', mapSoon: 'Holo map coming soon', chapter: 'Chapter 1', daily: 'Daily',
     chapterTitle: 'Base Alpha', dailySoon: 'Daily quests arrive in stage 2.', dailySoon2: 'Crystals already respawn every day — go collect them!',
     done: 'Done', active: 'Active', locked: 'Locked', close: 'Close', m: 'm',
     questDone: 'Quest complete!', levelUp: 'Level up!', capHit: 'Daily ⭐ limit reached', capPart: 'daily limit',

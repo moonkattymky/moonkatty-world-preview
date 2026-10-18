@@ -68,7 +68,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
   const syncCols = () => { const C = ctrl.colliders; oreCol.forEach((c) => { const on = c.f.mesh.visible && c.f.state[c.i].alive; const k = C.indexOf(c); if (on && k < 0) C.push(c); if (!on && k >= 0) C.splice(k, 1); }); const on = robot.root.visible && !ch2.on; const k = C.indexOf(robotCol); if (on) { robotCol.x = robot.root.position.x; robotCol.z = robot.root.position.z; if (k < 0) C.push(robotCol); } else if (k >= 0) C.splice(k, 1); };
 
   // ---------- helpers ----------
-  const refreshTop = () => { const c = store.capInfo(); hud.setTop({ level: D().level, xp: D().xp, need: xpForLevel(D().level), points: D().points, earned: c.earned, cap: c.cap }); hud.lives(D().lives); };
+  const refreshTop = () => { const c = store.capInfo(); hud.setTop({ level: D().level, xp: D().xp, need: xpForLevel(D().level), points: D().points, earned: c.earned, cap: c.cap, cry: D().ch2 && D().ch2.on ? D().ch2.res.cry : D().stats.crystals }); hud.lives(D().lives); };
   const syncCrystals = () => { store.roll(); const tk = new Set(D().crystals.taken); spots.forEach((_, i) => crystals.setAlive(i, !tk.has(i))); };
   const syncProps = () => {
     const q = cur(); ore.state.forEach((s, i) => { s.alive = !isDone('crystals') && !D().ch1.mined.includes(i); });
