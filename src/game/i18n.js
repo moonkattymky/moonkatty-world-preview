@@ -1,3 +1,4 @@
+import { T2 } from './i18n_ch2.js';
 // Tiny i18n table: Russian primary, English fallback. Lang: ?lang= > Telegram user language > 'ru'.
 const T = {
   ru: {
@@ -55,6 +56,7 @@ const T = {
     building: 'Builder is building: Depot', built: 'Depot built!', robotArrives: 'The Builder robot has arrived!', baseGrows: 'Your base grows',
     },
 };
+for (const l of ['ru', 'en']) Object.assign(T[l], T2[l]);
 export function pickLang(Q) {
   const q = Q.get('lang'); if (q && T[q]) return q;
   const tg = window.Telegram?.WebApp?.initDataUnsafe?.user?.language_code; if (tg && T[tg.slice(0, 2)]) return tg.slice(0, 2);

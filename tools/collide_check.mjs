@@ -9,7 +9,7 @@ const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome'
 const ctx = await browser.newContext(mode === 'phone' ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } : { viewport: { width: 1280, height: 720 } });
 const page = await ctx.newPage(); const logs = []; page.on('pageerror', e => logs.push('PAGEERROR ' + e.message)); page.on('console', m => { if (m.type() === 'error') logs.push(m.text()); });
 const q = mode === 'low' ? '&q=low' : '';
-const boot = async (extra) => { await page.goto('http://localhost:47321/index.html?view=play&fast=1' + q + extra); await page.waitForFunction(() => window.MK && MK.ready && MK.game && MK.game.ready, null, { timeout: 180000 }); };
+const boot = async (extra) => { await page.goto('http://localhost:' + (process.env.MKPORT || 47321) + '/index.html?view=play&fast=1' + q + extra); await page.waitForFunction(() => window.MK && MK.ready && MK.game && MK.game.ready, null, { timeout: 180000 }); };
 await boot('&reset=1');
 // ground-truth checker (re-installed after every page load)
 const INSTALL = async () => { window.__terrain = await import('./src/terrain.js');

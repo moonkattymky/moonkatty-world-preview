@@ -10,16 +10,19 @@ import { makeRobot } from './robot.js';
 import { makeProgressLabel, makeRobotJob } from './jobs.js';
 import { DEPOT_STAGES } from './activities.js';
 import { groundAt as terrainAt } from '../terrain.js';
+import { createChapter2 } from './ch2.js';
+import { BASE } from './economy.js';
 
 // Game layer: progression + Chapter 1 activities on top of the 3D world. createGame() is called once from main.js.
 //   opts: { scene, camera, ctrl, renderer, env, solids, groundAt, Q, places, crystalSpots, layout }
 //   layout (world positions, all pre-resolved to free spots by main.js):
 //     gates {hub, canyon, launch}, regions {hub, canyon, launch} (centres), cracks [{x,z,tx,tz,w,len,region}], ore [{x,z}], parts [{x,z}],
 //     meteor {x,z,r}, rings [{x,z,yaw}], secrets [{id,x,z,y?}], depot {x,z,yaw}, robotSpawn {x,z}
-export function createGame({ scene, camera, ctrl, renderer, env, solids, setPower = () => { }, groundAt, visAt, Q, places, crystalSpots, layout: L }) {
+export function createGame({ scene, camera, ctrl, renderer, env, solids, setPower = () => { }, setNight = () => { }, sd = null, mobile = false, catRoot = null, earthDir = null, groundAt, visAt, Q, places, crystalSpots, layout: L }) {
   const FAST = Q.get('fast') === '1'; const lang = pickLang(Q); const t = makeT(lang);
-  let dayOffset = 0; // test hook: shift "today"
-  const store = createStore({ backend: new LocalBackend(), now: () => Date.now() + dayOffset * 864e5 });
+  let dayOffset = 0; const clock = { off: 0 }; // test hooks: shift "today" / advance the job clock
+  const nowMs = () => Date.now() + dayOffset * 864e5 + clock.off;
+  const store = createStore({ backend: new LocalBackend(), now: nowMs });
   const gy = (p) => (p.y != null ? p.y : groundAt(p.x, p.z));
   const P = {}; for (const [k, v] of Object.entries(places)) P[k] = { x: v.x, z: v.z, y: groundAt(v.x, v.z) };
   const Qs = chapter1(P, FAST);
@@ -62,7 +65,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
   const depotCollider = { x: depotP.x, z: depotP.z, r: 1.65, h: 4.5 };
   // new props are solid too: ore clusters (until mined) and the robot (circle colliders, same system as the hub props)
   const oreCol = [...ore.spots.map((s, i) => ({ x: s.x, z: s.z, r: 0.75, h: 2.6, f: ore, i })), ...pow.spots.map((s, i) => ({ x: s.x, z: s.z, r: 0.75, h: 2.6, f: pow, i }))]; const robotCol = { x: 0, z: 0, r: 0.45, h: 1.9 };
-  const syncCols = () => { const C = ctrl.colliders; oreCol.forEach((c) => { const on = c.f.mesh.visible && c.f.state[c.i].alive; const k = C.indexOf(c); if (on && k < 0) C.push(c); if (!on && k >= 0) C.splice(k, 1); }); const on = robot.root.visible; const k = C.indexOf(robotCol); if (on) { robotCol.x = robot.root.position.x; robotCol.z = robot.root.position.z; if (k < 0) C.push(robotCol); } else if (k >= 0) C.splice(k, 1); };
+  const syncCols = () => { const C = ctrl.colliders; oreCol.forEach((c) => { const on = c.f.mesh.visible && c.f.state[c.i].alive; const k = C.indexOf(c); if (on && k < 0) C.push(c); if (!on && k >= 0) C.splice(k, 1); }); const on = robot.root.visible && !ch2.on; const k = C.indexOf(robotCol); if (on) { robotCol.x = robot.root.position.x; robotCol.z = robot.root.position.z; if (k < 0) C.push(robotCol); } else if (k >= 0) C.splice(k, 1); };
 
   // ---------- helpers ----------
   const refreshTop = () => { const c = store.capInfo(); hud.setTop({ level: D().level, xp: D().xp, need: xpForLevel(D().level), points: D().points, earned: c.earned, cap: c.cap }); hud.lives(D().lives); };
@@ -89,7 +92,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
   async function pickCrystal(i) {
     crystals.setAlive(i, false); D().crystals.taken.push(i); D().stats.crystals++; const s = spots[i]; burst.fire(s.x, s.y + 1.0, s.z);
     const r = await store.addPoints(3, 'crystal'); addXP(D(), 5);
-    hud.toast(r.granted ? `💎 ${t('crystalToast')} +${r.granted} ⭐` : `💎 ${t('capHit')}`); store.queueSave(); refreshTop();
+    hud.toast(r.granted ? `💎 ${t('crystalToast')} +${r.granted} ⭐` : `💎 ${t('capHit')}`); store.queueSave(); refreshTop(); if (ch2.on) ch2.track('crystals');
   }
   // ---------- regions + travel gates (no more running across the map) ----------
   const regionOf = (p) => { let best = 'hub', bd = Math.hypot(p.x - L.regions.hub.x, p.z - L.regions.hub.z) - 120; for (const k of ['canyon', 'launch']) { const d = Math.hypot(p.x - L.regions[k].x, p.z - L.regions[k].z); if (d < bd) { bd = d; best = k; } } return best; };
@@ -162,8 +165,8 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
   }
   // ---------- action buttons (press-and-hold aware) ----------
   let holdLatch = false, holdDown = false, hold = 0, act1 = null, act2 = null;
-  const actDown = () => { if (act1 === 'mine') { miner.press(); hud.$('#mk-act').classList.add('hold'); } else if (act1 === 'install') { holdDown = true; hud.$('#mk-act').classList.add('hold'); } else if (act1 === 'puzzle') puzzle.show(); else if (act1 === 'sprint') sprint.start(); else if (act1 && act1.startsWith('go:')) travel(act1.slice(3)); };
-  const actUp = () => { hud.$('#mk-act').classList.remove('hold'); if (act1 === 'mine' && miner.holding) mineResult(miner.release()); holdDown = false; };
+  const actDown = () => { if (act1 && act1.startsWith('c2:')) { ch2.actDown(act1); if (!act1.startsWith('c2:robot')) hud.$('#mk-act').classList.add('hold'); return; } if (act1 === 'mine') { miner.press(); hud.$('#mk-act').classList.add('hold'); } else if (act1 === 'install') { holdDown = true; hud.$('#mk-act').classList.add('hold'); } else if (act1 === 'puzzle') puzzle.show(); else if (act1 === 'sprint') sprint.start(); else if (act1 && act1.startsWith('go:')) travel(act1.slice(3)); };
+  const actUp = () => { hud.$('#mk-act').classList.remove('hold'); if (act1 && act1.startsWith('c2:')) { ch2.actUp(act1); return; } if (act1 === 'mine' && miner.holding) mineResult(miner.release()); holdDown = false; };
   const actEl = hud.$('#mk-act');
   actEl.addEventListener('pointerdown', (e) => { e.preventDefault(); actDown(); }); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) actEl.addEventListener(ev, actUp);
   hud.$('#mk-act2').addEventListener('click', () => { if (act2 && act2.startsWith('go:')) travel(act2.slice(3)); });
@@ -203,6 +206,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
   function placeRobot(p, look, snap) { robotState.pos.set(p.x, robotY(p.x, p.z, Math.atan2(look.x - p.x, look.z - p.z)), p.z); robot.root.position.copy(robotState.pos); robot.root.rotation.y = Math.atan2(look.x - p.x, look.z - p.z); robot.root.visible = true; }
   function startBuild() { if (robotState.mode !== 'hidden') return; robotState.mode = 'walk'; robotState.frac = 0; placeRobot(L.robotSpawn, weldSpot); hud.toast('🤖 ' + t('robotArrives')); burst.fire(L.robotSpawn.x, groundAt(L.robotSpawn.x, L.robotSpawn.z) + 1, L.robotSpawn.z); }
   async function updateRobot(dt) {
+    if (ch2.on) { robot.root.visible = false; if (!robotState.c2hid) { robotState.c2hid = true; jobLabel.hide(); } return; }
     const S = robotState; const q = cur(); const hubNear = Math.hypot(camera.position.x - depotP.x, camera.position.z - depotP.z) < 220;
     if (S.mode === 'hidden') { robot.root.visible = false; robot.update(dt, 'idle'); return; }
     robot.root.visible = hubNear;
@@ -221,11 +225,16 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
   function renderSheet() {
     const sh = hud.$('#mk-sheet'); sh.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     const sub = sh.querySelector('.sub'), list = sh.querySelector('.list'); const ci = D().ch1.idx;
+    if (ch2.on && !cur()) { if (tab === 'crew') ch2.renderCrew(sub, list); else if (tab === 'daily') ch2.renderDaily(sub, list); else { ch2.renderChapter(sub, list); list.insertAdjacentHTML('beforeend', `<details class="mk-ch1done"><summary>✅ ${esc(t('chapterTitle'))} · ${D().ch1.done.length}/${Qs.length}</summary>${ch1HTML()}</details>`); } return; }
+    if (tab === 'crew') tab = 'ch';
     if (tab === 'ch') {
       sub.innerHTML = `<span>${esc(t('chapterTitle'))}</span><span>${D().ch1.done.length}/${Qs.length}</span>`;
-      const sec = `<div class="mk-sec" id="mk-secrets"><span>🗝️ ${esc(t('secrets'))} ${D().secrets.length}/${caches.length}<small>${esc(t('secretsHint'))}</small></span><span>🐾 ${D().lives}</span></div>`;
-      list.innerHTML = sec + Qs.map((q, i) => { const s = isDone(q.id) ? 'done' : i === ci ? 'active' : 'locked'; return `<div class="mk-q ${s}"><div class="ic">${s === 'done' ? '✅' : s === 'locked' ? '🔒' : q.icon}</div><div class="tx"><div class="tt">${esc(t('q_' + q.id + '_t'))}</div><div class="dd">${esc(t('q_' + q.id + '_d'))}</div><div class="st">${esc(t(s === 'done' ? 'done' : s === 'active' ? 'active' : 'locked'))}${q.kind === 'sprint' && D().ch1.sprint ? ' · ' + '★'.repeat(D().ch1.sprint) : ''}</div></div><div class="rw">+${q.pts} ⭐<small>+${q.xp} XP</small></div></div>`; }).join('');
+      list.innerHTML = ch1HTML();
     } else { sub.innerHTML = `<span>${esc(t('daily'))}</span><span></span>`; list.innerHTML = `<div class="mk-soon"><b>🗓️</b>${esc(t('dailySoon'))}<br>${esc(t('dailySoon2'))}</div>`; }
+  }
+  function ch1HTML() { const ci = D().ch1.idx;
+      const sec = `<div class="mk-sec" id="mk-secrets"><span>🗝️ ${esc(t('secrets'))} ${D().secrets.length}/${caches.length}<small>${esc(t('secretsHint'))}</small></span><span>🐾 ${D().lives}</span></div>`;
+      return sec + Qs.map((q, i) => { const s = isDone(q.id) ? 'done' : i === ci ? 'active' : 'locked'; return `<div class="mk-q ${s}"><div class="ic">${s === 'done' ? '✅' : s === 'locked' ? '🔒' : q.icon}</div><div class="tx"><div class="tt">${esc(t('q_' + q.id + '_t'))}</div><div class="dd">${esc(t('q_' + q.id + '_d'))}</div><div class="st">${esc(t(s === 'done' ? 'done' : s === 'active' ? 'active' : 'locked'))}${q.kind === 'sprint' && D().ch1.sprint ? ' · ' + '★'.repeat(D().ch1.sprint) : ''}</div></div><div class="rw">+${q.pts} ⭐<small>+${q.xp} XP</small></div></div>`; }).join('');
   }
   const openSheet = (o) => { sheetOpen = o; hud.sheet(o, renderSheet); };
   hud.$('#mk-qbtn').addEventListener('click', () => openSheet(!sheetOpen));
@@ -233,6 +242,10 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
   hud.$('#mk-scrim').addEventListener('click', () => openSheet(false));
   hud.$('#mk-sheet .x').addEventListener('click', () => openSheet(false));
   hud.$('#mk-sheet .tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { tab = b.dataset.tab; renderSheet(); } });
+  // ---------- Chapter 2 (starts when Chapter 1 is complete) ----------
+  const ch2 = createChapter2({ scene, env, camera, ctrl, store, hud, t, lang, FAST, depotP, groundAt, robotY, gates: G, layout: L, places: P, burst, miner, grant, addXP, refreshTop, regionOf, me, now: nowMs,
+    setNight, sd, mobile, catRoot, earthDir, renderer, fade: (o) => hud.fade(o), time: () => time, free: (p, r) => { const f = solids.nearestFree(p.x, p.z, r); return { x: f.x, z: f.z }; }, low: Q.get('q') === 'low', openSheet: (o) => openSheet(o), isSheetOpen: () => sheetOpen, setTab: (x) => { tab = x; }, rerender: () => { if (sheetOpen) renderSheet(); } });
+  let c2wait = 0;
 
   // ---------- targets ----------
   const v = new THREE.Vector3();
@@ -254,6 +267,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
     return targetRaw(q);
   }
   function trackHTML(q, dist) {
+    if (!q && ch2.on) return ch2.trackHTML(dist);
     if (!q) return `<div class="ch"><span>${esc(t('chapter'))} · ${esc(t('chapterTitle'))}</span><span>${Qs.length}/${Qs.length}</span></div><div class="t">🏆 ${esc(t('chapterDone'))}</div><div class="d">${esc(t('chapterDoneSub'))}</div><div class="row"><span style="color:#ffd77a">🗝️ ${esc(t('secrets'))} ${D().secrets.length}/${caches.length}</span></div>`;
     let prog = '', hint = '';
     const bar = (a, b) => `<div class="row"><div class="bar"><i style="width:${Math.min(100, a / b * 100)}%"></i></div><span>${a}/${b}</span></div>`;
@@ -275,7 +289,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
     for (let i = 0; i < spots.length; i++) { if (!crystals.alive[i]) continue; const s = spots[i]; if (Math.hypot(s.x - ctrl.pos.x, s.z - ctrl.pos.z) < 1.7 && Math.abs(ctrl.pos.y - s.y) < 3.5) pickCrystal(i); }
     updateCracks(dt); updateMeteors(dt); sprint.update(dt); updateRobot(dt); miner.update(dt); syncCols();
     for (const c of caches) { if (!c.fx.mesh.visible) continue; if (dist2(me(), c) < 1.7 && Math.abs(me().y - c.y) < 2.2) openCache(c); }
-    const q = cur(); const tg = targetOf(q); const p = me();
+    const q = cur(); if (!q) { if (!ch2.on) { c2wait += dt; if (c2wait > (FAST ? 0.3 : 5)) ch2.begin(true); } ch2.update(dt); } const tg = q ? targetOf(q) : ch2.target(); const p = me();
     // parts: hidden hunt (compass + glow when close, beacon only within 22 m)
     let showBeacon = !!tg; const nP = q && q.kind === 'parts' ? nearestPart() : null;
     if (nP) { parts.update(time, nP.d < 25 ? 1 : 0); if (!(q.region !== regionOf(p))) showBeacon = nP.d < 22; for (let i = 0; i < parts.spots.length; i++) { if (!parts.alive[i]) continue; const s = parts.spots[i]; if (dist2(p, s) < 1.9 && Math.abs(p.y - s.y) < 2.5) { parts.alive[i] = false; D().ch1.parts.push(i); burst.fire(s.x, s.y + 0.6, s.z); grant(5, 'part'); hud.toast(`📡 ${t('partFound')} ${D().ch1.parts.length}/3`); store.queueSave(); if (D().ch1.parts.length >= q.need) reward(q); } } }
@@ -284,7 +298,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
     const dist = tg ? dist2(tg, p) : null;
     // ---- activity logic / context buttons ----
     act1 = null; let label1 = null, frac1 = 0;
-    const opts = travelOptions(); act2 = opts[0] ? 'go:' + opts[0] : null; hud.action2(act2 ? (gateOpen(opts[0]) ? '🌀 ' : '🔒 ') + t(opts[0] === 'canyon' ? 'toCanyon' : opts[0] === 'launch' ? 'toLaunch' : 'toBase') : null);
+    const opts = ch2.inside ? [] : travelOptions(); act2 = opts[0] ? 'go:' + opts[0] : null; hud.action2(act2 ? (gateOpen(opts[0]) ? '🌀 ' : '🔒 ') + t(opts[0] === 'canyon' ? 'toCanyon' : opts[0] === 'launch' ? 'toLaunch' : 'toBase') : null);
     if (opts[1]) { act1 = 'go:' + opts[1]; label1 = (gateOpen(opts[1]) ? '🌀 ' : '🔒 ') + t(opts[1] === 'launch' ? 'toLaunch' : 'toCanyon'); }
     if (q && !busy && !traveling) {
       if (q.kind === 'hop') { if (inZone(q)) { if (D().ch1.crossed.includes(q.crack)) reward(q); else if (!q._warned) { q._warned = true; hud.toast('🕳️ ' + t('crossFirst')); } } else q._warned = false; }
@@ -294,6 +308,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
       else if (q.kind === 'secret') { if (D().secrets.includes(q.cache)) reward(q); }
       else if (q.kind === 'build') { if (inZone(q) && robotState.mode === 'hidden') startBuild(); }
     }
+    if (!q && !traveling && ch2.on) { const a = ch2.action(dt); if (a && (!act1 || a.act === 'c2:help')) { act1 = a.act; label1 = a.label; frac1 = a.frac || 0; if (holdLatchC2 && (act1 === 'c2:collect' || act1 === 'c2:repair')) ch2.actDown(act1); } }
     if (!act1 && sprint.state === 'idle' && L.sprintStart && dist2(p, L.sprintStart) < 4.5 && (isDone('reactor'))) { act1 = 'sprint'; label1 = '🏁 ' + t(isDone('launch') ? 'retrySprint' : 'startSprint'); }
     if (q && q.kind !== 'mine' && q.kind !== 'power' && miner.open && !powerAnim) miner.hide();
     hud.action(label1, frac1);
@@ -309,11 +324,30 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
 
   const boot = (async () => {
     if (Q.get('reset') === '1') { await store.wipe(); try { history.replaceState(null, '', location.pathname + location.search.replace(/([?&])reset=1&?/, '$1').replace(/[?&]$/, '')); } catch (e) { } }
-    await store.load(); syncIdx(); syncCrystals(); syncProps(); refreshTop(); await store.save(); ready = true;
+    await store.load(); syncIdx(); syncCrystals(); syncProps(); refreshTop(); if (!cur() && !D().ch2.on) ch2.begin(false); ch2.boot(); await store.save(); ready = true;
     if (!isDone('power')) setTimeout(() => hud.toast('⚠️ ' + t('powerOut')), 600);
     if (FAST) { const b = hud.$('#mk-auto'); b.style.display = 'block'; b.addEventListener('click', () => api.auto()); }
   })();
 
+  // ?fast=1 auto-play of the current Chapter 2 quest (real actions through the same code paths; waits are skipped with the job clock)
+  async function autoCh2() {
+    const A = ch2.api, E = A.econ, S2 = () => D().ch2; const q = ch2.cur(); if (!q) return false; const id = q.id; const done = () => S2().done.includes(id);
+    const robotOf = (ty) => S2().robots.find(r => r.type === ty); const finishJob = async (j) => { if (!j) return; api.advance(Math.max(0, (j.end - nowMs()) / 1000) + 0.05); await frames(4); };
+    const topUp = (c) => { if (!c) return; S2().res.ore = Math.max(S2().res.ore, c.ore); S2().res.cry = Math.max(S2().res.cry, c.cry); };
+    if (regionOf(me()) !== 'hub') { await travel('hub'); await frames(3); }
+    if (q.kind === 'collect' || q.kind === 'deliver') { if (q.kind === 'deliver') { let e = S2().jobs.find(j => j.kind === 'expedition'); if (!e && !S2().expeditions) { await A.start(robotOf('geologist').id, 'expedition', 'e30'); e = S2().jobs.find(j => j.kind === 'expedition'); } await finishJob(e); }
+      api.teleport(depotP.x + Math.sin(depotP.yaw) * 3.0, depotP.z + Math.cos(depotP.yaw) * 3.0); await frames(3); holdLatchC2 = true; let f = 0; while (!done() && f++ < 120) { await frames(2); } holdLatchC2 = false; if (!done()) await A.collect(); }
+    else if (q.kind === 'send') { await A.start(robotOf('geologist').id, 'expedition', 'e30'); }
+    else if (q.kind === 'level') { let up = S2().jobs.find(j => j.kind === 'upgrade'); if (!up) { topUp(BASE_COST(S2().level + 1)); await A.start(robotOf('builder').id, 'upgrade'); up = S2().jobs.find(j => j.kind === 'upgrade'); } await finishJob(up); }
+    else if (q.kind === 'help') { if (!S2().jobs.some(j => j.kind === 'expedition')) await A.start(robotOf('geologist').id, 'expedition', 'e30'); await frames(3); A.tick(); let j = null; for (let k = 0; k < 40 && !(j = S2().jobs.find(j => j.help === 'asked')); k++) await frames(1); if (j) { const c = A.crew().find(c => c.id === j.rid); for (let k = 0; k < 60 && A.crew().find(c => c.id === j.rid).state !== 'site'; k++) await frames(1); const site = A.crew().find(c => c.id === j.rid); if (regionOf(site) !== regionOf(me())) { await travel(regionOf(site)); await frames(3); } api.teleport(site.x + 1.6, site.z); await frames(4); if (!done()) await A.helpResult('perfect'); } }
+    else if (q.kind === 'daily') { await A.claimLogin(); if (!S2().daily.tasks.some(x => x.done)) { const tk = S2().daily.tasks[0]; tk.prog = tk.need; tk.done = true; } await A.claimTask(S2().daily.tasks.findIndex(x => x.done && !x.claimed)); }
+    else if (q.kind === 'streak') { for (let k = 0; k < 7 && Math.max(S2().streak.count, S2().streak.best) < 7; k++) { api.shiftDay(1); await frames(1); } if (S2().robots.length < 3) await A.recruit('archaeologist'); A.tick(); }
+    else if (q.kind === 'home') { const h = A.home(); if (!h.inside) { api.teleport(h.outside.x, h.outside.z); await frames(3); await A.enterHome(); await frames(3); } const ci = A.home().consoleIn; ctrl.place(ci.x, ci.z, 0, false); await frames(3); ch2.actDown('c2:home:console'); await frames(3); openSheet(false); await A.exitHome(); await frames(3); }
+    else if (q.kind === 'storm') { const cp = A.storm().console; api.teleport(cp.x + 1.8, cp.z); await frames(3); if (!A.storm().on) { A.startStorm(); if (A.stepStorm) A.stepStorm(12); } let f = 0; while (!done() && f++ < 3000) { const st = A.storm(); const sp = st.spots.find(s => s.hp > 0); if (sp) { api.teleport(sp.x + 1.4, sp.z); await frames(2); holdLatchC2 = true; } await frames(2); } holdLatchC2 = false; }
+    else if (q.kind === 'museum') { if (!robotOf('archaeologist')) await A.recruit('archaeologist'); for (let k = 0; k < 6 && !S2().museum.length; k++) { const r = robotOf('archaeologist'); let j = S2().jobs.find(j => j.rid === r.id); if (!j) { await A.start(r.id, 'dig', 'd2'); j = S2().jobs.find(j => j.rid === r.id); } await finishJob(j); } }
+    let fr = 0; while (!done() && fr++ < 200) { A.tick(); await frames(2); } return done();
+  }
+  let holdLatchC2 = false; const BASE_COST = (l) => BASE[l] ? BASE[l].cost : null;
   const frames = (n = 2) => new Promise(r => { let k = 0; const f = () => (++k >= n ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); });
   const api = {
     boot, get ready() { return ready; }, t, lang, fast: FAST,
@@ -326,7 +360,8 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
     travel, interact() { const q = cur(); if (q && q.kind === 'install') holdLatch = true; else if (q && q.kind === 'puzzle') puzzle.show(); },
     openSheet, setTab(x) { tab = x; renderSheet(); },
     addPoints: (n, why) => store.addPoints(n, why).then(r => { refreshTop(); return r; }),
-    shiftDay(n) { dayOffset += n; store.roll(); syncCrystals(); refreshTop(); },
+    shiftDay(n) { dayOffset += n; store.roll(); syncCrystals(); refreshTop(); if (ch2.on) { ch2.api.econ.rollDay(); ch2.api.tick(); } },
+    ch2: ch2.api, advance(sec) { clock.off += sec * 1000; if (ch2.on) ch2.api.tick(); }, now: nowMs,
     crystals: () => ({ alive: crystals.alive.filter(Boolean).length, total: spots.length, spots: spots.map((s, i) => ({ ...s, alive: crystals.alive[i] })) }),
     fakeThrust() { lastThrust = time; }, popup: (o) => hud.popup(o, 60000), save: () => store.save(),
     // activity introspection for tests / screenshots
@@ -338,7 +373,7 @@ export function createGame({ scene, camera, ctrl, renderer, env, solids, setPowe
     crackSide: (i) => { const c = cracks[i]; return { ...c.fx.local(me().x, me().z), side: c.lastSide, air: c.air }; },
     // ?fast=1: every activity can be auto-completed (also the ⏩ AUTO button in the HUD)
     async auto() {
-      if (!FAST) return false; const q = cur(); if (!q) return false; const id = q.id;
+      if (!FAST) return false; const q = cur(); if (!q) return ch2.on ? autoCh2() : false; const id = q.id;
       const go = async (dest) => { if (regionOf(me()) !== dest) { await travel(dest === 'hub' ? 'hub' : dest); await frames(3); } };
       if (q.region && regionOf(me()) !== q.region) { if (regionOf(me()) !== 'hub') await travel('hub'); if (q.region !== 'hub') await travel(q.region); await frames(3); }
       if (q.kind === 'hop') { const c = cracks[q.crack]; if (!D().ch1.crossed.includes(q.crack)) { await api.hop(q.crack); } api.teleport(q.target.x, q.target.z); }

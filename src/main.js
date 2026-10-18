@@ -230,6 +230,9 @@ const setPower = (lv, red = 0) => { POW.level = lv; POW.red = red; };
 const applyPower = (t) => { const fl = POW.level < 1 ? (Math.random() < 0.06 ? 0.25 : 1) * (0.85 + 0.15 * Math.sin(t * 23)) : 1; const red = POW.level < 1 ? POW.red : 0; const k = POW.level >= 1 ? 1 : (red ? 0.05 + 0.2 * Math.pow(Math.abs(Math.sin(t * 2.2)), 6) : (0.03 + 0.82 * POW.level) * fl); /* power out: windows dark, slow red emergency pulse */
   for (const m of [mats.hull, mats.lattice]) { m.emissive.setRGB(1, 1 - 0.8 * red, 1 - 0.85 * red); m.emissiveIntensity = EMISSIVE_INTENSITY * k * (red ? 2.2 : 1); } LAMPK.value = red ? 0.02 : k; mats.beam.uniforms.uPow.value = k;
   coreLight.color.setRGB(1, 0.6 - 0.45 * POW.red, 0.25 - 0.2 * POW.red); coreLight.intensity = (55 + Math.sin(t * 2.3) * 8) * (POW.level >= 1 ? 1 : (0.35 + 0.65 * POW.level) * (POW.red ? 0.6 + 0.4 * Math.abs(Math.sin(t * 5.5)) : 1)); };
+// night (Chapter 2 finale): dims the sun-side lights toward a blue night; base emissives stay on so the base glows
+const NIGHT0 = { sun: sun.intensity, hemi: hemi.intensity, fill: fill.intensity, front: front.intensity, rim: rim.intensity, exp: renderer.toneMappingExposure, envI: null };
+const setNight = (k) => { k = Math.max(0, Math.min(1, k)); sun.intensity = NIGHT0.sun * (1 - 0.62 * k); hemi.intensity = NIGHT0.hemi * (1 - 0.5 * k); hemi.color.setRGB(0.70 - 0.25 * k, 0.71 - 0.18 * k, 0.74 + 0.0 * k); fill.intensity = NIGHT0.fill * (1 + 0.6 * k); front.intensity = NIGHT0.front * (1 - 0.9 * k); rim.intensity = NIGHT0.rim * (1 - 0.6 * k); renderer.toneMappingExposure = NIGHT0.exp * (1 - 0.08 * k); };
 const game = (!SHOT || Q.has('game')) ? (() => { const cs0 = canyonS(REGIONS.canyon.x, REGIONS.canyon.z); const L = REGIONS.launch, hl = Math.hypot(L.x, L.z); const lu = { x: L.x / hl, z: L.z / hl };
   const pad = sd(-9.5, -16), dsh = sd(-14, 12), st = PLAY_START; const dd = Math.hypot(st.x - dsh.x, st.z - dsh.z);
   const free = (p, r) => { const f = solids.nearestFree(p.x, p.z, r); return { x: f.x, z: f.z }; }; // markers / pickups never sit inside a rock or prop
@@ -269,7 +272,7 @@ const game = (!SHOT || Q.has('game')) ? (() => { const cs0 = canyonS(REGIONS.can
   };
   const places = Object.fromEntries(Object.entries({ canyonPad: cp(-18, -1), reactorConsole: sd(0, -10.6), dish: { x: dsh.x + (st.x - dsh.x) / dd * 7.2, z: dsh.z + (st.z - dsh.z) / dd * 7.2 }, launchPad: { x: L.x - L.x / hl * 34, z: L.z - L.z / hl * 34 }, ledge: { x: LEDGE.x, z: LEDGE.z }, homePad: pad, sprintStart }).map(([k, p]) => [k, free(p)]));
   window.__gamePlaces = places; window.__gameLayout = layout;
-  return createGame({ scene, camera, ctrl, renderer, env, solids, setPower, groundAt: solids.standAt, visAt: solids.visAt, Q, places, layout,
+  return createGame({ scene, camera, ctrl, renderer, env, solids, setPower, setNight, sd, mobile: MOBILE, catRoot, earthDir, groundAt: solids.standAt, visAt: solids.visAt, Q, places, layout,
     crystalSpots: [...[[-46, 4], [-36, -5], [-27, 4], [6, -4.5], [15, 4.5], [25, -3]].map(([ds, o]) => canyonPoint(cs0 - 18 + ds, o)), sd(-8, -31), sd(7, -27), sd(-20, -6), sd(17, -15)].map(p => free(p)) }); })() : null;
 const prints = makeFootprints(scene, groundAt);
 // soft contact (blob) shadows under the cat and the builder robot: 1 instanced draw, radial alpha, no depth write
@@ -325,7 +328,8 @@ window.MK = { setPower, POW, THREE, composer, bloom, camera, scene, sky, rendere
     sm.needsUpdate = true; info.reset(); renderer.render(scene, camera); const withShadow = { calls: info.render.calls, triangles: info.render.triangles };
     sm.autoUpdate = true; info.reset(); composer.render(0); const frameAll = { calls: info.render.calls, triangles: info.render.triangles };
     info.autoReset = true;
-    culler.update(camera, true); const per = []; scene.traverse(o => { if ((o.isMesh || o.isPoints) && o.visible && o.geometry) { const g = o.geometry; const n = (g.index ? g.index.count : g.attributes.position.count) / (o.isPoints ? 1 : 3) * (o.isInstancedMesh ? o.count : 1); per.push([o.name || o.type, Math.round(n)]); } });
+    culler.update(camera, true); const per = []; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); const shown = (o) => { for (let q = o; q; q = q.parent) if (!q.visible) return false; return o.layers.test(camera.layers) && (!o.frustumCulled || fr.intersectsObject(o)); };
+    scene.traverse(o => { if ((o.isMesh || o.isPoints) && o.geometry && shown(o)) { const g = o.geometry; const n = (g.index ? g.index.count : g.attributes.position.count) / (o.isPoints ? 1 : 3) * (o.isInstancedMesh ? o.count : 1); per.push([o.name || o.type, Math.round(n)]); } });
     per.sort((x, y) => y[1] - x[1]);
     return { culler: culler.stats(), rocks: rocks.counts, mainPass: main, mainPlusShadowPass: withShadow, wholeFrameInclPost: frameAll, top: per.slice(0, +(window.TOPN || 14)) };
   },
