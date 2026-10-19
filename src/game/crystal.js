@@ -75,9 +75,9 @@ const glowMat = () => new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }
     void main(){ float r = length(vP); if (r > 1.0) discard; float pulse = 0.75 + 0.25 * sin(uTime * 2.4 + vSeed); vec3 add; float occ;
       // premultiplied blend (One, OneMinusSrcAlpha): the halo both adds blue light and dims what is behind it, so it reads as a deep blue glow even on
       // bright regolith (pure additive blue on a light background turns lavender)
-      if (vK < 0.5) { vec2 e = vec2(vP.x * 1.45, (vP.y - 0.08) * 1.0); float rr = dot(e, e); float h = exp(-rr * 3.6) * 2.4 * pulse; float wr = smoothstep(0.06, 0.2, rr); // halo ringing the silhouette (no tint over the crystal body)
+      if (vK < 0.5) { vec2 e = vec2(vP.x, vP.y - 0.08) * 1.15; float rr = dot(e, e); float h = exp(-rr * 3.6) * 2.4 * pulse; float wr = smoothstep(0.06, 0.2, rr); // halo ringing the silhouette (no tint over the crystal body)
         add = vec3(0.04, 0.5, 1.8) * h * wr * (1.0 - smoothstep(0.3, 0.85, rr)); occ = min(0.75, h * 0.5 * wr);
-        vec2 b = vec2(vP.x / 0.62, (vP.y + 0.5) / 0.13); add += vec3(0.2, 0.85, 2.4) * exp(-dot(b, b)) * 1.2 * pulse;
+        vec2 b = vec2(vP.x / 0.62, (vP.y + 0.5) / 0.13); add += vec3(0.2, 0.85, 2.4) * exp(-dot(b, b)) * 1.2 * pulse; add += vec3(0.85, 1.35, 2.0) * exp(-rr * 32.0) * 0.45 * pulse; occ = max(occ, exp(-rr * 32.0) * 0.12); // v57 round white-hot core
         vec2 sp = vec2(vP.x - 0.18, vP.y + 0.42) * 6.0; float tw = pow(0.5 + 0.5 * sin(uTime * 3.7 + vSeed * 5.0), 3.0); add += vec3(0.6, 1.4, 2.6) * (exp(-abs(sp.x) * 9.0) * exp(-abs(sp.y) * 1.3) + exp(-abs(sp.y) * 9.0) * exp(-abs(sp.x) * 1.3)) * 0.45 * tw; } // twinkling sparkle at the base // white-cyan flare at the base
       else { float a = (pow(1.0 - r, 3.0) * 1.1 + smoothstep(0.08, 0.0, abs(r - fract(uTime * 0.45 + vSeed))) * 0.16 * (1.0 - r)) * pulse;
         vec3 col = mix(vec3(0.02, 0.2, 1.2), vec3(0.15, 0.7, 1.9), pow(1.0 - r, 6.0)); add = col * a * a * 3.4; occ = 0.0; } // pooled light on the ground
@@ -102,12 +102,12 @@ export function makeCrystalField(scene, spots, { scale = 1, name = 'game_crystal
 }
 
 // static decor clusters (canyon / echo world crystals): same look, one shard + one glow instanced draw for the whole list
-export function makeStaticCrystals(scene, list, name, k = 1) {
+export function makeStaticCrystals(scene, list, name, k = 1, glowK = 1) {
   const n = list.length; const sgeo = clusterGeometry().clone(); sgeo.setAttribute('aState', new THREE.InstancedBufferAttribute(new Float32Array(n), 1));
   const ggeo = glowGeometry().clone(); ggeo.setAttribute('aState', new THREE.InstancedBufferAttribute(new Float32Array(n), 1));
   const im = new THREE.InstancedMesh(sgeo, shardMat(), n), gl = new THREE.InstancedMesh(ggeo, glowMat(), n); im.name = name; gl.name = name + '_glow'; gl.renderOrder = 2; im.castShadow = false;
   const M = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
-  list.forEach((it, i) => { q.setFromEuler(e.set(it.tilt * 0.6, it.ph, it.tilt * 0.3)); M.compose(v.set(it.x, it.y + 0.25 * it.s, it.z), q, sc.setScalar(it.s * k)); im.setMatrixAt(i, M); q.identity(); M.compose(v, q, sc); gl.setMatrixAt(i, M); });
+  list.forEach((it, i) => { q.setFromEuler(e.set(it.tilt * 0.6, it.ph, it.tilt * 0.3)); M.compose(v.set(it.x, it.y + 0.25 * it.s, it.z), q, sc.setScalar(it.s * k)); im.setMatrixAt(i, M); q.identity(); M.compose(v, q, sc.multiplyScalar(glowK)); gl.setMatrixAt(i, M); });
   im.computeBoundingSphere(); gl.computeBoundingSphere(); gl.boundingSphere.radius += 4 * k * 2.5; im.add(gl); gl.matrixAutoUpdate = false; gl.matrix.identity(); gl.matrixWorldAutoUpdate = true;
   scene.add(im); return im;
 }

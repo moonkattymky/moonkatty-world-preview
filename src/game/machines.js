@@ -13,6 +13,10 @@ const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 const cyl = (rt, rb, h, s = 10, open = false, t0 = 0, tl = Math.PI * 2) => new THREE.CylinderGeometry(rt, rb, h, s, 1, open, t0, tl);
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _q = new THREE.Quaternion();
 const rod = (a, b, r, hex, s = 6, e = 0) => { _a.set(...a); _b.set(...b); const d = _b.clone().sub(_a); const g = cyl(r, r, d.length(), s); _q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()); g.applyQuaternion(_q); const m = _a.clone().add(_b).multiplyScalar(0.5); g.translate(m.x, m.y, m.z); return col(g, hex, e); };
+const truss = (a, b, w, d, n, r) => { const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), ax = B.clone().sub(A), up = new THREE.Vector3(0, 1, 0); const side = new THREE.Vector3(1, 0, 0), nrm = ax.clone().normalize().cross(side).normalize(); const out = []; const P = (u, i, j) => A.clone().addScaledVector(ax, u).addScaledVector(side, i * w / 2).addScaledVector(nrm, j * d / 2).toArray();
+  for (const [i, j] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) out.push(rod(P(0, i, j), P(1, i, j), r, C.gold, 5));
+  for (let k = 0; k < n; k++) { const u0 = k / n, u1 = (k + 1) / n; for (const i of [-1, 1]) out.push(rod(P(u0, i, k % 2 ? -1 : 1), P(u1, i, k % 2 ? 1 : -1), r * 0.6, C.dgold, 4)); for (const j of [-1, 1]) out.push(rod(P(u0, k % 2 ? -1 : 1, j), P(u1, k % 2 ? 1 : -1, j), r * 0.6, C.dgold, 4)); }
+  void up; return out; };
 const crystal = (x, y, z, h, w, rz, rx, hex, e) => col(new THREE.OctahedronGeometry(1, 0).scale(w, h, w).translate(0, h * 0.7, 0).rotateZ(rz).rotateX(rx).translate(x, y, z), hex, e);
 
 // ---------------- cargo rover: ivory + gold, 6 chunky wheels, open cargo bed of glowing crystals, headlights ----------------
@@ -72,8 +76,8 @@ export function drillHi() { const L = []; const HZ = DRILL_HEAD.z;
   L.push(col(box(1.9, 0.06, 1.9).translate(0, 1.36, -1.45), C.metal), col(cyl(0.6, 0.66, 0.24, 14).translate(0, 1.5, -1.2), C.gold), col(cyl(0.48, 0.5, 0.3, 12).translate(0, 1.77, -1.2), C.iv));
   // articulated arm: twin gold lower boom up to the elbow, upper boom out over the rear, hydraulic cylinders, joints
   const SH = [0, 1.9, -1.2], EL = [0, 3.55, -1.45], WR = [0, 2.95, HZ];
-  for (const s of [-1, 1]) { L.push(rod([s * 0.22, SH[1], SH[2]], [s * 0.22, EL[1], EL[2]], 0.13, C.gold, 8), rod([s * 0.2, EL[1], EL[2]], [s * 0.2, WR[1] + 0.2, WR[2]], 0.1, C.gold, 8)); }
-  for (let k = 1; k < 3; k++) { const u = k / 3; L.push(rod([-0.22, SH[1] + (EL[1] - SH[1]) * u, SH[2] + (EL[2] - SH[2]) * u], [0.22, SH[1] + (EL[1] - SH[1]) * u, SH[2] + (EL[2] - SH[2]) * u], 0.04, C.dgold, 4)); }
+  L.push(...truss(SH, EL, 0.36, 0.3, 5, 0.045), ...truss([0, EL[1], EL[2]], [0, WR[1] + 0.2, WR[2]], 0.3, 0.26, 4, 0.038)); // v57 lattice/truss booms (concept): 4 gold chords + zig-zag braces
+
   L.push(rod([0, 1.6, -0.6], [0, 2.75, -1.3], 0.09, C.metal, 6), rod([0, 2.1, -0.9], [0, 2.75, -1.3], 0.13, C.iv2, 6));   // lift cylinder
   L.push(rod([0, 3.45, -1.3], [0, 3.2, -2.15], 0.07, C.metal, 6), rod([0, 3.45, -1.3], [0, 3.38, -1.75], 0.1, C.iv2, 6));     // reach cylinder
   for (const [y, z, r] of [[SH[1], SH[2], 0.2], [EL[1], EL[2], 0.2], [WR[1] + 0.2, WR[2], 0.17]]) L.push(col(cyl(r, r, 0.62, 10).rotateZ(Math.PI / 2).translate(0, y, z), C.dgold));
