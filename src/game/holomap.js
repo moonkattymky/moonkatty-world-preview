@@ -3,6 +3,7 @@
 // Shows: holo terrain (cyan contour edges, scanlines, flicker, translucency), miniature base, crystals, holo pins with icons +
 // labels, orange cat marker (position + heading), quest target (yellow beam + dotted gold path), robots with progress rings,
 // fog of war (persisted, dim + flickering), undiscovered caches as hints, bottom quest card with GO, zoom / rotate / close.
+import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
 import * as THREE from 'three';
 
 const FOG_N = 32;
@@ -22,13 +23,16 @@ body.mk-mapopen #mk-root,body.mk-mapopen #joy,body.mk-mapopen #jump,body.mk-mapo
 .mkm-pin .i{font-size:20px;line-height:1;filter:drop-shadow(0 0 5px rgba(110,220,255,.95))}.mkm-pin .i svg{width:30px;height:30px;display:block}.mkm-pin.h .i svg{width:16px;height:16px}
 .mkm-pin:after{content:'';position:absolute;left:50%;bottom:-7px;width:2px;height:7px;background:rgba(120,225,255,.9);transform:translateX(-50%)}
 .mkm-pin.q{border-color:#ffd25a;box-shadow:0 0 14px rgba(255,200,80,.8);color:#fff3cf}
+.mkm-pin.f{opacity:.78;border-style:dashed}
+#mkm-stalks{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.mkm-pin:after{display:none}
 .mkm-pin.h{opacity:.55;border-style:dashed;min-width:0;padding:3px 6px}
 .mkm-pin.h .i{font-size:14px}
 .mkm-bot{position:absolute;left:0;top:0;width:30px;height:30px;transform:translate(-50%,-50%)}
 .mkm-bot svg{position:absolute;inset:0}
 .mkm-bot b{position:absolute;inset:5px;border-radius:50%;background:radial-gradient(circle,#123a66,#081a36);display:flex;align-items:center;justify-content:center;font-size:12px}
 .mkm-cat{position:absolute;left:0;top:0;transform:translate(-50%,-160%);font-size:10px;font-weight:900;color:#ffb35a;text-shadow:0 0 6px #000;white-space:nowrap}
-#mkm-card{position:absolute;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:center;gap:14px;padding:11px 12px 11px 18px;border-radius:8px;border:1.5px solid rgba(110,220,255,.9);background:linear-gradient(180deg,rgba(12,30,60,.85),rgba(5,14,34,.9));box-shadow:0 0 0 2px rgba(200,145,42,.55),0 0 18px rgba(80,200,255,.5);color:#e6fbff;max-width:92vw}
+#mkm-card{position:absolute;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:center;gap:16px;padding:10px 12px 10px 20px;border-radius:6px;border:1.5px solid #d9a640;background:linear-gradient(180deg,rgba(14,22,44,.82),rgba(4,9,22,.9));backdrop-filter:blur(4px);box-shadow:0 0 0 1px rgba(255,220,140,.25) inset,0 0 16px rgba(217,166,64,.45),0 6px 24px rgba(0,0,0,.6);color:#e6fbff;max-width:92vw}
 #mkm-card .t{font-size:15px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(52vw,420px);color:#dff7ff;text-shadow:0 0 8px rgba(110,220,255,.7)}
 #mkm-card .t small{display:block;font-size:10px;letter-spacing:.04em;color:#9fe6ff;font-weight:600;text-transform:none;margin-top:3px;overflow:hidden;text-overflow:ellipsis;opacity:.8}
 #mkm-card .t b{color:#9fe6ff;font-weight:700;margin-right:.35em}
@@ -54,17 +58,18 @@ void main(){
   vec3 rock = mix(vec3(0.30, 0.29, 0.30), vec3(0.55, 0.52, 0.48), clamp(vH * uHK * 0.8 + 0.5, 0.0, 1.0)) * shade;
   float ct = abs(fract(vH * uHK * 9.0) - 0.5); float cl = 1.0 - smoothstep(0.0, 0.06 + fwidth(vH * uHK * 9.0) * 1.5, ct);
   float ridge = smoothstep(0.35, 0.85, sl);
-  float scan = 0.95 + 0.05 * sin(gl_FragCoord.y * 1.6 + uT * 6.0);
+  float scan = 0.93 + 0.07 * sin(gl_FragCoord.y * 1.4 + uT * 6.0);
   float flick = 0.96 + 0.04 * sin(uT * 23.0);
   vec3 cyan = vec3(0.25, 0.85, 1.0);
   float tx = vn(vL.xz * 1.6) * 0.5 + vn(vL.xz * 4.5) * 0.32 + vn(vL.xz * 9.0) * 0.18; rock *= 0.62 + 0.7 * tx;
-  vec3 col = rock + cyan * (cl * 0.12 + ridge * 0.16 + 0.025);
+  float fres = pow(1.0 - abs(dot(n, normalize(cameraPosition - vW))), 3.0);
+  vec3 col = mix(rock, rock * vec3(0.55, 0.78, 1.1), 0.7) * 1.12 + cyan * (cl * 0.24 + ridge * 0.16 + fres * 0.4 + 0.025);
   float edge = smoothstep(0.82, 1.0, m); col += cyan * edge * 1.3;
   float grid = (1.0 - smoothstep(0.0, 0.03, abs(fract(vL.x / uR * 6.0) - 0.5) - 0.47)) + (1.0 - smoothstep(0.0, 0.03, abs(fract(vL.z / uR * 6.0) - 0.5) - 0.47));
-  col += cyan * grid * 0.025;
+  col += cyan * grid * 0.07;
   float unk = 1.0 - fog; float noise = hash(floor(uv * 90.0) + floor(uT * 9.0));
   col = mix(col, col * 0.3 + vec3(0.03, 0.12, 0.26) * (0.6 + 0.6 * tx) + cyan * (0.06 * noise + cl * 0.22 + ridge * 0.18), unk * 0.85);
-  float a = (0.97 - unk * 0.3) * scan * flick * uOpen;
+  float a = (0.84 + fres * 0.16 - unk * 0.25) * scan * flick * uOpen;
   gl_FragColor = vec4(col * scan * flick, a);
 }`;
 
@@ -74,7 +79,7 @@ const PQ = (() => { const q = new URLSearchParams(location.search).get('q'); ret
 export function makeHoloMap({ renderer, t, onGo, world }) {
   const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   const ui = document.createElement('div'); ui.id = 'mk-map-ui';
-  ui.innerHTML = `<canvas id="mk-map-cv"></canvas><div id="mkm-layer"></div><div id="mkm-title"></div><button id="mkm-x" class="pe" aria-label="close">×</button><div id="mkm-zoom" class="pe"><button data-z="1">+</button><button data-z="-1">−</button></div><div id="mkm-card" class="pe"><div class="t"></div><button id="mkm-go"></button></div>`;
+  ui.innerHTML = `<canvas id="mk-map-cv"></canvas><svg id="mkm-stalks"></svg><div id="mkm-layer"></div><div id="mkm-title"></div><button id="mkm-x" class="pe" aria-label="close">×</button><div id="mkm-zoom" class="pe"><button data-z="1">+</button><button data-z="-1">−</button></div><div id="mkm-card" class="pe"><div class="t"></div><button id="mkm-go"></button></div>`;
   document.body.appendChild(ui); const $ = (s) => ui.querySelector(s); const layer = $('#mkm-layer');
   for (const ev of ['pointerdown', 'touchstart', 'wheel', 'keydown']) ui.addEventListener(ev, e => e.stopPropagation(), { passive: true });
 
@@ -94,10 +99,38 @@ export function makeHoloMap({ renderer, t, onGo, world }) {
   let terr = null, built = null;
   // holo rim: glowing vertical ribbon around the superellipse edge + base plate glow
   const rimPts = []; for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2; const c = Math.cos(a), s = Math.sin(a); const k = Math.pow(Math.pow(Math.abs(c), 4) + Math.pow(Math.abs(s), 4), -0.25); rimPts.push(c * k * W, s * k * W); }
-  const rimGeo = (() => { const P = [], A = []; for (let i = 0; i < rimPts.length / 2; i++) { const x = rimPts[i * 2], z = rimPts[i * 2 + 1]; const top = 0.5 + 2.8 * Math.pow(Math.max(0, -z / W), 1.4); P.push(x, -0.6, z, x, top, z); A.push(0, 1); } const idx = []; for (let i = 0; i < rimPts.length / 2 - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('aV', new THREE.Float32BufferAttribute(A, 1)); g.setIndex(idx); return g; })();
+  const rimGeo = (() => { const P = [], A = []; for (let i = 0; i < rimPts.length / 2; i++) { const x = rimPts[i * 2], z = rimPts[i * 2 + 1]; const top = 0.35; P.push(x, -0.75, z, x, top, z); A.push(0, 1); } const idx = []; for (let i = 0; i < rimPts.length / 2 - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('aV', new THREE.Float32BufferAttribute(A, 1)); g.setIndex(idx); return g; })();
   const rim = new THREE.Mesh(rimGeo, new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, vertexShader: `attribute float aV; varying float vV; void main(){ vV = aV; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float uT; uniform float uOpen; varying float vV; void main(){ float a = 0.16 + (1.0 - vV) * 0.22 + exp(-vV * 30.0) * 0.6 + smoothstep(0.93, 1.0, vV) * 0.9; float sc = 0.8 + 0.2 * sin(gl_FragCoord.y * 1.4 - uT * 5.0); gl_FragColor = vec4(vec3(0.25, 0.8, 1.0) * a * sc * uOpen, 1.0); }` }));
   board.add(rim);
+  { // v52b glowing cyan glass slab with a bevelled edge under the terrain
+    const sh = new THREE.Shape(); for (let i = 0; i < rimPts.length / 2; i++) { const x = rimPts[i * 2] * 1.03, z = rimPts[i * 2 + 1] * 1.03; i ? sh.lineTo(x, -z) : sh.moveTo(x, -z); }
+    const sg = new THREE.ExtrudeGeometry(sh, { depth: 0.32, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.16, bevelSegments: 2, curveSegments: 4 }).rotateX(-Math.PI / 2).translate(0, -1.2, 0);
+    const slab = new THREE.Mesh(sg, new THREE.MeshStandardMaterial({ color: '#06263f', emissive: '#0a4f78', emissiveIntensity: 0.9, roughness: 0.15, metalness: 0.2, transparent: true, opacity: 0.62, depthWrite: false })); slab.renderOrder = 0; board.add(slab);
+    const eg = new THREE.LineSegments(new THREE.EdgesGeometry(sg, 25), new THREE.LineBasicMaterial({ color: new THREE.Color(0.4, 1.3, 2.0), toneMapped: false, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })); board.add(eg);
+    // vertical glass panels along the back arc
+    const P = [], UV = [], idx = []; const NPAN = 9; for (let k = 0; k < NPAN; k++) { const a0 = Math.PI * (1.08 + k * 0.84 / NPAN), a1 = a0 + Math.PI * 0.84 / NPAN * 0.96; const pt = (a) => { const c = Math.cos(a), s_ = Math.sin(a); const kk = Math.pow(Math.pow(Math.abs(c), 4) + Math.pow(Math.abs(s_), 4), -0.25) * W * 1.04; return [c * kk, s_ * kk]; }; const [x0, z0] = pt(a0), [x1, z1] = pt(a1); const hgt = 2.6 + 0.9 * Math.sin(k / (NPAN - 1) * Math.PI); const b = P.length / 3; P.push(x0, -0.8, z0, x1, -0.8, z1, x1, hgt, z1, x0, hgt, z0); UV.push(0, 0, 1, 0, 1, 1, 0, 1); idx.push(b, b + 1, b + 2, b, b + 2, b + 3); }
+    const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); pg.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); pg.setIndex(idx);
+    const pan = new THREE.Mesh(pg, new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, vertexShader: `varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float uT; uniform float uOpen; varying vec2 vU; void main(){ vec2 e = min(vU, 1.0 - vU); float edge = 1.0 - smoothstep(0.0, 0.025, min(e.x * 0.6, e.y)); float top = smoothstep(0.96, 1.0, vU.y); float grid = (1.0 - smoothstep(0.0, 0.02, abs(fract(vU.y * 9.0) - 0.5) - 0.47)) * 0.25; float sc = 0.85 + 0.15 * sin(gl_FragCoord.y * 1.3 - uT * 4.0); float a = (0.07 + (1.0 - vU.y) * 0.06 + edge * 0.55 + top * 0.5 + grid * 0.12) * sc; gl_FragColor = vec4(vec3(0.25, 0.8, 1.0) * a * uOpen, 1.0); }` })); pan.renderOrder = 5; board.add(pan); }
   const minis = new THREE.Group(); board.add(minis);
+  // v52b map-only decor (concept): crystal clusters in field areas, green crystal pillars, dark cave openings, glowing impact crater + trail
+  const decor = new THREE.Group(); board.add(decor);
+  const dCry = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0).scale(0.45, 1.25, 0.45), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 0.8, 1.7), toneMapped: false, transparent: true, opacity: 0.9 }), 80); dCry.count = 0; decor.add(dCry);
+  const dGrn = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.1, 0.13, 1, 6).translate(0, 0.5, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 1.5, 0.9), toneMapped: false, transparent: true, opacity: 0.85 }), 16); dGrn.count = 0; decor.add(dGrn);
+  const dCave = new THREE.InstancedMesh(new THREE.CircleGeometry(0.75, 18, 0, Math.PI).scale(1, 1.15, 1), new THREE.MeshBasicMaterial({ color: '#02050c' }), 4); dCave.count = 0; decor.add(dCave);
+  const dCaveE = new THREE.InstancedMesh(new THREE.RingGeometry(0.75, 0.83, 18, 1, 0, Math.PI).scale(1, 1.15, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 1.0, 1.6), toneMapped: false, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }), 4); dCaveE.count = 0; decor.add(dCaveE);
+  const crater = new THREE.Group(); decor.add(crater);
+  { const bowl = new THREE.Mesh(new THREE.CircleGeometry(1.25, 32).rotateX(-Math.PI / 2).scale(1, 1, 0.84), new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, vertexShader: `varying vec2 vP; void main(){ vP = position.xz / 1.25; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float uT; uniform float uOpen; varying vec2 vP; void main(){ float r = length(vP); vec3 c = mix(vec3(0.03, 0.015, 0.01), vec3(0.35, 0.24, 0.16), smoothstep(0.35, 0.95, r)); c += vec3(1.4, 0.45, 0.06) * (1.0 - smoothstep(0.0, 0.55, length(vP - vec2(0.25, -0.1)))) * (0.75 + 0.25 * sin(uT * 3.0)); gl_FragColor = vec4(c, (1.0 - smoothstep(0.92, 1.0, r)) * uOpen); }` })); bowl.position.y = 0.06; bowl.renderOrder = 4; crater.add(bowl);
+    const rimM = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.16, 6, 28).rotateX(Math.PI / 2).scale(1, 1, 0.84), new THREE.MeshStandardMaterial({ color: '#7a6450', roughness: 0.9, emissive: '#2a1406' })); crater.add(rimM);
+    const glow = new THREE.Mesh(new THREE.CircleGeometry(1.0, 24).rotateX(-Math.PI / 2).scale(1.1, 1, 0.9), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.55, 0.1), toneMapped: false, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })); glow.position.y = -0.18; crater.add(glow);
+    const trail = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 3.2).translate(0, 1.6, 0), new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, vertexShader: `varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float uT; uniform float uOpen; varying vec2 vU; void main(){ float w = 1.0 - abs(vU.x - 0.5) * 2.0; float a = pow(w, 2.0) * pow(1.0 - vU.y, 1.6) * (0.8 + 0.2 * sin(uT * 9.0 - vU.y * 20.0)); gl_FragColor = vec4(mix(vec3(2.2, 1.3, 0.35), vec3(1.6, 0.35, 0.05), vU.y) * a * uOpen, 1.0); }` })); trail.position.set(0.5, 0.1, 0); trail.rotation.set(0, -0.6, -0.55); crater.add(trail); }
+  const DECOR = { field: [-6.2, -3.2], crater: [5.0, 3.4], caves: [[-4.6, -7.9], [-1.8, -8.8]], clusters: [[-6.2, -3.2, 14, 1.5], [-3.6, 1.9, 6, 0.8], [-7.2, 1.2, 5, 0.7], [2.4, -6.0, 5, 0.8], [6.8, -2.2, 6, 0.9], [-0.6, 4.6, 4, 0.6]] };
+  const hAtM = (mx, mz) => { const [x, z] = toWorld(mx, mz); return hMap(data.groundAt(x, z)); };
+  function buildDecor() { const M = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(); let n = 0; const rnd = (i) => { const x = Math.sin(i * 127.1 + 31.7) * 43758.5453; return x - Math.floor(x); };
+    for (const [cx_, cz_, cnt, rad] of DECOR.clusters) for (let i = 0; i < cnt && n < 80; i++) { const a = rnd(n) * 6.283, r = Math.sqrt(rnd(n + 7)) * rad; const x = cx_ + Math.cos(a) * r, z = cz_ + Math.sin(a) * r; const s_ = 0.16 + rnd(n + 3) * 0.22; e.set((rnd(n + 1) - 0.5) * 0.7, a, (rnd(n + 2) - 0.5) * 0.7); M.compose(v.set(x, hAtM(x, z) + s_ * 0.8, z), q.setFromEuler(e), sc.set(s_, s_, s_)); dCry.setMatrixAt(n++, M); }
+    dCry.count = n; dCry.instanceMatrix.needsUpdate = true; let g = 0, c = 0;
+    for (const [x0, z0] of DECOR.caves) { const y = hAtM(x0, z0); M.compose(v.set(x0, y + 0.05, z0 + 0.6), q.identity(), sc.set(1, 1, 1)); dCave.setMatrixAt(c, M); M.compose(v.set(x0, y + 0.05, z0 + 0.61), q.identity(), sc.set(1, 1, 1)); dCaveE.setMatrixAt(c++, M); for (let k = 0; k < 4; k++) { const x = x0 - 0.9 + k * 0.6 + (rnd(g) - 0.5) * 0.2, z = z0 + 0.9 + rnd(g + 5) * 0.4; const hh = 0.5 + rnd(g + 9) * 0.8; M.compose(v.set(x, hAtM(x, z), z), q.setFromEuler(e.set(0, rnd(g) * 3, (rnd(g + 2) - 0.5) * 0.25)), sc.set(1, hh, 1)); dGrn.setMatrixAt(g++, M); } }
+    dCave.count = dCaveE.count = c; dGrn.count = g; for (const m of [dCave, dCaveE, dGrn]) m.instanceMatrix.needsUpdate = true;
+    const [kx, kz] = DECOR.crater; crater.position.set(kx, hAtM(kx, kz) + 0.05, kz); }
   const ivory = new THREE.MeshStandardMaterial({ color: '#efe6d2', roughness: 0.5, metalness: 0.1, emissive: '#3a3020' }), gold = new THREE.MeshStandardMaterial({ color: '#d9a640', roughness: 0.35, metalness: 0.8, emissive: '#3a2400' });
   const crysM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.45, 0.85, 1.6), toneMapped: false });
   const crysI = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0).scale(0.5, 1.3, 0.5), crysM, 64); crysI.count = 0; board.add(crysI);
@@ -108,30 +141,36 @@ export function makeHoloMap({ renderer, t, onGo, world }) {
   const catM = new THREE.Group(); { const sh = new THREE.Shape(); sh.moveTo(0, 0.55); sh.lineTo(0.38, -0.35); sh.lineTo(0, -0.15); sh.lineTo(-0.38, -0.35); sh.closePath(); const g = new THREE.ExtrudeGeometry(sh, { depth: 0.08, bevelEnabled: false }).rotateX(-Math.PI / 2); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.7, 0.15), toneMapped: false })); catM.add(m); { /* v52 mini cat token (concept): ivory suit body, orange head + ears, glass helmet */ const or = new THREE.MeshStandardMaterial({ color: '#f08a2c', roughness: 0.6, emissive: '#5a2006' }), su = new THREE.MeshStandardMaterial({ color: '#f1e8d6', roughness: 0.6, emissive: '#2a2418' }); const bd = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8).scale(1, 1.25, 0.9), su); bd.position.y = 0.26; catM.add(bd); const hd = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8), or); hd.position.y = 0.56; catM.add(hd); for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 6), or); e.position.set(sx * 0.08, 0.7, 0); catM.add(e); } const hl = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.9, 1.2), transparent: true, opacity: 0.22, depthWrite: false })); hl.position.y = 0.58; catM.add(hl); } const d = new THREE.Mesh(new THREE.CircleGeometry(0.7, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.9, 0.4, 0.05), transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false })); d.position.y = -0.02; catM.add(d); } board.add(catM);
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.3, 3.2, 16, 1, true).translate(0, 1.6, 0), new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, vertexShader: `varying float vY; void main(){ vY = position.y / 3.2; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float uT; uniform float uOpen; varying float vY; void main(){ float a = (1.0 - vY) * (0.75 + 0.25 * sin(uT * 6.0 - vY * 12.0)); gl_FragColor = vec4(vec3(2.0, 1.25, 0.3) * a * uOpen, 1.0); }` })); board.add(beam);
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.55, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 1.05, 0.3), toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); board.add(ring);
-  let tube = null; const tubeM = new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexShader: `varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float uT; uniform float uOpen; varying vec2 vU; void main(){ float d = fract(vU.x * 26.0 - uT * 1.6); float dash = smoothstep(0.0, 0.15, d) * (1.0 - smoothstep(0.45, 0.6, d)); gl_FragColor = vec4(vec3(1.9, 1.25, 0.35) * (0.35 + 1.1 * dash) * uOpen, 1.0); }` });
+  let tube = null; const tubeM = new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, vertexShader: `varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float uT; uniform float uOpen; varying vec2 vU; void main(){ float d = fract(vU.x * 26.0 - uT * 1.6); float dash = smoothstep(0.0, 0.15, d) * (1.0 - smoothstep(0.45, 0.6, d)); gl_FragColor = vec4(vec3(1.9, 1.25, 0.35) * (0.35 + 1.1 * dash) * uOpen, 1.0); }` });
   const NP = 60; const pathG = new THREE.BufferGeometry(); pathG.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NP * 3), 3));
   const path = new THREE.Points(pathG, new THREE.PointsMaterial({ color: new THREE.Color(1.6, 1.15, 0.35), size: 0.22, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })); board.add(path);
   // the wrist device: fluffy paw + gold bracelet with a cyan screen, projection cone toward the map
   const wrist = new THREE.Group(); scene.add(cam); cam.add(wrist);
-  { // v52 paw (concept): fluffy cream paw with toe pads, white suit sleeve with gold rings, ornate gold watch with a navy/cyan face
+  { // v52b OPEN paw (concept): forearm from bottom-left along +y, palm + spread fingers up toward the map, white sleeve w/ gold rings, big gold watch (face toward camera, +z) whose cyan screen projects the map
     const fluff = (g, amp = 0.05) => { const P = g.attributes.position, v = new THREE.Vector3(); for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); const n = Math.sin(v.x * 23.1 + v.y * 17.3) * Math.sin(v.z * 19.7 - v.y * 11.1) * 0.5 + Math.sin(v.x * 41 + v.z * 37) * 0.5; v.multiplyScalar(1 + amp * n); P.setXYZ(i, v.x, v.y, v.z); } g.computeVertexNormals(); return g; };
-    const fur = new THREE.MeshStandardMaterial({ color: '#f4ead6', roughness: 1, emissive: '#2a241a' }), suit = new THREE.MeshStandardMaterial({ color: '#ebe3d2', roughness: 0.65, emissive: '#1e1a14' });
-    const au = new THREE.MeshStandardMaterial({ color: '#e5b04a', roughness: 0.28, metalness: 0.55, emissive: '#4a3008' }), navy = new THREE.MeshStandardMaterial({ color: '#0b1d40', roughness: 0.3, metalness: 0.3, emissive: '#06122a' });
-    const add = (g, m, x, y, z) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); wrist.add(o); return o; };
-    add(fluff(new THREE.SphereGeometry(1, 26, 18).scale(1.05, 0.78, 1.15)), fur, 0, 0.18, -1.0);
-    for (let k = 0; k < 4; k++) { const x = -0.66 + k * 0.44, up = (k === 1 || k === 2) ? 0.12 : 0; add(fluff(new THREE.SphereGeometry(0.37, 18, 12).scale(1, 0.95, 1.15), 0.06), fur, x, 0.42 + up, -1.92 + Math.abs(x) * 0.25); }
-    add(fluff(new THREE.SphereGeometry(0.33, 16, 10).scale(1, 0.9, 1.2), 0.06), fur, 0.98, 0.05, -1.15);
-    add(fluff(new THREE.SphereGeometry(1, 22, 14).scale(1.02, 0.9, 0.62), 0.07), fur, 0, 0.02, -0.05);
-    add(new THREE.CylinderGeometry(0.98, 1.08, 3.6, 24, 1, true).rotateX(Math.PI / 2), suit, 0, -0.05, 2.15);
-    for (const z of [1.25, 2.35]) { add(new THREE.TorusGeometry(1.02, 0.07, 8, 32), au, 0, -0.05, z); }
-    add(new THREE.CylinderGeometry(0.93, 0.93, 0.55, 28, 1, true).rotateX(Math.PI / 2), au, 0, -0.03, 0.42);
-    add(new THREE.CylinderGeometry(0.66, 0.7, 0.3, 32), au, 0, 0.9, 0.42); add(new THREE.TorusGeometry(0.6, 0.085, 10, 36).rotateX(Math.PI / 2), au, 0, 1.06, 0.42);
-    add(new THREE.CircleGeometry(0.53, 32).rotateX(-Math.PI / 2), navy, 0, 1.07, 0.42);
-    add(new THREE.RingGeometry(0.34, 0.45, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 1.1, 1.7), toneMapped: false }), 0, 1.08, 0.42);
-    for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; add(new THREE.SphereGeometry(0.045, 8, 6), au, Math.cos(a) * 0.6, 1.13, 0.42 + Math.sin(a) * 0.6); }
-    add(new THREE.CylinderGeometry(0.09, 0.09, 0.2, 10).rotateZ(Math.PI / 2), au, 0.76, 0.9, 0.42);
-    const scr = new THREE.Mesh(new THREE.CircleGeometry(0.26, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 1.4, 2.0), toneMapped: false })); scr.position.set(0, 1.09, 0.42); wrist.add(scr); wrist.userData.scr = scr; }
-  const cone = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 32, 1, true), new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, vertexShader: `varying float vY; void main(){ vY = position.y + 0.5; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float uOpen; uniform float uT; varying float vY; void main(){ gl_FragColor = vec4(vec3(0.2, 0.7, 1.0) * (0.03 + 0.07 * vY * vY) * uOpen * (0.85 + 0.15 * sin(uT * 9.0)), 1.0); }` })); scene.add(cone);
+    const fur = new THREE.MeshStandardMaterial({ color: '#f4ead6', roughness: 1, emissive: '#2a241a' }), suit = new THREE.MeshStandardMaterial({ color: '#ece4d3', roughness: 0.6, emissive: '#1e1a14' });
+    const au = new THREE.MeshStandardMaterial({ color: '#e5b04a', roughness: 0.25, metalness: 0.6, emissive: '#4a3008' }), navy = new THREE.MeshStandardMaterial({ color: '#0b1d40', roughness: 0.3, metalness: 0.3, emissive: '#06122a' });
+    const add = (g, m, x, y, z, rz = 0, rx = 0) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); wrist.add(o); return o; };
+    add(fluff(new THREE.SphereGeometry(1, 26, 18).scale(1.05, 1.0, 0.55)), fur, 0, 1.05, 0);                       // palm (back of paw toward camera)
+    for (let k = 0; k < 4; k++) { const a = -0.5 + k * 0.33, L = k === 1 || k === 2 ? 0.42 : 0.32; const x = Math.sin(a) * 0.95, y = 1.62 + Math.cos(a) * 0.3;   // spread fingers fanning upward
+      add(fluff(new THREE.SphereGeometry(0.36, 18, 14).scale(1, 1 + L * 1.3, 0.82), 0.04), fur, x + Math.sin(a) * L * 0.5, y + Math.cos(a) * L * 0.5, 0.02, -a);
+      add(new THREE.SphereGeometry(0.15, 10, 8).scale(1, 0.8, 0.5), new THREE.MeshStandardMaterial({ color: '#f2b3a8', roughness: 0.8 }), x + Math.sin(a) * (L * 0.5 + 0.3), y + Math.cos(a) * (L * 0.5 + 0.3), -0.24, -a); }
+    add(fluff(new THREE.SphereGeometry(0.33, 18, 14).scale(1, 1.4, 0.85), 0.04), fur, 1.1, 0.75, 0.05, -1.0);                       // thumb out to the side
+    add(fluff(new THREE.SphereGeometry(1, 22, 14).scale(0.92, 0.55, 0.85), 0.07), fur, 0, 0.1, 0);                    // fluffy wrist cuff
+    add(new THREE.CylinderGeometry(0.98, 1.06, 3.8, 24, 1, true), suit, 0, -2.2, 0);                                  // sleeve
+    for (const y of [-1.25, -2.4]) add(new THREE.TorusGeometry(1.03, 0.075, 8, 32).rotateX(Math.PI / 2), au, 0, y, 0);
+    add(new THREE.CylinderGeometry(0.95, 0.95, 0.6, 28, 1, true), au, 0, -0.45, 0);                                   // watch band
+    add(new THREE.CylinderGeometry(0.82, 0.86, 0.34, 36).rotateX(Math.PI / 2), au, 0, -0.45, 0.98);                   // big watch body facing camera
+    add(new THREE.TorusGeometry(0.78, 0.1, 10, 40), au, 0, -0.45, 1.16);
+    add(new THREE.CircleGeometry(0.7, 36), navy, 0, -0.45, 1.16);
+    add(new THREE.RingGeometry(0.46, 0.6, 44), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 1.1, 1.7), toneMapped: false }), 0, -0.45, 1.17);
+    for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; add(new THREE.SphereGeometry(0.05, 8, 6), au, Math.cos(a) * 0.79, -0.45 + Math.sin(a) * 0.79, 1.24); }
+    add(new THREE.CylinderGeometry(0.11, 0.11, 0.24, 10).rotateZ(Math.PI / 2), au, 0.98, -0.45, 0.98);
+    const scr = new THREE.Mesh(new THREE.CircleGeometry(0.36, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 1.45, 2.0), toneMapped: false })); scr.position.set(0, -0.45, 1.18); wrist.add(scr); wrist.userData.scr = scr;
+    // merge paw parts per material -> few draw calls
+    { const by = new Map(); for (const o of [...wrist.children]) { if (o === scr || !o.isMesh) continue; o.updateMatrix(); let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k); g.applyMatrix4(o.matrix); (by.get(o.material) || by.set(o.material, []).get(o.material)).push(g); wrist.remove(o); }
+      for (const [m, gs] of by) wrist.add(new THREE.Mesh(mergeGeometries(gs), m)); } }
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 32, 1, true), new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, vertexShader: `varying float vY; void main(){ vY = position.y + 0.5; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`, fragmentShader: `uniform float uOpen; uniform float uT; varying float vY; void main(){ gl_FragColor = vec4(vec3(0.2, 0.7, 1.0) * (0.04 + 0.1 * vY * vY + 0.3 * pow(vY, 10.0)) * uOpen * (0.85 + 0.15 * sin(uT * 9.0)), 1.0); }` })); scene.add(cone);
 
   // ---------- state ----------
   let openAt = 0, open = false, openK = 0, yaw = 0, zoom = 1, data = null, region = null, R = 140, cx = 0, cz = 0, S = W / 140, HK = 1, h0 = 0; const pins = [];
@@ -170,12 +209,13 @@ export function makeHoloMap({ renderer, t, onGo, world }) {
   function pinEl(cls, html) { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; layer.appendChild(d); return d; }
   function rebuildPins() {
     layer.innerHTML = ''; pins.length = 0;
-    for (const p of data.pins) pins.push({ ...p, y: hAt(p.x, p.z), el: pinEl('mkm-pin' + (p.kind === 'hint' ? ' h' : p.kind === 'quest' ? ' q' : ''), `<span class="i">${ICONS[p.icon] || p.icon}</span>${p.label ? `<span>${p.label}</span>` : ''}`), lift: p.kind === 'hint' ? 0.6 : 1.7 });
+    for (const p of data.pins) pins.push({ ...p, y: hAt(p.x, p.z), el: pinEl('mkm-pin' + (p.kind === 'hint' ? ' h' : p.kind === 'quest' ? ' q' : ''), `<span class="i">${ICONS[p.icon] || p.icon}</span>${p.label ? `<span>${p.label}</span>` : ''}`), lift: p.kind === 'hint' ? 0.6 : 2.1 });
     for (const c of data.crew) { const el = pinEl('mkm-bot', `<svg viewBox="0 0 30 30"><circle cx="15" cy="15" r="13" fill="none" stroke="rgba(110,220,255,.3)" stroke-width="3"/><circle cx="15" cy="15" r="13" fill="none" stroke="#ffd25a" stroke-width="3" stroke-linecap="round" stroke-dasharray="81.7" stroke-dashoffset="${(81.7 * (1 - Math.max(0, c.prog))).toFixed(1)}" transform="rotate(-90 15 15)" ${c.prog < 0 ? 'opacity="0"' : ''}/></svg><b>🤖</b>`); pins.push({ x: c.x, z: c.z, y: hAt(c.x, c.z), el, lift: 0.5, bot: true }); }
+    for (const [key, icon, mp_, cls] of [['map_cfield', '💎', DECOR.field, ' f'], ['map_crater', '🕳️', DECOR.crater, ' f']]) { const [wx, wz] = toWorld(mp_[0], mp_[1]); pins.push({ x: wx, z: wz, y: hAtM(mp_[0], mp_[1]), kind: 'decor', el: pinEl('mkm-pin' + cls, `<span class="i">${ICONS[icon]}</span><span>${t(key)}</span>`), lift: 2.6 }); }
     const ce = pinEl('mkm-cat', t('mapYou')); pins.push({ x: data.me.x, z: data.me.z, y: hAt(data.me.x, data.me.z), el: ce, lift: 0.4, cat: true });
     // lines from pins down to the terrain
     if (board.userData.lines) { board.remove(board.userData.lines); board.userData.lines.geometry.dispose(); }
-    const L = []; for (const p of pins) { if (p.bot || p.cat) continue; const q = toMap(p.x, p.z, p.y); L.push(q.x, q.y, q.z, q.x, q.y + p.lift, q.z); }
+    const L = []; for (const p of pins) { if (p.bot || p.cat || p.kind !== 'hint') continue; const q = toMap(p.x, p.z, p.y); L.push(q.x, q.y, q.z, q.x, q.y + p.lift, q.z); }
     const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(L, 3)); const lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: new THREE.Color(0.4, 1.1, 1.6), toneMapped: false, transparent: true, opacity: 0.85 })); board.add(lines); board.userData.lines = lines;
   }
   function bakeFog() { if (!terr) return; const f = data.fog, n = FOG_N, rg = data.region, cell = 2 * rg.R / n, A_ = terr.geometry.attributes.aF, w = terr.geometry.userData.wxz; const at = (i, j) => (i < 0 || j < 0 || i >= n || j >= n) ? 1 : f[j * n + i];
@@ -183,7 +223,7 @@ export function makeHoloMap({ renderer, t, onGo, world }) {
   function updateFogTex() { bakeFog(); const f = data.fog; const d = fogT.image.data; for (let i = 0; i < FOG_N * FOG_N; i++) { const v = f[i] ? 255 : 0; d[i * 4] = v; d[i * 4 + 1] = v; d[i * 4 + 2] = v; d[i * 4 + 3] = 255; } fogT.needsUpdate = true; }
   function sync() {
     data = api.getData(); if (!data) return;
-    if (data.region.key !== region || !terr) { region = data.region.key; R = data.region.R; cx = data.region.x; cz = data.region.z; if (data.base) { cx = data.base.x - 3; cz = data.base.z + 3; } /* v52: centre on the base (+ a bit toward the crew yard) */ S = W / R; RW = data.region.RW || Math.max(R * 1.6, 140); R0 = R / 2.2; A = fwP(R0) / R0; U.uRW.value = RW; U.uFR.value = R; U.uA.value = A; U.uR0.value = R0; buildTerrain(); buildMinis(); }
+    if (data.region.key !== region || !terr) { region = data.region.key; R = data.region.R; cx = data.region.x; cz = data.region.z; if (data.base) { cx = data.base.x - 3; cz = data.base.z + 3; } /* v52: centre on the base (+ a bit toward the crew yard) */ S = W / R; RW = data.region.RW || Math.max(R * 1.6, 140); R0 = R / 2.2; A = fwP(R0) / R0; U.uRW.value = RW; U.uFR.value = R; U.uA.value = A; U.uR0.value = R0; buildTerrain(); buildMinis(); buildDecor(); }
     updateFogTex();
     if (world && !scene.userData.realEarth) { scene.userData.realEarth = true; const sk = world.getObjectByName('sky'); let src = null; if (sk) sk.traverse(o => { if (!src && o.isMesh && o.geometry && o.geometry.type === 'SphereGeometry' && o.geometry.parameters.radius === 1) src = o; }); if (src) { const e = scene.userData.earth; e.geometry = src.geometry; e.material = src.material; e.scale.setScalar(7); } } /* v52: the game's own textured Earth */
     const cs = data.crystals.slice(0, 21); const M = new THREE.Matrix4(); let ci = 0; cs.forEach((c, i) => { const b0 = toMap(c.x, c.z, hAt(c.x, c.z)); for (let k = 0; k < 3; k++) { const a = i * 2.4 + k * 2.1, o = k ? 0.22 : 0; const p = b0.clone().add(new THREE.Vector3(Math.cos(a) * o, 0, Math.sin(a) * o)); const s = (k ? 0.26 : 0.42) + 0.08 * ((i * 0.618) % 1); M.compose(p.setY(p.y + s * 0.9), new THREE.Quaternion().setFromEuler(new THREE.Euler(k ? 0.35 * Math.cos(a) : 0, a, k ? 0.35 * Math.sin(a) : 0)), new THREE.Vector3(s, s, s)); crysI.setMatrixAt(ci++, M); } }); crysI.count = ci; crysI.instanceMatrix.needsUpdate = true;
@@ -192,7 +232,7 @@ export function makeHoloMap({ renderer, t, onGo, world }) {
     const tg = data.target; beam.visible = ring.visible = !!tg; path.visible = false; if (tube) { board.remove(tube); tube.geometry.dispose(); tube = null; }
     if (tg) { const tp = toMap(tg.x, tg.z, hAt(tg.x, tg.z)); beam.position.copy(tp); ring.position.copy(tp).setY(tp.y + 0.05); const A = pathG.attributes.position; const mx = (mp.x + tp.x) / 2, mz = (mp.z + tp.z) / 2; const nx = -(tp.z - mp.z) * 0.18, nz = (tp.x - mp.x) * 0.18;
       for (let i = 0; i < NP; i++) { const u = i / (NP - 1); const x = (1 - u) * (1 - u) * mp.x + 2 * u * (1 - u) * (mx + nx) + u * u * tp.x, z = (1 - u) * (1 - u) * mp.z + 2 * u * (1 - u) * (mz + nz) + u * u * tp.z; const [wx, wz] = toWorld(x, z); A.setXYZ(i, x, hAt(wx, wz) + 0.32, z); } A.needsUpdate = true;
-      const pts = []; for (let i = 0; i < NP; i++) pts.push(new THREE.Vector3().fromBufferAttribute(A, i)); tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 90, 0.09, 6, false), tubeM); tube.renderOrder = 3; board.add(tube); }
+      const pts = []; for (let i = 0; i < NP; i++) pts.push(new THREE.Vector3().fromBufferAttribute(A, i)); tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 90, 0.11, 6, false), tubeM); tube.renderOrder = 20; board.add(tube); }
     rebuildPins();
     $('#mkm-title').textContent = data.region.name; $('#mkm-card .t').innerHTML = `${data.quest ? `<b>${t('mapQ')}</b>${data.quest.title.replace(/^\S+\s/, '')}` : t('mapNoQuest')}${data.quest && data.quest.sub ? `<small>${data.quest.sub}</small>` : ''}`; $('#mkm-go').textContent = t('mapGo'); $('#mkm-go').style.display = tg ? '' : 'none';
     const cvs = renderer.domElement; void cvs;
@@ -218,20 +258,26 @@ export function makeHoloMap({ renderer, t, onGo, world }) {
       T += dt; openK = Math.min(1, (performance.now() - openAt) / 450); U.uT.value = T; U.uOpen.value = openK < 1 ? openK * (0.6 + 0.4 * Math.sin(T * 60.0) * (1 - openK)) + openK * 0.4 : 1;
       const w = innerWidth, h = innerHeight; const pr = renderer.getPixelRatio(); const port = h > w;
       cam.aspect = w / h; cam.fov = port ? 62 : 42; cam.updateProjectionMatrix();
-      const dist = (port ? 22 : 18.5) / zoom; cam.position.set(0, dist * (port ? 0.5 : 0.42), dist * (port ? 0.87 : 0.92)); cam.lookAt(0, port ? -0.8 : -1.6, port ? 0.8 : -0.2);
+      const dist = (port ? 34 : 19.5) / zoom; cam.position.set(0, dist * (port ? 0.5 : 0.36), dist * (port ? 0.87 : 0.95)); cam.lookAt(0, port ? -0.8 : -1.0, port ? 0.8 : -0.8);
       board.rotation.y = yaw; board.scale.setScalar(0.25 + 0.75 * (1 - Math.pow(1 - openK, 3))); board.position.y = 0;
       board.rotation.x = 0; board.rotation.z = 0;
       scene.userData.earth.rotation.y += dt * 0.03; scene.userData.earth.position.set(port ? 9 : 25, port ? 9 : -9, port ? -40 : -50);
       // wrist in the lower-left foreground, projection cone from the screen to the board
-      wrist.position.set(port ? -1.0 : -2.05, port ? -2.3 : -1.3, -5.0); wrist.rotation.set(1.25, -0.5, 0.25, 'YXZ'); wrist.scale.setScalar(port ? 0.46 : 0.6);
+      wrist.position.set(port ? -0.75 : -1.9, port ? -1.9 : -1.25, -5.0); wrist.rotation.set(-0.45, 0.35, -0.55, 'YXZ'); wrist.scale.setScalar(port ? 0.34 : 0.4);
       cam.updateMatrixWorld(true); const s0 = wrist.userData.scr.getWorldPosition(new THREE.Vector3()); const s1 = new THREE.Vector3(0, 0, 0); const mid = s0.clone().add(s1).multiplyScalar(0.5); const len = s0.distanceTo(s1);
       cone.position.copy(mid); cone.scale.set(W * 0.8 * board.scale.x, len, W * 0.8 * board.scale.x); cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), s1.clone().sub(s0).normalize());
       catM.children[0].material.color.setScalar(1).setRGB(1.6, 0.7 + 0.2 * Math.sin(T * 5), 0.15);
       const path_ = pathG.attributes.position; void path_; path.material.size = 0.2 + 0.05 * Math.sin(T * 6);
       board.updateMatrixWorld(true);
-      for (const p of pins) { pv.copy(toMap(p.x, p.z, p.y + p.lift)); board.localToWorld(pv); pv.project(cam); const vis = pv.z < 1 && Math.abs(pv.x) < 1.1 && Math.abs(pv.y) < 1.1; p.el.style.display = vis && openK > 0.6 ? '' : 'none'; p.sx = (pv.x + 1) / 2 * w; p.sy = (1 - pv.y) / 2 * h; p.vis = vis; }
-      { const placed = []; const lab = pins.filter(p => p.vis && !p.bot && !p.cat).sort((a, b) => b.sy - a.sy); for (const p of lab) { const bw = p.kind === 'hint' ? 26 : 70, bh = p.kind === 'hint' ? 26 : 44; let bx = p.sx, by = p.sy; const C = [[0, 0], [-0.55, 0], [0.55, 0], [0, -1], [-0.55, -0.6], [0.55, -0.6], [-1.1, 0], [1.1, 0], [-0.55, -1.2], [0.55, -1.2], [0, -2]]; for (const [kx, ky] of C) { const x = p.sx + kx * (bw + 4), y = p.sy + ky * (bh + 2); if (!placed.some(q => Math.abs(q.x - x) < (bw + q.w) / 2 && Math.abs(q.y - y) < (bh + q.h) / 2)) { bx = x; by = y; break; } } placed.push({ x: bx, y: by, w: bw, h: bh }); p.sx = bx; p.sy = by; } }
+      const prj = (x, z, y) => { pv.copy(toMap(x, z, y)); board.localToWorld(pv); pv.project(cam); return [(pv.x + 1) / 2 * w, (1 - pv.y) / 2 * h, pv.z < 1 && Math.abs(pv.x) < 1.15 && Math.abs(pv.y) < 1.15]; };
+      for (const p of pins) { const [gx, gy, gv] = prj(p.x, p.z, p.y); p.gx = gx; p.gy = gy; const [sx, sy] = prj(p.x, p.z, p.y + p.lift); p.sx = sx; p.sy = sy; p.vis = gv; p.el.style.display = gv && openK > 0.6 ? '' : 'none'; }
+      { const placed = []; const sm = w < 560 ? 0.72 : 1; const lab = pins.filter(p => p.vis && !p.bot && !p.cat).sort((a, b) => (a.kind === 'hint') - (b.kind === 'hint') || b.gy - a.gy);
+        for (const p of lab) { const hint = p.kind === 'hint', bw = (p.el.offsetWidth || (hint ? 26 : 84) * sm), bh = (p.el.offsetHeight || (hint ? 26 : 56) * sm), stalk = p.gy - p.sy; let best = null;
+          const C = hint ? [[0, 1], [0, 1.5], [-1, 1], [1, 1]] : [[0, 1], [0, 1.45], [-0.75, 1.2], [0.75, 1.2], [0, 1.9], [-1.0, 1.6], [1.0, 1.6], [0, 0.75], [-1.4, 1.1], [1.4, 1.1], [0, 2.4], [-1.2, 2.1], [1.2, 2.1], [-2.0, 1.0], [2.0, 1.0], [-2.0, 0.6], [2.0, 0.6], [-1.0, 0.55], [1.0, 0.55], [-2.6, 1.3], [2.6, 1.3]];
+          let bs = 1e9; for (const [kx, kl] of C) { const x = Math.min(w - bw / 2 - 4, Math.max(bw / 2 + 4, p.gx + kx * (bw + 6))), y = p.gy - stalk * kl; if (y - bh < 30 || y > h - 70) continue; let ov = 0; for (const q of placed) { const ox = (bw + q.w) / 2 + 4 - Math.abs(q.x - x), oy = (bh + q.h) / 2 + 4 - Math.abs((q.y - q.h / 2) - (y - bh / 2)); if (ox > 0 && oy > 0) ov += ox * oy; } const sc = ov * 10 + Math.abs(kx) * 8 + Math.abs(kl - 1) * 6; if (sc < bs) { bs = sc; best = [x, y]; } if (ov === 0 && kx === 0 && kl === 1) break; }
+          if (!best) best = [p.sx, p.sy]; placed.push({ x: best[0], y: best[1], w: bw, h: bh }); p.sx = best[0]; p.sy = best[1]; } }
       for (const p of pins) if (p.vis) p.el.style.transform = `translate(${p.sx.toFixed(1)}px,${p.sy.toFixed(1)}px) translate(-50%,${p.bot ? '-50%' : '-100%'})`;
+      { let svg = ''; for (const p of pins) { if (!p.vis || p.bot || p.cat || p.kind === 'hint' || openK < 0.6) continue; const q = p.kind === 'quest' ? '#ffd25a' : p.kind === 'decor' ? 'rgba(120,225,255,.55)' : 'rgba(120,225,255,.9)'; svg += `<line x1="${p.gx.toFixed(1)}" y1="${p.gy.toFixed(1)}" x2="${p.sx.toFixed(1)}" y2="${p.sy.toFixed(1)}" stroke="${q}" stroke-width="1.6" ${p.kind === 'decor' ? 'stroke-dasharray="4 3"' : ''}/><circle cx="${p.gx.toFixed(1)}" cy="${p.gy.toFixed(1)}" r="3.2" fill="${q}"/><circle cx="${p.gx.toFixed(1)}" cy="${p.gy.toFixed(1)}" r="7" fill="none" stroke="${q}" stroke-width="1" opacity=".6"/>`; } $('#mkm-stalks').innerHTML = svg; }
       const tm = renderer.toneMapping; renderer.toneMapping = THREE.ACESFilmicToneMapping; const ot = renderer.getRenderTarget(); renderer.setRenderTarget(null); renderer.render(scene, cam); renderer.setRenderTarget(ot); renderer.toneMapping = tm; void pr;
     },
     stats() { return renderer.info.render; },
