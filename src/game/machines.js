@@ -24,7 +24,7 @@ export function roverHi() { const L = [];
   for (const s of [-1, 1]) L.push(col(box(0.05, 0.26, 0.62).translate(s * 0.86, 1.6, 1.02), C.glass, 0.3));
   L.push(col(box(1.05, 0.07, 0.14).translate(0, 1.92, 1.2), C.gold)); for (const x of [-0.3, 0, 0.3]) L.push(col(box(0.16, 0.06, 0.06).translate(x, 1.93, 1.29), C.lamp, 2.5));
   // headlights + bumper
-  for (const s of [-1, 1]) L.push(col(cyl(0.16, 0.16, 0.05, 10).rotateX(Math.PI / 2).translate(s * 0.62, 1.0, 1.75), C.gold), col(cyl(0.11, 0.11, 0.06, 10).rotateX(Math.PI / 2).translate(s * 0.62, 1.0, 1.78), C.lamp, 2.4));
+  for (const s of [-1, 1]) L.push(col(cyl(0.16, 0.16, 0.05, 10).rotateX(Math.PI / 2).translate(s * 0.62, 1.0, 1.75), C.gold), col(cyl(0.12, 0.12, 0.06, 10).rotateX(Math.PI / 2).translate(s * 0.62, 1.0, 1.78), C.lamp, 5.0), col(cyl(0.2, 0.2, 0.02, 10).rotateX(Math.PI / 2).translate(s * 0.62, 1.0, 1.8), '#ffe9b0', 1.6));
   L.push(col(box(1.8, 0.14, 0.16).translate(0, 0.72, 1.76), C.gold));
   // open cargo bed
   L.push(col(box(1.8, 0.08, 1.9).translate(0, 1.18, -0.6), C.metal));
@@ -36,42 +36,60 @@ export function roverHi() { const L = [];
   for (const z of [-1.15, 0, 1.15]) for (const s of [-1, 1]) { const x = s * 1.07;
     L.push(col(cyl(0.46, 0.46, 0.4, 10).rotateZ(Math.PI / 2).translate(x, 0.46, z), C.tire), col(cyl(0.25, 0.25, 0.42, 6).rotateZ(Math.PI / 2).translate(x, 0.46, z), C.gold));
  }
-  for (const s of [-1, 1]) L.push(col(box(0.5, 0.07, 3.35).translate(s * 1.07, 1.0, 0), C.iv), col(box(0.04, 0.1, 3.35).translate(s * 1.32, 1.0, 0), C.gold));
+  for (const z of [-1.15, 0, 1.15]) for (const s of [-1, 1]) { const x = s * 1.07; L.push(col(cyl(0.58, 0.58, 0.48, 8, true, 0, Math.PI).rotateZ(Math.PI / 2).translate(x, 0.5, z), C.iv2), col(new THREE.TorusGeometry(0.6, 0.045, 3, 8, Math.PI).rotateY(Math.PI / 2).translate(x + s * 0.25, 0.5, z), C.gold)); }
+  // cargo bed detail: corner posts, cross ribs, side lamps, tie-down rail
+  for (const x of [-0.88, 0.88]) for (const z of [-1.52, 0.33]) L.push(col(box(0.12, 0.55, 0.12).translate(x, 1.45, z), C.gold));
+  for (const z of [-1.05, -0.6, -0.15]) L.push(col(box(1.72, 0.03, 0.05).translate(0, 1.23, z), C.dgold));
+  for (const s of [-1, 1]) L.push(col(box(0.04, 0.06, 1.7).translate(s * 0.93, 1.5, -0.6), C.dgold), col(box(0.06, 0.08, 0.1).translate(s * 0.93, 1.3, -1.45), C.red, 3.0));
   L.push(rod([0.7, 1.85, 0.75], [0.7, 2.8, 0.7], 0.02, C.metal, 4), col(new THREE.SphereGeometry(0.06, 6, 4).translate(0.7, 2.82, 0.7), C.red, 3.5));
   return merge(L); }
 export function roverLo() { const L = [col(box(2.0, 0.55, 3.5).translate(0, 0.92, 0), C.iv), col(box(2.05, 0.06, 3.56).translate(0, 1.13, 0), C.gold), col(box(1.7, 0.75, 1.1).translate(0, 1.5, 1.05), C.iv2), col(box(1.3, 0.3, 0.05).translate(0, 1.6, 1.61), C.glass, 0.35), col(box(1.8, 0.4, 1.9).translate(0, 1.38, -0.6), C.iv)];
   for (const [x, z, h] of [[-0.4, -1.1, 0.6], [0.3, -1.0, 0.7], [0, -0.4, 0.9], [-0.4, -0.1, 0.55], [0.45, -0.2, 0.5]]) L.push(crystal(x, 1.4, z, h, 0.2, 0, 0, C.cry, 1.4));
   for (const z of [-1.15, 0, 1.15]) for (const s of [-1, 1]) L.push(col(cyl(0.46, 0.46, 0.4, 7).rotateZ(Math.PI / 2).translate(s * 1.07, 0.46, z), C.tire));
-  for (const s of [-1, 1]) L.push(col(box(0.22, 0.18, 0.05).translate(s * 0.62, 1.0, 1.77), C.lamp, 2.4));
+  for (const s of [-1, 1]) L.push(col(box(0.22, 0.18, 0.05).translate(s * 0.62, 1.0, 1.77), C.lamp, 4.5));
   return merge(L); }
 
-// ---------------- tracked drill rig: tall ivory/gold lattice mast, cab, engine housing; the auger head is separate (spins) ----------------
-export const DRILL_HEAD = new THREE.Vector3(0, 1.05, 2.05); // where the spinning head hangs (local)
-export function drillHi() { const L = [];
-  for (const s of [-1, 1]) { const x = s * 1.18; L.push(col(sq(0.72, 0.78, 3.7, 6, 10, 5).translate(x, 0.42, 0), C.tire), col(box(0.04, 0.44, 3.0).translate(x + s * 0.37, 0.46, 0), C.gold));
-    for (const z of [-1.1, -0.37, 0.37, 1.1]) L.push(col(cyl(0.21, 0.21, 0.06, 8).rotateZ(Math.PI / 2).translate(x + s * 0.4, 0.42, z), C.dgold)); }
-  L.push(col(sq(2.7, 0.72, 3.1, 7, 12, 6).translate(0, 1.15, 0), C.iv), col(box(2.74, 0.06, 3.14).translate(0, 1.36, 0), C.gold), col(box(2.3, 0.2, 2.8).translate(0, 0.86, 0), C.dark));
-  // engine housing (rear) with vents, cab (left)
-  L.push(col(sq(1.9, 0.85, 1.05, 7, 10, 5).translate(0.25, 1.82, -1.0), C.iv2)); for (let k = 0; k < 3; k++) L.push(col(box(1.2, 0.05, 0.03).translate(0.25, 1.62 + k * 0.17, -1.53), C.dark));
-  L.push(col(box(1.95, 0.05, 1.1).translate(0.25, 2.26, -1.0), C.gold), rod([0.85, 2.2, -1.2], [0.85, 2.9, -1.2], 0.08, C.metal, 6));
-  L.push(col(sq(1.0, 1.1, 1.05, 7, 10, 5).translate(-0.78, 1.98, 0.1), C.iv), col(box(0.72, 0.42, 0.04).translate(-0.78, 2.08, 0.63), C.glass, 0.35), col(box(0.04, 0.38, 0.6).translate(-1.29, 2.08, 0.1), C.glass, 0.3), col(box(1.04, 0.05, 1.08).translate(-0.78, 2.55, 0.1), C.gold));
-  // lattice mast at the front
-  L.push(col(box(1.0, 0.5, 0.8).translate(0, 1.62, 1.5), C.gold));
-  const Y0 = 1.85, Y1 = 6.2, ZM = 1.55; const rails = [[-0.42, ZM + 0.22], [0.42, ZM + 0.22], [0, ZM - 0.36]];
-  for (const [x, z] of rails) L.push(col(box(0.24, Y1 - Y0, 0.24).translate(x, (Y0 + Y1) / 2, z), C.iv));
-  for (let k = 0; k <= 5; k++) { const y = Y0 + 0.2 + k * 0.8; L.push(col(box(0.86, 0.09, 0.09).translate(0, y, ZM + 0.22), C.gold), col(box(0.09, 0.09, 0.66).rotateY(0.6).translate(-0.21, y, ZM - 0.07), C.gold), col(box(0.09, 0.09, 0.66).rotateY(-0.6).translate(0.21, y, ZM - 0.07), C.gold));
-    if (k < 5) L.push(rod([-0.42, y, ZM + 0.22], [0.42, y + 0.8, ZM + 0.22], 0.045, C.dgold, 4)); }
-  L.push(col(sq(1.25, 0.6, 0.95, 7, 10, 5).translate(0, Y1 + 0.2, ZM), C.iv), col(box(1.3, 0.07, 1.0).translate(0, Y1 + 0.47, ZM), C.gold), col(new THREE.SphereGeometry(0.13, 8, 5).translate(0, Y1 + 0.62, ZM), C.red, 4.0), col(cyl(0.2, 0.2, 0.12, 10).rotateZ(Math.PI / 2).translate(0, Y1 - 0.1, ZM + 0.45), C.gold));
-  L.push(rod([0.55, 1.55, -0.2], [0.3, 4.4, ZM - 0.36], 0.12, C.dgold, 8), rod([0.55, 1.55, -0.2], [0.45, 2.7, 0.55], 0.19, C.metal, 8), rod([-0.2, 1.55, -0.2], [-0.3, 4.4, ZM - 0.36], 0.12, C.dgold, 8), rod([-0.2, 1.55, -0.2], [-0.27, 2.7, 0.55], 0.19, C.metal, 8));
-  // gearbox + cable above the head
-  L.push(col(sq(0.62, 0.5, 0.55, 4, 8, 4).translate(DRILL_HEAD.x, 1.95, DRILL_HEAD.z), C.iv2), col(box(0.66, 0.05, 0.58).translate(DRILL_HEAD.x, 2.18, DRILL_HEAD.z), C.gold), rod([0, 2.2, DRILL_HEAD.z], [0, Y1 - 0.1, ZM + 0.45], 0.015, C.dark, 3));
-  for (const s of [-1, 1]) L.push(col(box(0.18, 0.12, 0.05).translate(s * 0.9, 1.15, 1.56), C.lamp, 3.0));
+// ---------------- v55 drill truck (concept d04ca995): 6-wheel ivory/gold truck, cab up front, articulated gold arm on a
+// turntable at the rear holding a vertical drill motor; the spinning bit (separate mesh) hangs below it to the ground ----------------
+export const DRILL_HEAD = new THREE.Vector3(0, 1.05, -2.95); // where the spinning bit hangs (local)
+const WZ = [-1.35, 0, 1.35];
+export function drillHi() { const L = []; const HZ = DRILL_HEAD.z;
+  // wheels: chunky tyres, gold hubs, rounded ivory fenders
+  for (const z of WZ) for (const s of [-1, 1]) { const x = s * 1.12; L.push(col(cyl(0.44, 0.44, 0.42, 12).rotateZ(Math.PI / 2).translate(x, 0.44, z), C.tire), col(cyl(0.23, 0.23, 0.44, 6).rotateZ(Math.PI / 2).translate(x, 0.44, z), C.gold), col(cyl(0.54, 0.54, 0.5, 8, true, 0, Math.PI).rotateZ(Math.PI / 2).translate(x, 0.5, z), C.iv2), col(new THREE.TorusGeometry(0.56, 0.04, 3, 8, Math.PI).rotateY(Math.PI / 2).translate(x + s * 0.25, 0.5, z), C.gold)); }
+  // chassis + gold trim + dark underframe
+  L.push(col(sq(2.0, 0.55, 4.6, 7, 12, 5).translate(0, 1.05, -0.1), C.iv), col(box(2.04, 0.07, 4.5).translate(0, 1.3, -0.1), C.gold), col(box(1.7, 0.25, 4.2).translate(0, 0.72, -0.1), C.dark));
+  for (const s of [-1, 1]) L.push(col(box(0.05, 0.14, 3.6).translate(s * 1.0, 1.0, -0.1), C.gold));
+  // cab up front: rounded ivory, wrap glass, gold roof + light bar, headlights, bumper
+  L.push(col(sq(1.85, 1.05, 1.25, 7, 10, 5).translate(0, 1.88, 1.45), C.iv2), col(box(1.45, 0.42, 0.06).rotateX(-0.3).translate(0, 2.02, 2.06), C.glass, 0.4));
+  for (const s of [-1, 1]) L.push(col(box(0.05, 0.36, 0.72).translate(s * 0.93, 2.0, 1.45), C.glass, 0.35));
+  L.push(col(box(1.6, 0.06, 1.0).translate(0, 2.43, 1.4), C.gold)); for (const x of [-0.42, -0.14, 0.14, 0.42]) L.push(col(box(0.18, 0.07, 0.07).translate(x, 2.48, 1.85), C.lamp, 3.2));
+  for (const s of [-1, 1]) L.push(col(cyl(0.15, 0.15, 0.05, 10).rotateX(Math.PI / 2).translate(s * 0.66, 1.2, 2.2), C.gold), col(cyl(0.1, 0.1, 0.06, 10).rotateX(Math.PI / 2).translate(s * 0.66, 1.2, 2.23), C.lamp, 4.0));
+  L.push(col(box(1.9, 0.16, 0.16).translate(0, 0.86, 2.24), C.gold));
+  // engine block behind the cab with vents + exhaust stack
+  L.push(col(sq(1.5, 0.6, 0.9, 6, 8, 4).translate(0, 1.6, 0.35), C.iv)); for (let k = 0; k < 3; k++) L.push(col(box(1.0, 0.04, 0.03).translate(0, 1.45 + k * 0.12, -0.11), C.dark));
+  L.push(rod([0.62, 1.6, 0.65], [0.62, 2.75, 0.65], 0.07, C.metal, 6), col(cyl(0.09, 0.07, 0.12, 6).translate(0.62, 2.8, 0.65), C.dgold));
+  // rear deck + turntable
+  L.push(col(box(1.9, 0.06, 1.9).translate(0, 1.36, -1.45), C.metal), col(cyl(0.6, 0.66, 0.24, 14).translate(0, 1.5, -1.2), C.gold), col(cyl(0.48, 0.5, 0.3, 12).translate(0, 1.77, -1.2), C.iv));
+  // articulated arm: twin gold lower boom up to the elbow, upper boom out over the rear, hydraulic cylinders, joints
+  const SH = [0, 1.9, -1.2], EL = [0, 4.15, -1.55], WR = [0, 3.35, HZ];
+  for (const s of [-1, 1]) { L.push(rod([s * 0.22, SH[1], SH[2]], [s * 0.22, EL[1], EL[2]], 0.13, C.gold, 8), rod([s * 0.2, EL[1], EL[2]], [s * 0.2, WR[1] + 0.2, WR[2]], 0.1, C.gold, 8)); }
+  for (let k = 1; k < 4; k++) { const u = k / 4; L.push(rod([-0.22, SH[1] + (EL[1] - SH[1]) * u, SH[2] + (EL[2] - SH[2]) * u], [0.22, SH[1] + (EL[1] - SH[1]) * u, SH[2] + (EL[2] - SH[2]) * u], 0.04, C.dgold, 4)); }
+  L.push(rod([0, 1.6, -0.55], [0, 3.1, -1.25], 0.11, C.metal, 8), rod([0, 2.25, -0.85], [0, 3.1, -1.25], 0.15, C.iv2, 8));   // lift cylinder
+  L.push(rod([0, 4.0, -1.35], [0, 3.75, -2.3], 0.08, C.metal, 6), rod([0, 4.0, -1.35], [0, 3.95, -1.85], 0.12, C.iv2, 6));     // reach cylinder
+  for (const [y, z, r] of [[SH[1], SH[2], 0.2], [EL[1], EL[2], 0.2], [WR[1] + 0.2, WR[2], 0.17]]) L.push(col(cyl(r, r, 0.62, 10).rotateZ(Math.PI / 2).translate(0, y, z), C.dgold));
+  // drill motor housing hanging from the wrist: ivory cylinder with gold rings + status lamp; hoses
+  L.push(col(cyl(0.42, 0.42, 1.0, 14).translate(0, 2.55, HZ), C.iv), col(cyl(0.45, 0.45, 0.08, 14).translate(0, 3.02, HZ), C.gold), col(cyl(0.45, 0.45, 0.08, 14).translate(0, 2.1, HZ), C.gold), col(cyl(0.3, 0.36, 0.2, 12).translate(0, 1.95, HZ), C.dgold));
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4; L.push(col(box(0.06, 0.7, 0.1).rotateY(a).translate(Math.sin(a) * 0.42, 2.55, HZ + Math.cos(a) * 0.42), C.dgold)); }
+  L.push(col(new THREE.SphereGeometry(0.08, 6, 4).translate(0.3, 2.85, HZ + 0.3), C.red, 4.0), rod([0.25, 3.0, HZ + 0.2], [0.3, 1.7, -1.6], 0.035, C.dark, 4), rod([-0.25, 3.0, HZ + 0.2], [-0.3, 1.7, -1.6], 0.035, C.dark, 4));
+  // beacon on the cab
+  L.push(col(new THREE.SphereGeometry(0.1, 6, 4).translate(-0.6, 2.55, 1.2), C.red, 4.0));
   return merge(L); }
-export function drillLo() { const L = [];
-  for (const s of [-1, 1]) L.push(col(box(0.72, 0.78, 3.7).translate(s * 1.18, 0.42, 0), C.tire));
-  L.push(col(box(2.7, 0.72, 3.1).translate(0, 1.15, 0), C.iv), col(box(2.74, 0.06, 3.14).translate(0, 1.36, 0), C.gold), col(box(1.9, 0.85, 1.05).translate(0.25, 1.82, -1.0), C.iv2), col(box(1.0, 1.1, 1.05).translate(-0.78, 1.98, 0.1), C.iv),
-    col(box(0.95, 4.35, 0.7).translate(0, 4.02, 1.55), C.iv), col(box(1.0, 0.07, 0.75).translate(0, 4.0, 1.55), C.gold), col(box(1.25, 0.6, 0.95).translate(0, 6.4, 1.55), C.iv), col(box(0.25, 0.25, 0.25).translate(0, 6.85, 1.55), C.red, 4.0), col(box(0.62, 0.5, 0.55).translate(0, 1.95, 2.05), C.iv2));
+export function drillLo() { const L = []; const HZ = DRILL_HEAD.z;
+  for (const z of WZ) for (const s of [-1, 1]) L.push(col(cyl(0.44, 0.44, 0.42, 7).rotateZ(Math.PI / 2).translate(s * 1.12, 0.44, z), C.tire));
+  L.push(col(box(2.0, 0.55, 4.6).translate(0, 1.05, -0.1), C.iv), col(box(2.04, 0.07, 4.5).translate(0, 1.3, -0.1), C.gold), col(box(1.85, 1.05, 1.25).translate(0, 1.88, 1.45), C.iv2), col(box(1.45, 0.4, 0.05).translate(0, 2.0, 2.09), C.glass, 0.4), col(box(1.5, 0.6, 0.9).translate(0, 1.6, 0.35), C.iv),
+    rod([0, 1.9, -1.2], [0, 4.15, -1.55], 0.2, C.gold, 4), rod([0, 4.15, -1.55], [0, 3.55, HZ], 0.15, C.gold, 4), col(cyl(0.42, 0.42, 1.0, 6).translate(0, 2.55, HZ), C.iv));
+  for (const s of [-1, 1]) L.push(col(box(0.22, 0.18, 0.05).translate(s * 0.66, 1.2, 2.24), C.lamp, 4.0));
   return merge(L); }
 export function drillHeadGeo() { const L = [col(cyl(0.2, 0.2, 1.5, 8), C.metal), col(cyl(0.3, 0.3, 0.14, 10).translate(0, 0.72, 0), C.gold), col(cyl(0.26, 0.02, 0.5, 8).translate(0, -1.0, 0), '#d8d0c0')];
-  for (let k = 0; k < 10; k++) { const a = k * 1.1, y = 0.6 - k * 0.13; L.push(col(box(0.44, 0.05, 0.12).rotateY(a).rotateZ(0.25).translate(0, y, 0), C.dgold)); }
+  for (let k = 0; k < 14; k++) { const a = k * 0.9, y = 0.62 - k * 0.12; L.push(col(box(0.46, 0.05, 0.13).rotateZ(0.28).rotateY(a).translate(0, y, 0), C.dgold)); } L.push(col(cyl(0.05, 0.05, 0.08, 6).translate(0, -1.27, 0), '#ffb060', 2.5));
   return merge(L); }
