@@ -24,7 +24,7 @@ export function makeHome(scene, { env, groundAt, door, origin, low = false, eart
   const I = new THREE.Group(); I.name = 'ch2_home'; I.position.copy(origin); scene.add(I);
   const R = 3.5, WH = 3.4; const W = (r) => R - (4.6 - r); // radii below are authored as distance-from-wall in a 4.6 m room
   // layout (angles around the room; 0 = straight ahead of the entry view): tightened toward the concept's composition
-  const LAY = { door: -0.92, rack: -0.2, rackR: 2.75, pet: -0.33, petR: 1.9, win: 0.66, bed: 0.47, bedR: 2.75, desk: 1.42, deskR: 2.85, shelf: 1.5, chair: 2.15, chairR: 2.35, robot: 1.28, robotR: 2.35, bedS: 1.05, cab: -1.47, cabR: 2.85 }; // v59: solved by projecting the concept's screen positions through the entry camera // solved so the entry view frames them like the concept
+  const LAY = { door: -0.92, rack: -0.2, rackR: 2.75, pet: -0.33, petR: 1.9, win: 0.66, bed: 0.47, bedR: 2.75, desk: 1.42, deskR: 2.85, shelf: 1.5, chair: 2.15, chairR: 2.35, robot: 1.2, robotR: 2.35, bedS: 1.05, cab: -1.47, cabR: 2.85 }; // v59: solved by projecting the concept's screen positions through the entry camera // solved so the entry view frames them like the concept
   const setL = (o) => o.traverse(x => x.layers.set(LAYER));
   const std = (o = {}) => new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0.0, envMap: env || null, envMapIntensity: 0.32, ...o });
   // ---- shell: floor, quilted wall, ceiling with cove ----
@@ -153,17 +153,21 @@ export function makeHome(scene, { env, groundAt, door, origin, low = false, eart
   const HW = 1024, HH = 512; const holoTex = canvasTex(HW, HH, () => { });
   const HR = { main: [0, 0, 600, 360], left: [610, 0, 810, 170], right: [820, 0, 1024, 250], key: [610, 380, 1024, 512] }; // atlas regions (px)
   const scr = (reg, w, h, phi, r, y, yaw = 0, tilt = -0.1) => { const [x0, y0, x1, y1] = HR[reg]; const g = new THREE.PlaneGeometry(w, h); const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, (x0 + uv.getX(i) * (x1 - x0)) / HW, 1 - (y1 - uv.getY(i) * (y1 - y0)) / HH); const o = onWall(phi, r); return g.rotateX(tilt).rotateY(o.yaw + yaw).translate(o.x, y, o.z); };
-  const holo = new THREE.Mesh(mergeGeometries([scr('main', 1.4, 0.8, LAY.desk - 0.08, 2.72, 1.22, 0.6), scr('left', 0.6, 0.44, LAY.desk - 0.22, 2.66, 1.74, 0.6, 0.0), scr('right', 0.5, 0.55, LAY.desk + 0.16, 2.6, 1.08, 0.75), scr('key', 0.6, 0.18, LAY.desk - 0.1, 2.6, 0.84, 0.5, -Math.PI / 2 + 0.25)]),
-    new THREE.MeshBasicMaterial({ map: holoTex, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.0, 1.9, 2.6) })); holo.name = 'home_holo'; I.add(holo); // normal blend: tinted blue glass that still reads on the bright ivory room
+  const holo = new THREE.Mesh(mergeGeometries([scr('main', 1.62, 0.92, LAY.desk - 0.05, 2.72, 1.27, 0.6), scr('left', 0.5, 0.36, LAY.desk - 0.3, 2.6, 1.66, 0.6, 0.0), scr('right', 0.5, 0.56, LAY.desk + 0.21, 2.62, 1.1, 0.75), scr('key', 0.6, 0.18, LAY.desk - 0.1, 2.6, 0.84, 0.5, -Math.PI / 2 + 0.25)]),
+    new THREE.MeshBasicMaterial({ map: holoTex, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.0, 1.15, 1.3) })); holo.name = 'home_holo'; I.add(holo); // normal blend: tinted blue glass that still reads on the bright ivory room
   function drawHolo() { const g = holoTex.image.getContext('2d'); const info = getHubInfo(); g.clearRect(0, 0, HW, HH); const t = performance.now() * 0.001;
-    const panel = ([x0, y0, x1, y1]) => { g.fillStyle = 'rgba(14,70,130,0.6)'; g.fillRect(x0 + 4, y0 + 4, x1 - x0 - 8, y1 - y0 - 8); g.strokeStyle = 'rgba(140,230,255,0.95)'; g.lineWidth = 3; g.strokeRect(x0 + 5, y0 + 5, x1 - x0 - 10, y1 - y0 - 10); };
+    const panel = ([x0, y0, x1, y1]) => { const gr = g.createLinearGradient(0, y0, 0, y1); gr.addColorStop(0, 'rgba(10,150,255,0.97)'); gr.addColorStop(1, 'rgba(4,70,200,0.96)'); g.fillStyle = gr; g.fillRect(x0 + 4, y0 + 4, x1 - x0 - 8, y1 - y0 - 8); g.save(); g.shadowColor = '#7ff4ff'; g.shadowBlur = 14; g.strokeStyle = 'rgba(170,250,255,1)'; g.lineWidth = 4; g.strokeRect(x0 + 6, y0 + 6, x1 - x0 - 12, y1 - y0 - 12); g.restore(); };
     for (const k of ['main', 'left', 'right']) panel(HR[k]);
-    g.fillStyle = '#d8f8ff'; g.font = '700 28px system-ui,sans-serif'; g.fillText(info.title || 'MOONKATTY HUB', 22, 44); g.font = '600 20px system-ui,sans-serif'; (info.lines || []).slice(0, 5).forEach((l, i) => g.fillText(l, 22, 80 + i * 28));
-    g.strokeStyle = 'rgba(160,240,255,0.95)'; g.lineWidth = 3; g.beginPath(); for (let i = 0; i <= 26; i++) { const x = 300 + i * 10.5, y = 300 - (Math.sin(i * 0.6 + t) * 0.5 + 0.5) * 70 - i * 3.2; i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); // main: rising line chart
-    g.fillStyle = 'rgba(120,220,255,0.35)'; g.beginPath(); g.moveTo(300, 330); for (let i = 0; i <= 26; i++) g.lineTo(300 + i * 10.5, 300 - (Math.sin(i * 0.6 + t) * 0.5 + 0.5) * 70 - i * 3.2); g.lineTo(573, 330); g.fill();
-    for (let i = 0; i < 8; i++) { const h = 20 + ((i * 37 + Math.floor(t * 2) * 13) % 90); g.fillStyle = 'rgba(120,220,255,0.75)'; g.fillRect(632 + i * 21, 155 - h, 13, h); } // left: bars
-    { const cx = 922, cy = 100, rr = 62; g.lineWidth = 12; g.strokeStyle = 'rgba(80,170,230,0.45)'; g.beginPath(); g.arc(cx, cy, rr, 0, 7); g.stroke(); g.strokeStyle = 'rgba(170,245,255,0.95)'; g.beginPath(); g.arc(cx, cy, rr, -1.57, -1.57 + 4.4 + Math.sin(t) * 0.3); g.stroke(); g.fillStyle = '#d8f8ff'; g.font = '700 26px system-ui'; g.fillText('72%', cx - 26, cy + 9);
-      g.lineWidth = 2; g.beginPath(); for (let i = 0; i <= 16; i++) { const x = 840 + i * 10.5, y = 215 - Math.abs(Math.sin(i * 0.9 + t * 1.5)) * 30; i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); } // right: gauge + pulse
+    const glow = (fn, col = 'rgba(190,255,255,1)', w = 3.5) => { g.save(); g.shadowColor = '#8ff8ff'; g.shadowBlur = 12; g.strokeStyle = col; g.lineWidth = w; g.beginPath(); fn(); g.stroke(); g.restore(); };
+    { g.strokeStyle = 'rgba(150,230,255,0.25)'; g.lineWidth = 1; for (let x = 30; x < 590; x += 40) { g.beginPath(); g.moveTo(x, 70); g.lineTo(x, 300); g.stroke(); } for (let y = 70; y <= 300; y += 33) { g.beginPath(); g.moveTo(20, y); g.lineTo(580, y); g.stroke(); } }
+    g.fillStyle = '#e6fbff'; g.font = '700 26px system-ui,sans-serif'; g.fillText(info.title || 'MOONKATTY HUB', 22, 42); g.font = '600 15px system-ui,sans-serif'; (info.lines || []).slice(0, 3).forEach((l, i) => g.fillText(l, 330 + (i % 2) * 130, 28 + Math.floor(i / 2) * 22));
+    const L1 = (i) => 270 - (Math.sin(i * 0.55 + t) * 0.5 + 0.5) * 60 - i * 5.2, L2 = (i) => 250 - (Math.sin(i * 0.9 - t * 1.3) * 0.5 + 0.5) * 50 - i * 2.4;
+    g.fillStyle = 'rgba(120,235,255,0.32)'; g.beginPath(); g.moveTo(24, 300); for (let i = 0; i <= 34; i++) g.lineTo(24 + i * 16.3, L1(i)); g.lineTo(578, 300); g.fill();
+    glow(() => { for (let i = 0; i <= 34; i++) { const x = 24 + i * 16.3; i ? g.lineTo(x, L1(i)) : g.moveTo(x, L1(i)); } }); glow(() => { for (let i = 0; i <= 34; i++) { const x = 24 + i * 16.3; i ? g.lineTo(x, L2(i)) : g.moveTo(x, L2(i)); } }, 'rgba(255,240,170,0.95)', 2.5);
+    for (let i = 0; i < 22; i++) { const h = 8 + ((i * 29 + Math.floor(t * 2) * 11) % 34); g.fillStyle = 'rgba(160,245,255,0.85)'; g.fillRect(26 + i * 25, 345 - h, 15, h); } // main: big line chart + bar strip
+    for (let i = 0; i < 7; i++) { const h = 20 + ((i * 37 + Math.floor(t * 2) * 13) % 90); g.fillStyle = 'rgba(170,250,255,0.9)'; g.fillRect(636 + i * 23, 158 - h, 14, h); } // left: bars
+    { const cx = 922, cy = 100, rr = 62; g.lineWidth = 12; g.strokeStyle = 'rgba(80,190,255,0.45)'; g.beginPath(); g.arc(cx, cy, rr, 0, 7); g.stroke(); glow(() => g.arc(cx, cy, rr, -1.57, -1.57 + 4.4 + Math.sin(t) * 0.3), 'rgba(190,255,255,1)', 12); g.fillStyle = '#e6fbff'; g.font = '700 26px system-ui'; g.fillText('72%', cx - 26, cy + 9);
+      glow(() => { for (let i = 0; i <= 16; i++) { const x = 840 + i * 10.5, y = 215 - Math.abs(Math.sin(i * 0.9 + t * 1.5)) * 30; i ? g.lineTo(x, y) : g.moveTo(x, y); } }, 'rgba(190,255,255,1)', 2.5); } // right: gauge + pulse
     { const [x0, y0, x1, y1] = HR.key; g.strokeStyle = 'rgba(140,230,255,0.9)'; g.lineWidth = 2; for (let r = 0; r < 3; r++) for (let c = 0; c < 12; c++) g.strokeRect(x0 + 12 + c * 33, y0 + 12 + r * 38, 28, 32); } // holo keyboard
     holoTex.needsUpdate = true; }
   // crystals + artifacts on the shelf (rebuilt from the save on entry)
@@ -179,8 +183,9 @@ export function makeHome(scene, { env, groundAt, door, origin, low = false, eart
   const robot = makeCrewRobot(I, env, 'builder', 1); { const rp = onWall(LAY.robot, LAY.robotR); robot.root.position.set(rp.x, 0, rp.z); const yD = Math.atan2(desk.x - rp.x, desk.z - rp.z), yC = Math.atan2(0 - rp.x, 2.2 - rp.z); robot.root.rotation.y = yD + Math.atan2(Math.sin(yC - yD), Math.cos(yC - yD)) * 0.55; robot.root.visible = true; robot.root.scale.setScalar(0.85); /* v60: smaller in frame, working at the desk */ }
   // lights (layer 1 only: they never touch the outside world)
   const hemi = new THREE.HemisphereLight('#fff1de', '#5a4d3e', 0.22); const lamp = new THREE.PointLight('#ffe6c4', 6.5, 0, 1.6); const warm = new THREE.PointLight('#ffd9a8', 3.0, 6, 2); { const w = onWall((LAY.bed + LAY.shelf) / 2, 2.0); warm.position.set(w.x, 2.3, w.z); } lamp.position.set(0, WH + 0.6, 0); const cyan = new THREE.PointLight('#7fdcff', 2.0, 5, 2); { const off = new THREE.Vector3(0, 1.3, 0.6).applyAxisAngle(new THREE.Vector3(0, 1, 0), desk.yaw); cyan.position.set(desk.x + off.x, off.y, desk.z + off.z); }
-  const bedPool = new THREE.PointLight('#ffdcae', 8, 3.2, 1.8); { const w = onWall(LAY.bed, 2.05); bedPool.position.set(w.x, 1.75, w.z); } const shelfPool = new THREE.PointLight('#ffe2b4', 3.2, 2.2, 2); { const w = onWall(shelf.phi, 2.6); shelfPool.position.set(w.x, 1.9, w.z); } // v62 pooled light
-  I.add(hemi, lamp, warm, cyan, bedPool); if (!low) I.add(shelfPool); setL(I); I.visible = false;
+  const bedPool = new THREE.PointLight('#ffdcae', 8, 3.2, 1.8); { const w = onWall(LAY.bed, 2.05); bedPool.position.set(w.x, 1.75, w.z); } const shelfPool = new THREE.PointLight('#ffe2b4', 4.5, 2.4, 2); { const w = onWall(shelf.phi, 2.6); shelfPool.position.set(w.x, 1.9, w.z); } // v62 pooled light
+  const rightFill = new THREE.PointLight('#fff0dc', 6, 3.6, 1.6); { const w = onWall(1.72, 1.85); rightFill.position.set(w.x, 1.7, w.z); } // v64: lift the shelves/desk/armchair side out of grey
+  I.add(hemi, lamp, warm, cyan, bedPool, rightFill); if (!low) I.add(shelfPool); setL(I); I.visible = false;
   // collision: room circle + furniture circles (local xz)
   const L = (phi, r) => onWall(phi, r);
   const cols = [{ ...L(LAY.bed, LAY.bedR), r: 0.75 }, { ...L(LAY.bed - 0.3, LAY.bedR + 0.1), r: 0.7 }, { ...L(LAY.bed + 0.3, LAY.bedR + 0.1), r: 0.7 }, { ...L(LAY.pet, LAY.petR), r: 0.68 }, { ...rack, r: 0.65 }, ...[-0.2, 0, 0.2].map(f => ({ ...L(LAY.desk + f, 2.95), r: 0.45 })), { ...L(LAY.chair, LAY.chairR), r: 0.62 }, { ...L(LAY.cab, LAY.cabR), r: 0.55 }, { x: sideT.x, z: sideT.z, r: 0.34 }, { x: rcab.x, z: rcab.z, r: 0.34 }, { x: robot.root.position.x, z: robot.root.position.z, r: 0.45 }];
@@ -198,7 +203,7 @@ export function makeHome(scene, { env, groundAt, door, origin, low = false, eart
   const outsideDoorW = { x: door.x + Math.sin(door.yaw) * 2.2, z: door.z + Math.cos(door.yaw) * 2.2 };
   // entry framing (v58, per concept 2d260de8): cat just inside the door porthole facing the room, camera near the back wall,
   // wide lens + lateral shift so door/cat sit left, rack+pet house middle, bed centre-right, console+robot right, shelves far right
-  const entry = { cat: { x: -1.9, z: -0.6 }, yaw: Math.atan2(1.0, 0.8), camYaw: 0, camDist: 3.7, camPitch: 0.05, shift: 2.2, fov: 68,
+  const entry = { cat: { x: -1.9, z: -0.6 }, yaw: 1.35, stride: 0.0, camYaw: 0, camDist: 3.7, camPitch: 0.05, shift: 2.2, fov: 68,
     portrait: { cat: { x: 0.08, z: 0.78 }, yaw: -0.3, camYaw: -0.524, camDist: 2.4, camPitch: 0.75, shift: 0, fov: 80, fixedShift: true } }; // tall phone screens: cat in front, bed + console + robot behind it
   const api = { group: I, LAYER, R, doorIn, consoleIn, entry, outside: outsideDoorW, doorW: { x: door.x, z: door.z }, robot, doorMesh: doorM,
     solids(real) { const fy = origin.y; return { CAT: real.CAT, standAt: () => fy, floorAt: () => fy, visAt: () => fy, top, over: () => 1e9, slabHit: () => Infinity, nearestFree: (x, z) => { const lx = x - origin.x, lz = z - origin.z, d = Math.hypot(lx, lz), m = R - 1.0; if (d > m) return { x: origin.x + lx / d * m, z: origin.z + lz / d * m, moved: d - m }; return { x, z, moved: 0 }; } }; },
@@ -211,6 +216,6 @@ export function makeHome(scene, { env, groundAt, door, origin, low = false, eart
       renderer.setRenderTarget(prevT); },
     enterPrep() { fillShelf(); drawHolo(); },
     update(dt, camPos, inside) { open += (want - open) * Math.min(1, dt * 5); for (const [i, g] of leaves.entries()) g.position.x = (i ? 1 : -1) * open * 1.25; leaves.forEach(g => g.visible = open < 0.98);
-      if (inside) { robot.update(dt, 'work', camPos); holoT -= dt; if (holoT <= 0) { holoT = 1; drawHolo(); } holo.material.opacity = 0.85 + 0.15 * Math.sin(performance.now() * 0.004); } } };
+      if (inside) { robot.update(dt, 'work', camPos); holoT -= dt; if (holoT <= 0) { holoT = 1; drawHolo(); } holo.material.opacity = 0.94 + 0.06 * Math.sin(performance.now() * 0.004); } } };
   return api;
 }
