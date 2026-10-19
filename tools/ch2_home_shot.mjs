@@ -9,6 +9,7 @@ const info = await p.evaluate(async (FIX) => { const G = MK.game, H = G.ch2.home
 await p.addStyleTag({ content: '#mk-root{display:none !important} body > *:not(#app):not(canvas){opacity:0}' });
 await p.waitForTimeout(4000);
 const st = await p.evaluate(() => { const s = MK.stats(); return { main: s.mainPass, shadow: s.mainPlusShadowPass, frame: s.wholeFrameInclPost }; });
+console.log('CAMLOCAL', JSON.stringify(await p.evaluate(() => { const o = MK.game.ch2.home().origin, C = MK.camera.position; return [C.x - o.x, C.y - o.y, C.z - o.z, MK.ctrl.pos.x - o.x, MK.ctrl.pos.z - o.z, MK.ctrl.camDist, MK.ctrl.camShift, MK.ctrl.camYaw].map(v => +(+v).toFixed(2)); })));
 if (process.env.PROJ) console.log('PROJ', JSON.stringify(await p.evaluate((P) => { const o = MK.game.ch2.home().origin, C = MK.camera; C.updateMatrixWorld(); return P.map(([n, phi, r, y]) => { const v = new MK.THREE.Vector3(o.x + Math.sin(phi) * r, o.y + y, o.z - Math.cos(phi) * r).project(C); return [n, +((v.x + 1) / 2).toFixed(2), +((1 - v.y) / 2).toFixed(2)]; }); }, JSON.parse(process.env.PROJ))));
 await p.screenshot({ path: `renders/ch2_home${q ? '_' + q.replace(/\W/g, '') : ''}.png` });
 console.log(JSON.stringify({ info, st, errs })); await b.close();
