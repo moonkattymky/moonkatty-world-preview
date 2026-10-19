@@ -19,16 +19,22 @@ function shard(pos, bary, hh, { x, z, h, r, rb = 0.85, tilt = 0, dir = 0, tip, r
 let _geo = null;
 // proportions measured on the user's reference (silhouette overlay, tools/crystal_shot.mjs): one tall dominant slim prism, slightly narrower at the
 // base, with a long convex faceted point (shoulders at ~55% of the height); two long shards splayed ~45-50 deg low at the base; small chips in front
-export const CLUSTER = [{ x: 0, z: 0, h: 0.94, r: 0.44, rb: 0.74, tip: 0.7, tm: [0.46, 0.64], rot: 0.0 },
-  { x: -0.215, z: 0.05, h: 0.5, r: 0.21, rb: 0.7, tip: 0.245, tilt: 0.92, dir: 3.022, rot: 0.3 }, { x: 0.17, z: 0.05, h: 0.38, r: 0.17, rb: 0.7, tip: 0.24, tilt: 1.02, dir: 0.12, rot: 0.2 },
-  { x: -0.04, z: 0.26, h: 0.12, r: 0.09, tip: 0.1, tilt: 0.95, dir: 2.071 },
-  { x: -0.48, z: 0.12, h: 0.1, r: 0.12, tip: 0.09, tilt: 1.42, dir: 3.392 }, { x: 0.38, z: 0.14, h: 0.1, r: 0.12, tip: 0.09, tilt: 1.46, dir: -0.25 }, { x: 0.12, z: 0.28, h: 0.07, r: 0.06, tip: 0.06, tilt: 0.8, dir: 0.971 }];
-export function buildCluster(list, low = false) { const pos = [], bary = [], hh = [];
-  list.forEach((s, i) => { if (!(low && i >= 4)) shard(pos, bary, hh, s, i > 0); });
+// v58 full cluster per the concept crop (d04ca995): two tall shards (the tallest leaning slightly left), two medium shards splayed left/right,
+// a small front shard and two low chips; shards 0-5 are kept in the in-world geometry (6 of 7)
+export const CLUSTER = [{ x: -0.07, z: 0, h: 0.92, r: 0.25, rb: 0.74, tip: 0.55, tm: [0.46, 0.64], rot: 0.0, tilt: 0.12, dir: 3.14 },
+  { x: 0.15, z: -0.05, h: 0.64, r: 0.19, rb: 0.72, tip: 0.38, tm: [0.5, 0.62], rot: 0.5, tilt: 0.3, dir: 0.05 },
+  { x: -0.26, z: 0.06, h: 0.46, r: 0.13, rb: 0.7, tip: 0.26, tilt: 0.78, dir: 3.0, rot: 0.3 }, { x: 0.3, z: 0.1, h: 0.4, r: 0.12, rb: 0.7, tip: 0.24, tilt: 0.92, dir: 0.15, rot: 0.2 },
+  { x: 0.03, z: 0.24, h: 0.24, r: 0.1, tip: 0.15, tilt: 0.6, dir: 1.6 }, { x: 0.44, z: 0.2, h: 0.14, r: 0.08, tip: 0.1, tilt: 1.25, dir: -0.25 },
+  { x: -0.46, z: 0.16, h: 0.12, r: 0.08, tip: 0.09, tilt: 1.35, dir: 3.35 }];
+// quality tier (same rule as main.js): 0 desktop, 1 phone, 2 ?q=low
+const TIER = (() => { if (typeof location === 'undefined') return 0; const q = new URLSearchParams(location.search).get('q'); if (q === 'low') return 2; if (q === 'mobile' || (!q && typeof matchMedia !== 'undefined' && (matchMedia('(pointer:coarse)').matches || Math.min(innerWidth, innerHeight) < 480))) return 1; return 0; })();
+// n = shards kept, tmN = shards that get the convex 'gothic' point (the rest a plain point): desktop 6/2 = 132 tris, phone 5/1 = 102, low 5/0 = 90
+export function buildCluster(list, n = list.length, tmN = list.length) { const pos = [], bary = [], hh = [];
+  list.forEach((s, i) => { if (i < n) shard(pos, bary, hh, i < tmN ? s : { ...s, tm: null }, i > 1); });
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('aBary', new THREE.Float32BufferAttribute(bary, 3)); g.setAttribute('aH', new THREE.Float32BufferAttribute(hh, 1)); g.computeVertexNormals(); g.computeBoundingSphere();
   return g; }
-export function clusterGeometry() { // q=low: skip the tiny base chips (main + splayed shards + front shard kept)
-  return _geo || (_geo = buildCluster(CLUSTER, true)); }
+export function clusterGeometry() { // in-world: 6 of the 7 shards on desktop, 5 on phone / low (budget)
+  return _geo || (_geo = TIER === 0 ? buildCluster(CLUSTER, 6, 2) : buildCluster(CLUSTER, 5, TIER === 1 ? 1 : 0)); }
 const shardMat = () => new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 } }, toneMapped: false,
   vertexShader: `attribute vec3 aBary; attribute float aH; attribute float aState; varying vec3 vB; varying float vH; varying float vE; varying vec3 vV; varying float vS; varying float vSeed; varying vec3 vLP; varying vec3 vWP;
     void main(){ vLP = position; mat4 im = modelMatrix * instanceMatrix; vec4 wp = im * vec4(position, 1.0); vWP = wp.xyz; vV = cameraPosition - wp.xyz; vB = aBary; vH = aH > 1.5 ? aH - 2.0 : aH; vE = aH > 1.5 ? 0.0 : 1.0; vS = aState; vSeed = im[3].x * 0.37 + im[3].z * 0.11; gl_Position = projectionMatrix * viewMatrix * wp; }`,
@@ -50,18 +56,18 @@ const shardMat = () => new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 
       // facing facets, lighter refracted fracture planes, soft light-blue fresnel. Colours pre-solved through the ACES output transform.
       vec3 cobalt = vec3(0.0, 0.02, 0.42), royal = vec3(0.0, 0.07, 0.85), cyan = vec3(0.0, 0.42, 1.5), ice = vec3(0.12, 0.85, 2.1), hot = vec3(0.4, 1.6, 3.2);
       vec3 c = mix(cobalt * 0.8, royal, smoothstep(0.2, 0.6, tone));
-      c = mix(c, cyan, smoothstep(0.7, 0.95, tone) * 0.65);
+      c = mix(c, cyan, smoothstep(0.6, 0.95, tone) * 0.72);
       c = mix(c, ice, smoothstep(0.97, 1.0, tone) * 0.35);
       c *= mix(0.42, 1.0, pow(nv, 0.8)); float thr = pow(nv, 1.6); float ax = length(vLP.xz); float coreC = exp(-ax * ax / 0.028) * (0.45 + 0.55 * (smoothstep(0.0, 0.12, vH) * (1.0 - smoothstep(0.62, 0.98, vH)))); float coreH = exp(-pow((vH - 0.38) / 0.42, 2.0));
       c += cyan * thr * thr * coreH * 0.3 * pulse + mix(cyan, hot, 0.45) * pow(nv, 4.0) * exp(-pow((vH - 0.26) / 0.26, 2.0)) * mix(0.1, 1.0, smoothstep(0.35, 0.9, cell)) * 1.0 * pulse;                      // inner glow core
       c += cyan * streak * 0.5;                                   // refracted fracture planes
-      c += royal * fr * 0.25 + cyan * pow(1.0 - nv, 8.0) * 0.6;                                                        // soft fresnel
+      c += royal * fr * 0.25 + cyan * pow(1.0 - nv, 8.0) * 0.6 + mix(ice, hot, 0.5) * pow(1.0 - nv, 4.0) * 0.55 * (0.5 + 0.5 * vH); // v58 bright white-ice fresnel rim                                                        // soft fresnel
       c += mix(ice, hot, 0.4) * pow(1.0 - vH, 9.0) * 1.8 * pulse * (0.4 + 0.6 * exp(-ax * ax / 0.08));                  // glowing base
       // edge highlights: soft and only on SOME facet edges (per-facet random), brighter toward the tip - no uniform wireframe outline
       float e = min(min(vB.x, vB.y), vB.z); float w = fwidth(e);
       float sel = mix(0.3, 1.0, step(0.45, h3(floor(ln * 4.0 + 0.5) + floor(vSeed * 3.0) + 7.0))) * mix(0.55, 1.0, vE);
       float soft = 1.0 - smoothstep(0.0, 0.07, e), core = 1.0 - smoothstep(w * 0.5, w * 2.2, e);
-      c += mix(cyan, ice, 0.3) * soft * soft * 0.9 * sel * (0.45 + 0.55 * vH) + ice * core * 0.35 * sel * smoothstep(0.25, 1.0, vH);
+      c += mix(cyan, ice, 0.45) * soft * soft * 1.25 * sel * (0.45 + 0.55 * vH) + mix(ice, hot, 0.6) * core * 0.9 * sel * smoothstep(0.15, 1.0, vH); // v58 brighter white facet edges
       c += ice * smoothstep(0.9, 1.0, vH) * 0.25;                                  // bright tips
       if (vS > 0.5) c = c * vec3(0.35, 0.33, 0.4) + vec3(0.5, 0.12, 0.05) * core; // mined / cracked
       gl_FragColor = vec4(c, 1.0); }` });
