@@ -214,7 +214,7 @@ export class InstanceCuller {
   }
   stats() { const o = {}; for (const k of this.kinds) o[k.name] = k.lods.map(l => l.mesh.count + '×' + (l.mesh.geometry.attributes.position.count / 3)); return o; }
 }
-/* v51: pebble LOD0 distance per preset (budget margin for world-life machines) */ const SCAT_D = (() => { const q = new URLSearchParams(location.search).get('q'); return q === 'mobile' || q === 'low' || (!q && (matchMedia('(pointer:coarse)').matches || Math.min(innerWidth, innerHeight) < 480)) ? 21 : 24; })();
+/* v51: pebble LOD0 distance per preset (budget margin for world-life machines) */ const SCAT_D = (() => { const q = new URLSearchParams(location.search).get('q'); return q === 'mobile' || q === 'low' || (!q && (matchMedia('(pointer:coarse)').matches || Math.min(innerWidth, innerHeight) < 480)) ? 21 : 20; })();
 let LOD_SCALE = 1; // low preset shortens all rock LOD distances
 function makeKind(scene, name, lods, items, mat, castShadow) {
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
