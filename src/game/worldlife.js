@@ -6,6 +6,7 @@
 // Cheap by design: few draw calls, low-poly merged meshes, one particle system, distance culling.
 import * as THREE from 'three';
 import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
+import { roverHi, roverLo, drillHi, drillLo, drillHeadGeo, DRILL_HEAD } from './machines.js';
 
 const col = (g, hex, e = 0) => { g = g.index ? g.toNonIndexed() : g; const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3), ae = new Float32Array(n); for (let i = 0; i < n; i++) { c.toArray(a, i * 3); ae[i] = e; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.setAttribute('aE', new THREE.BufferAttribute(ae, 1)); if (g.attributes.uv) g.deleteAttribute('uv'); return g; };
 const merge = (list) => mergeGeometries(list.map(g => g.index ? g.toNonIndexed() : g));
@@ -84,8 +85,9 @@ export function makeWorldLife({ scene, camera, env, groundAt, depotP, fields, ba
   const sat = new THREE.Mesh(satGeo(), mat); sat.name = 'life_sat'; sat.scale.setScalar(3); root.add(sat); sat.visible = !LITE;
   const lift = new THREE.Mesh(shG, mat); lift.name = 'life_liftoff'; lift.scale.setScalar(2.6); root.add(lift); let liftT = 5;
   // ground vehicles
-  const rover = new THREE.Mesh(roverGeo(), mat); rover.name = 'life_rover'; rover.scale.setScalar(1.2); rover.castShadow = true; root.add(rover);
-  const drill = new THREE.Mesh(drillGeo(), mat); drill.name = 'life_drill'; drill.scale.setScalar(1.5); /* concept: the drill rig is a big hero prop */ root.add(drill); const bit = new THREE.Mesh(bitGeo(), mat); bit.position.set(0, 1.0, 1.1); drill.add(bit); bit.visible = !low;
+  const HID = low ? 0 : mobile ? 10 : 13, HIDD = low ? 0 : mobile ? 12 : 15; /* v51 LOD: hand-built machines up close, cheap LO beyond (geometry swap = same single draw) */ const rvG = [roverLo(), low ? null : roverHi()], drG = [drillLo(), low ? null : drillHi()];
+  const rover = new THREE.Mesh(rvG[0], mat); rover.name = 'life_rover'; rover.scale.setScalar(1.0); rover.castShadow = true; root.add(rover);
+  const drill = new THREE.Mesh(drG[0], mat); drill.name = 'life_drill'; drill.scale.setScalar(1.15); /* concept: the drill rig is a big hero prop */ root.add(drill); const bit = new THREE.Mesh(drillHeadGeo(), mat); bit.position.copy(DRILL_HEAD); drill.add(bit); bit.visible = !low;
   // rotating radar dish next to the base
   if (false) { const rg = merge([col(new THREE.CylinderGeometry(0.25, 0.4, 3.2, 8).translate(0, 1.6, 0), '#d8cdb5'), col(new THREE.BoxGeometry(0.8, 0.5, 0.8).translate(0, 3.3, 0), '#c8912a')]); const st_ = new THREE.Mesh(rg, mat); const rx = base.x + 22, rz = base.z - 12; st_.position.set(rx, groundAt(rx, rz), rz); root.add(st_);
     dish = new THREE.Mesh(merge([col(new THREE.SphereGeometry(2.2, 16, 6, 0, Math.PI * 2, 0, 0.9).rotateX(-Math.PI / 2 + 0.5).translate(0, 0.6, 0), '#efe6d2'), col(new THREE.CylinderGeometry(0.05, 0.05, 2.0, 4).rotateX(-0.6).translate(0, 1.3, 0.55), '#c8912a'), col(new THREE.SphereGeometry(0.15, 6, 4).translate(0, 2.1, 1.1), '#7fe0ff', 3.0)]), mat); dish.position.set(0, 3.5, 0); st_.add(dish); dish.name = 'life_radar'; }
@@ -105,8 +107,11 @@ export function makeWorldLife({ scene, camera, env, groundAt, depotP, fields, ba
   const loop = new THREE.CatmullRomCurve3(loopPts, true); const loopLen = loop.getLength();
   // porters: two crew robots shuttling crystals drill -> depot; they wave at the cat when it comes close
   const porters = makeCrew ? [['builder', 0], ['geologist', 0.5]].map(([ty, o]) => { const r = makeCrew(scene, env, ty, 2); r.root.name = 'life_porter'; return { r, o, wave: 0 }; }) : [];
-  const IMP_D = low ? 6 : mobile ? 7 : 8; // same as the crew: far porters become impostors (one shared instanced draw)
+  // v51: a builder welding at the depot wall near the base (orange spark bursts); impostor when far, like the porters
+  const welder = makeCrew ? (() => { const r = makeCrew(scene, env, 'builder', 2); r.root.name = 'life_welder'; const x = depotP.x - px * 2.9 + ux * 0.4, z = depotP.z - pz * 2.9 + uz * 0.4; return { r, x, z, yaw: Math.atan2(depotP.x - x, depotP.z - z), far: false }; })() : null;
+  const IMP_D = low ? 6 : mobile ? 7 : 8; const NEAR = low ? 3.2 : mobile ? 3.7 : 4.6; /* v51: life robots show hi only (no lo band) -> impostor beyond NEAR */ // same as the crew: far porters become impostors (one shared instanced draw)
   const pA = { x: D.x - ux * 3 + px * 2, z: D.z - uz * 3 + pz * 2 }, pB = { x: depotP.x + ux * 2.5 + px * 1.2, z: depotP.z + uz * 2.5 + pz * 1.2 };
+  if (welder) { const gx = welder.x, gz = welder.z; welder.y = groundAt(gx, gz); }
   // steam vents near the base
   const vents = [0, 1, 2].map(i => { const a = 1.1 + i * 2.1, r = 14 + i * 3; const x = base.x + Math.cos(a) * r, z = base.z + Math.sin(a) * r; return { x, z, y: groundAt(x, z) + 1.2, tt: i * 0.7 }; });
   // lore anchors
@@ -137,16 +142,18 @@ export function makeWorldLife({ scene, camera, env, groundAt, depotP, fields, ba
     bb.flush();
     // rover on its loop: follows the ground, dust trail, crystals while hauling back
     { const u = ((T * 4.2) / loopLen) % 1; loop.getPointAt(u, v); const gy = groundAt(v.x, v.z); const tng = loop.getTangentAt(u); rover.position.set(v.x, gy, v.z); rover.rotation.y = Math.atan2(tng.x, tng.z);
-      const e = 0.9; const fy = groundAt(v.x + tng.x * e, v.z + tng.z * e), by = groundAt(v.x - tng.x * e, v.z - tng.z * e); rover.rotation.x = -Math.atan2(fy - by, 2 * e) ; rover.visible = Math.hypot(v.x - cam.x, v.z - cam.z) < VR;
+      const e = 0.9; const fy = groundAt(v.x + tng.x * e, v.z + tng.z * e), by = groundAt(v.x - tng.x * e, v.z - tng.z * e); rover.rotation.x = -Math.atan2(fy - by, 2 * e) ; { const dR = Math.hypot(v.x - cam.x, v.z - cam.z); rover.visible = dR < VR; rover.geometry = dR < HID ? rvG[1] : rvG[0]; }
       if (rover.visible && Math.random() < dt * 30) { const bx = v.x - tng.x * 1.6, bz = v.z - tng.z * 1.6; parts.emit(bx + (Math.random() - 0.5), gy + 0.3, bz + (Math.random() - 0.5), (Math.random() - 0.5) * 0.8, 0.5 + Math.random() * 0.5, (Math.random() - 0.5) * 0.8, 1.6, 0.9, 0.42, 0.4, 0.38, 0.3, 'smoke', 2.2); } }
     // drill: bit spins + bobs, sparks at the ground
     // porters: walk A->B carrying a crystal, return empty; wave when the cat is near
     for (const P of porters) { const cyc = 22, k = ((T / cyc + P.o) % 1); const go = k < 0.5, u = go ? k * 2 : (k - 0.5) * 2; const e = u < 0.1 ? 0 : u > 0.9 ? 1 : (u - 0.1) / 0.8; const a = go ? pA : pB, b = go ? pB : pA;
       const x = a.x + (b.x - a.x) * e, z = a.z + (b.z - a.z) * e; const dc = cat ? Math.hypot(cat.x - x, cat.z - z) : 99; if (dc < 4.5 && P.wave <= 0) P.wave = 3.5; P.wave -= dt;
-      const R = P.r.root; R.position.set(x, groundAt(x, z), z); const dcam = Math.hypot(x - cam.x, z - cam.z); P.far = dcam >= IMP_D && dcam < 90; const vis = dcam < IMP_D; R.visible = vis; P.yaw = Math.atan2(b.x - a.x, b.z - a.z); if (!vis) continue;
+      const R = P.r.root; R.position.set(x, groundAt(x, z), z); const dcam = Math.hypot(x - cam.x, z - cam.z); P.far = dcam >= NEAR && dcam < 90; const vis = dcam < NEAR; R.visible = vis; P.yaw = Math.atan2(b.x - a.x, b.z - a.z); if (!vis) continue;
       const moving = u >= 0.1 && u <= 0.9; let yaw = Math.atan2(b.x - a.x, b.z - a.z); if (P.wave > 0 && cat) yaw = Math.atan2(cat.x - x, cat.z - z); R.rotation.y = yaw;
       const mode = P.wave > 0 ? (go ? 'wavecarry' : 'wave') : go ? (moving ? 'carry' : 'carryidle') : (moving ? 'walk' : 'idle'); P.r.update(dt, mode, P.wave > 0 && dcam < 6 ? null : cam); }
-    { const dv = Math.hypot(D.x - cam.x, D.z - cam.z) < VR; drill.visible = dv; if (dv) { bit.rotation.y += dt * 14; bit.position.y = 0.9 + Math.sin(T * 1.3) * 0.25; if (Math.random() < dt * 25) { drill.localToWorld(v.set(0, 0.05, 1.1)); parts.emit(v.x, v.y, v.z, (Math.random() - 0.5) * 5, 2 + Math.random() * 3, (Math.random() - 0.5) * 5, 0.5, 0.25, 2.6, 1.4, 0.4, 0, 'spark', 0, 9); } } }
+    if (welder) { const W = welder, R = W.r.root; R.position.set(W.x, W.y, W.z); R.rotation.y = W.yaw; const dcam = Math.hypot(W.x - cam.x, W.z - cam.z); W.far = dcam >= NEAR && dcam < 90; R.visible = dcam < NEAR; /* static prop: impostor sooner than the porters (budget) */ if (R.visible) { W.r.update(dt, 'work', null); W.r.pivot.rotation.x = 0.28 + Math.sin(T * 7) * 0.05; }
+      const burst = (T % 3.2) < 2.2; if (burst && dcam < 70 && Math.random() < dt * 70) { const fx = Math.sin(W.yaw), fz = Math.cos(W.yaw), sx = W.x + fx * 0.8, sz = W.z + fz * 0.8; parts.emit(sx, W.y + 0.85, sz, (Math.random() - 0.5) * 3 - fx * 1.2, 1 + Math.random() * 2.5, (Math.random() - 0.5) * 3 - fz * 1.2, 0.7, 0.22, 3.0, 0.9, 0.12, 0, 'spark', 0, 9); } }
+    { const dv = Math.hypot(D.x - cam.x, D.z - cam.z) < VR; drill.visible = dv; if (dv) { drill.geometry = Math.hypot(D.x - cam.x, D.z - cam.z) < HIDD ? drG[1] : drG[0]; bit.rotation.y += dt * 14; bit.position.y = 1.2 + Math.sin(T * 1.3) * 0.2; if (Math.random() < dt * 25) { drill.localToWorld(v.set(DRILL_HEAD.x, 0.05, DRILL_HEAD.z)); parts.emit(v.x, v.y, v.z, (Math.random() - 0.5) * 5, 2 + Math.random() * 3, (Math.random() - 0.5) * 5, 0.5, 0.25, 2.6, 1.4, 0.4, 0, 'spark', 0, 9); } } }
     // steam puffs
     for (const s of vents) { s.tt -= dt; if (s.tt <= 0) { s.tt = 0.25 + Math.random() * 0.3; if (Math.hypot(s.x - cam.x, s.z - cam.z) < 120) parts.emit(s.x, s.y, s.z, (Math.random() - 0.5) * 0.4, 1.6 + Math.random() * 0.6, (Math.random() - 0.5) * 0.4, 3.2, 1.0, 0.55, 0.55, 0.58, 0.32, 'smoke', 3.5); } }
     // beacons blink, dish turns
@@ -161,6 +168,6 @@ export function makeWorldLife({ scene, camera, env, groundAt, depotP, fields, ba
     if (ctrl && ctrl.onGround && ctrl.speed > 0.8 && stepT <= 0) { stepT = 0.42 / Math.min(2, ctrl.speed / 2); audio.step(); }
     if (radioT <= 0) { radioT = 40 + Math.random() * 40; audio.radio(); sub(RADIO[Math.floor(Math.random() * RADIO.length)]); }
   }
-  const pushImp = (imp) => { if (!on) return; for (const P of porters) if (P.far) imp.push(P.r.root.position, P.r.type || 'builder', P.yaw); };
-  return { root, update, audio, pushImp, setVisible(v_) { on = v_; root.visible = v_; if (!v_) porters.forEach(P => { P.r.root.visible = false; P.far = false; }); parts.pts.visible = v_ && !low; bb.mesh.visible = v_; mb.style.display = v_ ? '' : 'none'; }, meshes: { rover, drill, ships, sat, lift, beacons, porters: porters.map(p => p.r.root) }, drillAt: D };
+  const pushImp = (imp) => { if (!on) return; for (const P of porters) if (P.far) imp.push(P.r.root.position, P.r.type || 'builder', P.yaw); if (welder && welder.far) imp.push(welder.r.root.position, 'builder', welder.yaw); };
+  return { root, update, audio, pushImp, setVisible(v_) { on = v_; root.visible = v_; if (!v_) { porters.forEach(P => { P.r.root.visible = false; P.far = false; }); if (welder) { welder.r.root.visible = false; welder.far = false; } } parts.pts.visible = v_ && !low; bb.mesh.visible = v_; mb.style.display = v_ ? '' : 'none'; }, meshes: { rover, drill, ships, sat, lift, beacons, porters: porters.map(p => p.r.root), welder: welder && welder.r.root }, drillAt: D };
 }

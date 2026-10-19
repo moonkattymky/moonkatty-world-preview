@@ -149,7 +149,7 @@ export function createChapter2(ctx) {
   // state machine: home -> (job) walkout -> site (work) -> (done) return -> home. Upgrades / engineer jobs are local (walk straight to the site).
   function updateCrew(dt) {
     const camR = regionOf(camera.position); const camP = camera.position; if (imp) { imp.begin(); imp.dim = 1 + 0.25 * shield.night; }
-    const showBot = (c, vis, mode, d) => { const far = imp && vis && d > (storm.on && c.storm ? IMP_D - 3 : IMP_D) && imp.push(c.pos, c.r.type, c.yaw); /* storm: panel crew sits close to the console -> impostor sooner (budget) */ c.rob.root.visible = vis && !far; if (vis && !far) c.rob.update(dt, mode, camP); };
+    const showBot = (c, vis, mode, d) => { const far = imp && vis && d > (storm.on ? IMP_D - 3 : IMP_D) /* v51: during the storm ALL crew go impostor sooner (no 3.3k lo meshes in the console view) */ && imp.push(c.pos, c.r.type, c.yaw); /* storm: panel crew sits close to the console -> impostor sooner (budget) */ c.rob.root.visible = vis && !far; if (vis && !far) c.rob.update(dt, mode, camP); };
     for (const c of crew.values()) {
       const j = econ.jobOf(c.r.id); const local = j && (j.kind === 'upgrade' || j.kind === 'eng');
       let mode = 'idle', vis = true, region = 'hub';
