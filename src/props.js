@@ -175,7 +175,7 @@ function rockMaterial(fog = true, bump = 2.2, smooth = false, key = 0.0, far = f
       { vec3 fnD = normalize(cross(dFdx(vWP), dFdy(vWP))); vec3 tw = pow(abs(fnD), vec3(4.0)); tw /= tw.x + tw.y + tw.z + 1e-4; float fnK = 1.0 - smoothstep(15.0, 70.0, length(vWP - cameraPosition));
         if (fnK > 0.01) { vec2 nx = texture2D(uDet, vWP.zy / 2.6).gb - 0.5, ny = texture2D(uDet, vWP.xz / 2.6).gb - 0.5, nz = texture2D(uDet, vWP.xy / 2.6).gb - 0.5;
           vec3 gw = vec3(0.0, nx.y, nx.x) * tw.x + vec3(ny.x, 0.0, ny.y) * tw.y + vec3(nz.x, nz.y, 0.0) * tw.z; normal = normalize(normal + (viewMatrix * vec4(gw * 3.2 * fnK, 0.0)).xyz); } } /* pass 40: triplanar detail normal: faces are no longer flat */`)
-      .replace('#include <opaque_fragment>', `${key > 0 ? `{ vec3 kd = normalize((viewMatrix * vec4(${KEY}, 0.0)).xyz); float kl = max(dot(normal, kd), 0.0); outgoingLight = outgoingLight * 0.6 + diffuseColor.rgb * vec3(1.0, 0.96, 0.9) * (${(key * 1.75).toFixed(2)} * pow(kl, 2.6) + ${(amb * 0.35).toFixed(2)}); } /* v69: darker shadow side + sharper sunlit faces = concept's high-contrast crags */` : ''}
+      .replace('#include <opaque_fragment>', `${key > 0 ? `{ vec3 kd = normalize((viewMatrix * vec4(${KEY}, 0.0)).xyz); float kl = max(dot(normal, kd), 0.0); outgoingLight = outgoingLight * 0.6 + diffuseColor.rgb * vec3(1.0, 0.96, 0.9) * (${(key * 1.75).toFixed(2)} * pow(kl, 2.6) + ${(amb * 0.35).toFixed(2)}); { float lq = dot(outgoingLight, vec3(0.299, 0.587, 0.114)); float nf = 1.0 - smoothstep(40.0, 120.0, length(vWP - cameraPosition)); outgoingLight *= mix(1.0, mix(0.6, 2.6, smoothstep(0.03, 0.45, lq)), nf); } } /* v69: darker shadow side + sharper sunlit faces; v70: near-field S-curve */` : ''}
       #include <opaque_fragment>`);
   };
   return m;
